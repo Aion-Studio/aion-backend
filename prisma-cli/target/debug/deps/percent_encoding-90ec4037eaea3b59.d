@@ -1,0 +1,5 @@
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/percent_encoding-90ec4037eaea3b59.rmeta: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/percent-encoding-2.2.0/src/lib.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/percent_encoding-90ec4037eaea3b59.d: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/percent-encoding-2.2.0/src/lib.rs
+
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/percent-encoding-2.2.0/src/lib.rs:

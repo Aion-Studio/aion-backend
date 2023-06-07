@@ -1,0 +1,15 @@
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/uuid-f76c817009619151.rmeta: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/builder.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/error.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/parser.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/fmt.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/timestamp.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/v4.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/rng.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/external.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/external/serde_support.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/macros.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/uuid-f76c817009619151.d: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/builder.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/error.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/parser.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/fmt.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/timestamp.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/v4.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/rng.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/external.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/external/serde_support.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/macros.rs
+
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/lib.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/builder.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/error.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/parser.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/fmt.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/timestamp.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/v4.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/rng.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/external.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/external/serde_support.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/uuid-1.3.3/src/macros.rs:

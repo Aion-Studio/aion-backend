@@ -1,0 +1,10 @@
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/ordermap-920e8e7a9098edd1.rmeta: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/macros.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/util.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/equivalent.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/mutable_keys.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/set.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/ordermap-920e8e7a9098edd1.d: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/macros.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/util.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/equivalent.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/mutable_keys.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/set.rs
+
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/lib.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/macros.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/util.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/equivalent.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/mutable_keys.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/ordermap-0.3.5/src/set.rs:

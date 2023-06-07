@@ -1,0 +1,41 @@
+version: "3.8"
+services:
+  app:
+    container_name: rpg
+    image: idle_rpg:latest
+    build:
+      context: .
+      dockerfile: Dockerfile-dev
+    command: cargo watch -x run
+    volumes:
+      - ./src:/idle_rpg/src
+      - ./configuration:/idle_rpg/configuration
+      - ./prisma:/idle_rpg/prisma
+      - ./Cargo.toml:/idle_rpg/Cargo.toml
+    environment:
+      APP_ENVIRONMENT: local
+    ports:
+      - 8000:8000
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: defaultdb
+      POSTGRES_USER: root
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+
+  redis:
+    image: redis:latest
+    ports:
+      - 6379:6379
+
+volumes:
+  postgres_data: {}
+

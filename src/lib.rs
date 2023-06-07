@@ -1,0 +1,59 @@
+// pub mod authentication;
+pub mod configuration;
+// pub mod idempotency;
+// pub mod routes;
+// pub mod session_state;
+pub mod startup;
+pub mod telemetry;
+pub mod utils;
+pub mod types;
+
+#[allow(warnings, unused)]
+pub mod prisma;
+
+#[allow(dead_code)]
+#[allow(unused_variables)]
+mod models {
+    pub mod game_engine;
+    pub mod hero;
+    pub mod region;
+    pub mod resources;
+}
+
+mod repos {
+    pub mod hero_repo;
+    pub mod region_repo;
+    // pub mod action_repo;
+    // pub mod resources_repo;
+}
+
+mod services {
+    pub mod impls {
+        pub mod game_engine_service;
+        pub mod hero_service;
+        pub mod region_service;
+
+        #[cfg(test)]
+        mod hero_service_test;
+
+        #[cfg(test)]
+        mod region_service_test;
+
+        pub mod items_service;
+        pub mod task_scheduler_service;
+    }
+
+    pub mod traits {
+        pub mod async_task;
+        pub mod hero_service;
+        pub mod region;
+        pub mod scheduler;
+    }
+    pub mod tasks {
+        pub mod explore;
+        pub mod task_kind;
+    }
+}
+
+#[cfg(test)]
+pub mod test_helpers;

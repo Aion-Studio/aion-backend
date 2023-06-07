@@ -1,0 +1,14 @@
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/base64-a201aebccd90f27a.rmeta: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/chunked_encoder.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/display.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/read/mod.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/read/decoder.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/tables.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/write/mod.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/write/encoder.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/encode.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/decode.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/base64-a201aebccd90f27a.d: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/chunked_encoder.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/display.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/read/mod.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/read/decoder.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/tables.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/write/mod.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/write/encoder.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/encode.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/decode.rs
+
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/lib.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/chunked_encoder.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/display.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/read/mod.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/read/decoder.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/tables.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/write/mod.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/write/encoder.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/encode.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/base64-0.12.3/src/decode.rs:

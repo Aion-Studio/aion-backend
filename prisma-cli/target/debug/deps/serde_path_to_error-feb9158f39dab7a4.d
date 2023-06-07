@@ -1,0 +1,11 @@
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/serde_path_to_error-feb9158f39dab7a4.rmeta: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/de.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/path.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/ser.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/wrap.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/libserde_path_to_error-feb9158f39dab7a4.rlib: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/de.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/path.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/ser.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/wrap.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/serde_path_to_error-feb9158f39dab7a4.d: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/de.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/path.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/ser.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/wrap.rs
+
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/lib.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/de.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/path.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/ser.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/serde_path_to_error-0.1.11/src/wrap.rs:

@@ -1,0 +1,12 @@
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/libasync_trait-2b80a0ddbe29084f.dylib: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/args.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/bound.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/expand.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/lifetime.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/parse.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/receiver.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/verbatim.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/async_trait-2b80a0ddbe29084f.d: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/args.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/bound.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/expand.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/lifetime.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/parse.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/receiver.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/verbatim.rs
+
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/lib.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/args.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/bound.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/expand.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/lifetime.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/parse.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/receiver.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/async-trait-0.1.68/src/verbatim.rs:

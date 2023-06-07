@@ -1,0 +1,11 @@
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/parking_lot_core-633dbeb51b60dbe6.rmeta: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/parking_lot.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/spinwait.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/thread_parker/mod.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/util.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/word_lock.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/thread_parker/unix.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/parking_lot_core-633dbeb51b60dbe6.d: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/parking_lot.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/spinwait.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/thread_parker/mod.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/util.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/word_lock.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/thread_parker/unix.rs
+
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/lib.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/parking_lot.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/spinwait.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/thread_parker/mod.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/util.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/word_lock.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/parking_lot_core-0.9.7/src/thread_parker/unix.rs:

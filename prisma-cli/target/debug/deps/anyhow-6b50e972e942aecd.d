@@ -1,0 +1,15 @@
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/anyhow-6b50e972e942aecd.rmeta: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/backtrace.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/chain.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/context.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/ensure.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/error.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/fmt.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/kind.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/macros.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/ptr.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/wrapper.rs
+
+/Users/marko/idle-rpg/aion_server/prisma-cli/target/debug/deps/anyhow-6b50e972e942aecd.d: /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/lib.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/backtrace.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/chain.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/context.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/ensure.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/error.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/fmt.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/kind.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/macros.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/ptr.rs /Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/wrapper.rs
+
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/lib.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/backtrace.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/chain.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/context.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/ensure.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/error.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/fmt.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/kind.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/macros.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/ptr.rs:
+/Users/marko/.cargo/registry/src/github.com-1ecc6299db9ec823/anyhow-1.0.71/src/wrapper.rs:
