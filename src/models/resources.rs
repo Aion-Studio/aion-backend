@@ -1,10 +1,12 @@
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Resource {
     Aion(i32),
-    Material(MaterialType),
     Valor(i32),
     NexusShard(i32),
+    Oak(i32),
+    IronOre(i32),
+    Copper(i32),
+    Silk(i32),
 }
 
 #[derive(Clone, Debug, PartialEq)]

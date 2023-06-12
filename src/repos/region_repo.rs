@@ -5,7 +5,12 @@ use prisma_client_rust::QueryError;
 
 use crate::{
     models::{hero::Hero, region::RegionActionResult, resources::Resource},
-    prisma::{hero, region_action_result, PrismaClient, ResourceType},
+    prisma::{
+        hero,
+        region_action_result::{self, resources},
+        resource_value::{self, resource},
+        PrismaClient, ResourceType,
+    },
 };
 
 #[derive(Clone)]
@@ -31,8 +36,41 @@ impl RegionRepo {
         Ok(hero.into())
     }
     pub async fn store_result(&self, result: RegionActionResult) -> Result<(), QueryError> {
-        // Implement result storage logic...
+        let action_result = self
+            .prisma
+            .region_action_result()
+            .create(
+                result.xp,
+                result.discovery_level_increase,
+                hero::id::equals(result.hero_id),
+                // vec result.resources
+                vec![],
+            )
+            .exec()
+            .await
+            .unwrap(); // Implement result storage logic...
+
         Ok(())
+    }
+
+    pub async fn results_by_hero(
+        &self,
+        hero_id: String,
+    ) -> Result<Vec<RegionActionResult>, QueryError> {
+        let results = self
+            .prisma
+            .region_action_result()
+            .find_many(vec![region_action_result::hero::is(vec![
+                hero::id::equals(hero_id),
+            ])])
+            .exec()
+            .await
+            .unwrap();
+
+        let region_action_results: Vec<RegionActionResult> =
+            results.into_iter().map(RegionActionResult::from).collect();
+
+        Ok(region_action_results)
     }
 }
 
@@ -57,9 +95,31 @@ impl From<region_action_result::Data> for RegionActionResult {
         }
 
         Self {
+            hero_id: data.hero_id,
             resources,
             xp: data.xp,
             discovery_level_increase: data.discovery_level_increase,
+        }
+    }
+}
+
+impl From<resource_value::resource::Set> for ResourceType {
+    fn from(set: resource_value::resource::Set) -> Self {
+        set.0
+    }
+}
+
+impl<'a> From<&'a Resource> for ResourceType {
+    fn from(resource: &'a Resource) -> Self {
+        match resource {
+            Resource::Aion(_) => ResourceType::Aion,
+
+            Resource::Valor(_) => ResourceType::Valor,
+            Resource::NexusShard(_) => ResourceType::NexusShard,
+            Resource::Oak(_) => todo!(),
+            Resource::IronOre(_) => todo!(),
+            Resource::Copper(_) => todo!(),
+            Resource::Silk(_) => todo!(),
         }
     }
 }

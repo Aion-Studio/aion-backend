@@ -1,10 +1,9 @@
-use prisma_client_rust::QueryError;
 use uuid::Uuid;
 
 use crate::{
     models::region::{RegionActionResult, RegionName},
     services::tasks::explore::ExploreAction,
-    types::{AsyncResult, RepoFuture},
+    types::RepoFuture,
 };
 
 use super::async_task::TaskError;
@@ -21,4 +20,5 @@ pub trait RegionService {
         explore_action: &'a ExploreAction,
     ) -> RepoFuture<'a, RegionActionResult>;
     fn calculate_boost_factor(&self, exploration: i32) -> f64;
+    fn results_by_hero(&self, hero_id: String) -> RepoFuture<Vec<RegionActionResult>>;
 }

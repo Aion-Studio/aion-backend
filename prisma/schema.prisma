@@ -28,18 +28,19 @@ model Inventory {
 }
 
 model Hero {
-  id            String          @id @default(uuid())
-  aionCapacity  Int
-  aionCollected Int
-  baseStatsId   String          @unique @map("base_stats_id")
-  attributesId  String          @unique @map("attributes_id")
-  baseStats     BaseStats       @relation(fields: [baseStatsId], references: [id])
-  attributes    Attributes      @relation(fields: [attributesId], references: [id])
-  inventory     Inventory       @relation(fields: [inventoryId], references: [id])
-  inventoryId   String          @unique @map("inventory_id")
-  retinueSlots  RetinueSlot[]
-  heroRegion    HeroRegion[]
-  exploreAction ExploreAction[] // Added ExploreAction relation
+  id                 String               @id @default(uuid())
+  aionCapacity       Int
+  aionCollected      Int
+  baseStatsId        String               @unique @map("base_stats_id")
+  attributesId       String               @unique @map("attributes_id")
+  baseStats          BaseStats            @relation(fields: [baseStatsId], references: [id])
+  attributes         Attributes           @relation(fields: [attributesId], references: [id])
+  inventory          Inventory            @relation(fields: [inventoryId], references: [id])
+  inventoryId        String               @unique @map("inventory_id")
+  retinueSlots       RetinueSlot[]
+  heroRegion         HeroRegion[]
+  exploreAction      ExploreAction[] // Added ExploreAction relation
+  RegionActionResult RegionActionResult[]
 }
 
 model HeroRegion {
@@ -97,9 +98,6 @@ enum ResourceType {
   Aion
   Valor
   NexusShard
-}
-
-enum MaterialType {
   Oak
   IronOre
   Copper
@@ -110,15 +108,6 @@ model ResourceCost {
   id       String       @id @default(uuid())
   resource ResourceType
   amount   Int
-  material MaterialType
-}
-
-model ResourceValue {
-  id                   String              @id @default(uuid())
-  resource             ResourceType
-  value                Int
-  RegionActionResult   RegionActionResult? @relation(fields: [regionActionResultId], references: [id])
-  regionActionResultId String?
 }
 
 model Region {
@@ -149,9 +138,19 @@ model ExploreAction {
   start_time      DateTime?
 }
 
+model ResourceValue {
+  id                   String             @id @default(uuid())
+  resource             ResourceType
+  value                Int
+  RegionActionResult   RegionActionResult @relation(fields: [regionActionResultId], references: [id])
+  regionActionResultId String
+}
+
 model RegionActionResult {
   id                       String          @id @default(uuid())
   resources                ResourceValue[]
   xp                       Int
   discovery_level_increase Float
+  heroId                   String          @map("hero_id")
+  hero                     Hero            @relation(fields: [heroId], references: [id])
 }

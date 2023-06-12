@@ -58,7 +58,6 @@ impl HeroRepo {
 
         let result = self
             .prisma
-            .as_ref()
             .hero()
             .create(
                 new_hero.aion_capacity,
@@ -73,7 +72,7 @@ impl HeroRepo {
             .with(hero::inventory::fetch())
             .exec()
             .await?;
-
+        
         Ok(result.into())
     }
     pub async fn update_level(&self, hero: Hero) -> Result<Hero, QueryError> {

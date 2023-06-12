@@ -36,6 +36,7 @@ pub enum ActionError {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RegionActionResult {
+    pub hero_id: String,
     pub resources: Vec<Resource>,
     pub xp: i32,
     pub discovery_level_increase: f64,

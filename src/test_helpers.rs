@@ -1,7 +1,7 @@
 use std::{
     println,
     process::Command,
-    sync::{Arc, Once},
+    sync::{Arc, Mutex},
 };
 
 use crate::{
@@ -24,7 +24,9 @@ use uuid::Uuid;
 
 use lazy_static::lazy_static;
 
-static INIT_RUN: Once = Once::new();
+lazy_static! {
+    static ref SETUP_DONE: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+}
 
 // Mock definition
 mock! {
@@ -72,15 +74,17 @@ async fn setup_once() -> Result<(), Box<dyn std::error::Error>> {
         .output()
         .expect("failed to execute process");
 
-    println!("migration complete output: {:?} \n", _output);
-
     Ok(())
 }
 
 pub async fn setup_test_database() -> Result<Data<PrismaClient>, Box<dyn std::error::Error>> {
-    INIT_RUN.call_once(|| {
-        let _ = setup_once();
-    });
+    {
+        let mut setup_done = SETUP_DONE.lock().unwrap();
+        if !*setup_done {
+            setup_once().await?;
+            *setup_done = true;
+        }
+    }
     // Re-initialize connected to test DB
     let prisma_client = PrismaClient::_builder()
         .with_url(format!("{}/testdb", URL.to_string())) // make sure to use the new database name

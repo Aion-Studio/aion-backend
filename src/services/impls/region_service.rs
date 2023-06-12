@@ -73,6 +73,7 @@ impl RegionService for RegionServiceImpl {
 
             let result = RegionActionResult {
                 xp: (explore_action.xp as f64 * boost_factor) as i32,
+                hero_id: hero.id.unwrap(),
                 resources: vec![],
                 discovery_level_increase: (explore_action.discovery_level as f64 * boost_factor),
             };
@@ -81,6 +82,19 @@ impl RegionService for RegionServiceImpl {
                 Ok(_) => Ok(result),
                 Err(err) => Err(err.into()),
             }
+        })
+    }
+
+    fn results_by_hero(&self, hero_id: String) -> RepoFuture<Vec<RegionActionResult>> {
+        let repo = self.repo.clone();
+
+        Box::pin(async move {
+            let results = match repo.clone().results_by_hero(hero_id).await {
+                Ok(results) => results,
+                Err(err) => return Err(err.into()),
+            };
+
+            Ok(results)
         })
     }
 
