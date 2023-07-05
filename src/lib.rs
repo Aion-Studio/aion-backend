@@ -4,9 +4,8 @@ pub mod configuration;
 // pub mod routes;
 // pub mod session_state;
 pub mod startup;
-pub mod telemetry;
-pub mod utils;
 pub mod types;
+pub mod utils;
 
 #[allow(warnings, unused)]
 pub mod prisma;
@@ -18,6 +17,8 @@ mod models {
     pub mod hero;
     pub mod region;
     pub mod resources;
+    pub mod date_times;
+    pub mod task;
 }
 
 mod repos {
@@ -48,11 +49,16 @@ mod services {
         pub mod hero_service;
         pub mod region;
         pub mod scheduler;
+        pub mod game_engine;
     }
     pub mod tasks {
         pub mod explore;
-        pub mod task_kind;
     }
+}
+
+pub mod handlers {
+    pub mod heroes;
+    pub mod regions;
 }
 
 #[cfg(test)]

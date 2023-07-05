@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
+use prisma_client_rust::chrono::Duration;
 use secrecy::Secret;
 use serde::Deserialize;
+
+use crate::models::region::RegionName;
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Settings {
@@ -8,7 +13,7 @@ pub struct Settings {
     pub redis_uri: Secret<String>,
 }
 
-#[derive(Deserialize, Clone,Debug)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct ApplicationSettings {
     pub host: String,
     pub port: u16,
@@ -83,4 +88,11 @@ impl TryFrom<String> for Environment {
             )),
         }
     }
+}
+
+pub fn get_region_durations() -> HashMap<RegionName, Duration> {
+    let mut durations = HashMap::new();
+    durations.insert(RegionName::Dusane, Duration::seconds(3));
+    durations.insert(RegionName::Buzna, Duration::seconds(3));
+    durations
 }

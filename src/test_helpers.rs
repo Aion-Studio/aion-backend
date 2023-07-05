@@ -5,47 +5,17 @@ use std::{
 };
 
 use crate::{
-    models::{
-        hero::{Attributes, BaseStats, Hero, Range},
-        region::RegionName,
-    },
+    models::hero::{Attributes, BaseStats, Hero, Range},
     prisma::PrismaClient,
-    services::{tasks::explore::ExploreAction, traits::scheduler::TaskScheduler},
 };
 use actix_web::web::Data;
-use mockall::predicate::*;
-use mockall::*;
 use prisma_client_rust::raw;
 use rand::Rng;
-
-use crate::services::tasks::task_kind::TaskKind;
-use crate::services::traits::async_task::TaskError;
-use uuid::Uuid;
 
 use lazy_static::lazy_static;
 
 lazy_static! {
     static ref SETUP_DONE: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
-}
-
-// Mock definition
-mock! {
-    pub TaskScheduler {
-        pub fn schedule(&self, task: TaskKind) -> Result<Uuid, TaskError>;
-    }
-}
-
-impl TaskScheduler for MockTaskScheduler {
-    fn schedule(&self, task: TaskKind) -> Result<Uuid, TaskError> {
-        self.schedule(task)
-    }
-
-    fn get_task(&self, task_id: Uuid) -> Option<TaskKind> {
-        Some(TaskKind::Exploration(ExploreAction::new(
-            String::from("hero_id"),
-            RegionName::Dusane,
-        )))
-    }
 }
 
 lazy_static! {

@@ -16,7 +16,18 @@ impl HeroRepo {
     pub fn new(prisma: Arc<Data<PrismaClient>>) -> Self {
         Self { prisma }
     }
-
+    pub async fn get_hero(&self, hero_id:String) ->Result<Hero, QueryError>{
+        let hero = self
+            .prisma
+            .hero()
+            .find_unique(hero::id::equals(hero_id))
+            .with(hero::base_stats::fetch())
+            .with(hero::attributes::fetch())
+            .with(hero::inventory::fetch())
+            .exec()
+            .await?;
+        Ok(hero.unwrap().into())
+    }
     pub async fn create(&self, new_hero: Hero) -> Result<Hero, QueryError> {
         // Use Prisma to create a new Hero in the database
         // Convert the resulting record into a Hero struct and return it

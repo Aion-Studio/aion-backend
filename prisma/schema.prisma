@@ -22,7 +22,7 @@ model Item {
 
 model Inventory {
   id       String @id @default(uuid())
-  active   Item[] @relation("active")
+  active   Item[] @relation("active") 
   backpack Item[] @relation("backpack")
   hero     Hero?
 }
@@ -44,12 +44,13 @@ model Hero {
 }
 
 model HeroRegion {
-  id              String @id @default(uuid())
-  HeroId          String @map("hero_id")
-  region_name     String @map("region_name")
-  discovery_level Int    @map("discovery_level")
-  Hero            Hero   @relation(fields: [HeroId], references: [id])
-  Region          Region @relation(fields: [region_name], references: [name])
+  id              String  @id @default(uuid())
+  HeroId          String  @map("hero_id")
+  region_name     String  @map("region_name")
+  discovery_level Int     @map("discovery_level")
+  Hero            Hero    @relation(fields: [HeroId], references: [id])
+  Region          Region  @relation(fields: [region_name], references: [name])
+  current_location Boolean @default(false) @map("current_location")
 }
 
 model BaseStats {
@@ -112,9 +113,9 @@ model ResourceCost {
 
 model Region {
   name             String          @id
-  adjacent_regions String
+  adjacent_regions String[]
   HeroRegion       HeroRegion[]
-  Leyline          Leyline[]
+  Leylines         Leyline[]
   ExploreAction    ExploreAction[]
 }
 

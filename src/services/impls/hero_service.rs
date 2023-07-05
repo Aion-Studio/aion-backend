@@ -31,6 +31,18 @@ impl HeroService for ServiceHeroes {
         })
     }
 
+    fn get_hero(&self, hero_id: String) -> RepoFuture<Hero> {
+        Box::pin(async move {
+            match self.repo.get_hero(hero_id).await {
+                Ok(hero) => Ok(hero),
+                Err(e) => {
+                    eprintln!("Error getting hero: {}", e);
+                    Err(e)
+                }
+            }
+        })
+    }
+
     fn level_up_hero<'a>(&'a self, hero: Hero) -> RepoFuture<'a, Hero> {
         Box::pin(async move {
             match self.repo.update_level(hero).await {

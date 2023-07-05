@@ -1,39 +1,97 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use prisma_client_rust::chrono::Duration;
+
+use crate::models::task::TaskKind;
+use crate::services::impls::game_engine_service::GameEngineService;
 use crate::services::impls::hero_service::ServiceHeroes;
 use crate::services::impls::region_service::RegionServiceImpl;
+use crate::services::impls::task_scheduler_service::TaskSchedulerService;
+use crate::services::traits::async_task::{Task, TaskStatus};
+use crate::services::traits::game_engine::GameEngine;
 use crate::services::traits::hero_service::HeroService;
 use crate::services::traits::region::RegionService;
-use crate::test_helpers::{random_hero, setup_test_database, MockTaskScheduler};
+use crate::services::traits::scheduler::TaskScheduler;
+use crate::test_helpers::{random_hero, setup_test_database};
 use crate::{models::region::RegionName, services::tasks::explore::ExploreAction};
-use uuid::Uuid;
 
 #[tokio::test]
 async fn test_start_exploration() {
-    let mut mock_scheduler = MockTaskScheduler::new();
-    mock_scheduler
-        .expect_schedule()
-        .returning(|_| Ok(Uuid::new_v4()));
+    let mut durations = HashMap::new();
+    durations.insert(RegionName::Dusane, Duration::seconds(10));
+    let scheduler = Arc::new(TaskSchedulerService::new());
+    let game_engine = Arc::new(GameEngineService::new());
+    let tx = game_engine.clone().result_channels().unwrap();
 
     let prisma_client = setup_test_database().await.unwrap();
-    let service = RegionServiceImpl::new(Arc::new(mock_scheduler), prisma_client.clone());
+    let service = RegionServiceImpl::new(scheduler.clone(), prisma_client.clone(), durations, tx);
 
     let hero_id = "test_hero_id".to_string();
     let region_name = RegionName::Dusane; // assuming this is a valid region name
 
     // Execute the start_exploration function and get the result
-    let result = service.start_exploration(hero_id, region_name);
+    let result = service.start_exploration(hero_id.clone(), region_name.clone());
 
     // Assert that the result is an Ok value (exploration start was successful)
     assert!(result.is_ok(), "Starting exploration failed");
 }
 
 #[tokio::test]
+async fn test_start_exploration_task_status() {
+    let mut durations = HashMap::new();
+    durations.insert(RegionName::Dusane, Duration::seconds(2));
+    let scheduler = Arc::new(TaskSchedulerService::new());
+    let prisma_client = setup_test_database().await.unwrap();
+    let game_engine = Arc::new(GameEngineService::new());
+    let tx = game_engine.clone().result_channels().unwrap();
+
+    let service = RegionServiceImpl::new(scheduler.clone(), prisma_client.clone(), durations, tx);
+    let hero_service = ServiceHeroes::new(prisma_client.clone());
+    let mut new_hero = random_hero();
+    new_hero.attributes.exploration = 17;
+    let hero = hero_service.create_hero(new_hero).await.unwrap();
+    let hero_id = hero.get_id().clone();
+
+    let region_name = RegionName::Dusane;
+
+    let task_id = service
+        .start_exploration(hero_id.clone(), region_name.clone())
+        .expect("Failed to start exploration");
+
+    let task = scheduler.get_task(task_id);
+    assert!(task.is_some(), "Task not found");
+
+    let explore_task = match task {
+        Some(task_kind) => match task_kind {
+            TaskKind::Exploration(explore_task) => explore_task,
+            _ => panic!("TaskKind is not Exploration"),
+        },
+        None => todo!(),
+    };
+
+    assert_eq!(hero_id, explore_task.hero_id());
+    assert_eq!(region_name, explore_task.region_name);
+
+    // Check task status
+    assert_eq!(explore_task.check_status(), TaskStatus::InProgress);
+    println!("Task status in progress is correct");
+    //wait 2s and check status again
+    tokio::time::sleep(Duration::seconds(2).to_std().unwrap()).await;
+    assert_eq!(explore_task.check_status(), TaskStatus::Completed);
+    println!("Task status completed is correct");
+}
+
+#[tokio::test]
 async fn test_generate_result_for_exploration() {
-    let mock_scheduler = MockTaskScheduler::new();
+    let scheduler = Arc::new(TaskSchedulerService::new());
+    let mut durations = HashMap::new();
+    durations.insert(RegionName::Dusane, Duration::seconds(10));
+    let game_engine = Arc::new(GameEngineService::new());
+    let tx = game_engine.clone().result_channels().unwrap();
 
     let prisma_client = setup_test_database().await.unwrap();
-    let service = RegionServiceImpl::new(Arc::new(mock_scheduler), prisma_client.clone());
+    let service = RegionServiceImpl::new(scheduler, prisma_client.clone(), durations.clone(), tx);
 
     let hero_service = ServiceHeroes::new(prisma_client.clone());
     let mut new_hero = random_hero();
@@ -42,7 +100,7 @@ async fn test_generate_result_for_exploration() {
     let hero_id = hero.get_id().clone();
     let region_name = RegionName::Dusane; // assuming this is a valid region name
 
-    let explore_action = ExploreAction::new(hero.get_id(), region_name);
+    let explore_action = ExploreAction::new(hero.get_id(), region_name, &durations);
 
     // Execute the generate_result_for_exploration function and get the result
     let result = service

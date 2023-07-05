@@ -12,6 +12,7 @@ services:
       - ./configuration:/idle_rpg/configuration
       - ./prisma:/idle_rpg/prisma
       - ./Cargo.toml:/idle_rpg/Cargo.toml
+      - ./target:/idle_rpg/target  # added line
     environment:
       APP_ENVIRONMENT: local
     ports:

@@ -1,6 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 #[allow(dead_code)]
 #[allow(unused_variables)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Hero {
     pub id: Option<String>,
     pub base_stats: BaseStats,
@@ -63,7 +66,7 @@ impl Hero {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize,Deserialize)]
 pub struct BaseStats {
     pub id: Option<String>,
     pub level: i32,
@@ -74,7 +77,7 @@ pub struct BaseStats {
     pub armor: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, Deserialize,Serialize)]
 pub struct Attributes {
     pub id: Option<String>,
     pub resilience: i32,
@@ -91,14 +94,14 @@ pub struct AttributeModifier {
     change: i32,           // positive for increase, negative for decrease
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, Deserialize,Serialize)]
 pub struct Inventory {
     pub hero_id: String,
     pub active: Vec<Item>,
     pub backpack: Vec<Item>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum RetinueSlot {
     Mage(Follower),
     Warrior(Follower),
@@ -107,14 +110,14 @@ pub enum RetinueSlot {
     Alchemist(Follower),
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, Deserialize,Serialize)]
 pub struct Follower {
     pub name: String,
     pub level: i32,
     pub bonus_attributes: Attributes,
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, Deserialize,Serialize)]
 pub struct Item {
     pub id: String,
     pub name: String,
@@ -122,7 +125,7 @@ pub struct Item {
     pub value: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
 pub struct Range<T> {
     pub min: T,
     pub max: T,

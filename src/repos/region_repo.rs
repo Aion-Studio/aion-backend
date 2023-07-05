@@ -4,9 +4,16 @@ use actix_web::web::Data;
 use prisma_client_rust::QueryError;
 
 use crate::{
-    models::{hero::Hero, region::RegionActionResult, resources::Resource},
+    models::{
+        hero::Hero,
+        region::{HeroRegion, Leyline, Region, RegionActionResult, RegionName},
+        resources::Resource,
+    },
     prisma::{
         hero,
+        hero_region::{self, current_location, hero_id},
+        leyline,
+        region::{self, adjacent_regions},
         region_action_result::{self, resources},
         resource_value::{self, resource},
         PrismaClient, ResourceType,
@@ -35,9 +42,81 @@ impl RegionRepo {
         let hero = h.unwrap();
         Ok(hero.into())
     }
-    pub async fn store_result(&self, result: RegionActionResult) -> Result<(), QueryError> {
-        let action_result = self
+
+    pub async fn create_hero_region(&self, hero: &Hero) -> Result<HeroRegion, QueryError> {
+        //Select a random enum variant from RegionName
+        let region_name = RegionName::random();
+
+        let hero_region = self
             .prisma
+            .hero_region()
+            .create(
+                0,
+                hero::id::equals(hero.get_id()),
+                region::name::equals(region_name.to_str()),
+                vec![current_location::set(true)],
+            )
+            .exec()
+            .await?;
+
+        Ok(hero_region.into())
+    }
+
+    pub async fn get_hero_regions(&self, hero_id: &str) -> Result<Vec<HeroRegion>, QueryError> {
+        let hero_region = self
+            .prisma
+            .hero_region()
+            //find first where hero id is equal to hero_id and current_location is true
+            .find_many(vec![hero_id::equals(hero_id.to_string())])
+            .with(hero_region::region::fetch())
+            .exec()
+            .await?;
+
+        // maps the vec to the from impl
+        Ok(hero_region.into_iter().map(HeroRegion::from).collect())
+    }
+
+    pub async fn insert_new_region(
+        &self,
+        region_name: RegionName,
+        adjacent_regions: Vec<String>,
+    ) -> Result<Region, QueryError> {
+        let region = self
+            .prisma
+            .region()
+            .create(
+                region_name.to_str(),
+                vec![adjacent_regions::set(adjacent_regions)],
+            )
+            .exec()
+            .await?;
+
+        Ok(region.into())
+    }
+
+    pub async fn add_leyline(
+        &self,
+        region_name: RegionName,
+        location: String,
+        xp_reward: i32,
+    ) -> Result<Leyline, QueryError> {
+        let leyline = self
+            .prisma
+            .leyline()
+            .create(
+                location,
+                xp_reward,
+                region::name::equals(region_name.to_str()),
+                vec![],
+            )
+            .exec()
+            .await?;
+
+        Ok(leyline.into())
+    }
+
+    pub async fn store_result(&self, result: RegionActionResult) -> Result<(), QueryError> {
+        self.prisma
             .region_action_result()
             .create(
                 result.xp,
@@ -120,6 +199,59 @@ impl<'a> From<&'a Resource> for ResourceType {
             Resource::IronOre(_) => todo!(),
             Resource::Copper(_) => todo!(),
             Resource::Silk(_) => todo!(),
+        }
+    }
+}
+
+impl From<hero_region::Data> for HeroRegion {
+    fn from(data: hero_region::Data) -> Self {
+        Self {
+            hero_id: data.hero_id,
+            region_name: match data.region_name.as_str() {
+                "Dusane" => RegionName::Dusane,
+                "Yezer" => RegionName::Yezer,
+                "Emerlad" => RegionName::Emerlad,
+                "Forest" => RegionName::Forest,
+                "Buzna" => RegionName::Buzna,
+                "Veladria" => RegionName::Veladria,
+                "Lindon" => RegionName::Lindon,
+                _ => panic!("Unexpected region name"),
+            },
+            discovery_level: data.discovery_level,
+            current_location: data.current_location,
+        }
+    }
+}
+
+impl From<region::Data> for Region {
+    fn from(data: region::Data) -> Self {
+        Self {
+            name: match data.name.as_str() {
+                "Dusane" => RegionName::Dusane,
+                "Yezer" => RegionName::Yezer,
+                "Emerlad" => RegionName::Emerlad,
+                "Forest" => RegionName::Forest,
+                "Buzna" => RegionName::Buzna,
+                "Veladria" => RegionName::Veladria,
+                "Lindon" => RegionName::Lindon,
+                _ => panic!("Unexpected region name"),
+            },
+            adjacent_regions: data.adjacent_regions,
+            leylines: data
+                .leylines
+                .unwrap_or_else(Vec::new)
+                .into_iter()
+                .map(|l| l.into())
+                .collect(),
+        }
+    }
+}
+
+impl From<leyline::Data> for Leyline {
+    fn from(data: leyline::Data) -> Self {
+        Self {
+            location: data.location,
+            xp_reward: data.xp_reward,
         }
     }
 }
