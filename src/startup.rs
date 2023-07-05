@@ -66,7 +66,7 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
     let prisma = web::Data::new(prisma_client);
 
     let hero_service = web::Data::new(ServiceHeroes::new(prisma.clone()));
-    let game_engine = web::Data::new(GameEngineService::new());
+    let game_engine = web::Data::new(GameEngineService::new(prisma.clone()));
     let scheduler = Arc::new(TaskSchedulerService::new());
     let task_schedule_service = web::Data::new(scheduler.clone());
     let durations = get_region_durations();

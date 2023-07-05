@@ -24,6 +24,7 @@ mod models {
 mod repos {
     pub mod hero_repo;
     pub mod region_repo;
+    pub mod game_engine;
     // pub mod action_repo;
     // pub mod resources_repo;
 }

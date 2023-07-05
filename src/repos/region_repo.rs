@@ -115,23 +115,6 @@ impl RegionRepo {
         Ok(leyline.into())
     }
 
-    pub async fn store_result(&self, result: RegionActionResult) -> Result<(), QueryError> {
-        self.prisma
-            .region_action_result()
-            .create(
-                result.xp,
-                result.discovery_level_increase,
-                hero::id::equals(result.hero_id),
-                // vec result.resources
-                vec![],
-            )
-            .exec()
-            .await
-            .unwrap(); // Implement result storage logic...
-
-        Ok(())
-    }
-
     pub async fn results_by_hero(
         &self,
         hero_id: String,

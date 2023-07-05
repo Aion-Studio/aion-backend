@@ -192,10 +192,11 @@ impl RegionService for RegionServiceImpl {
                 resources: vec![],
                 discovery_level_increase: (explore_action.discovery_level as f64 * boost_factor),
             };
-            match repo.clone().store_result(result.clone()).await {
-                Ok(_) => Ok(result),
-                Err(err) => Err(err.into()),
-            }
+            Ok(result)
+            // match repo.clone().store_result(result.clone()).await {
+            //     Ok(_) => Ok(result),
+            //     Err(err) => Err(err.into()),
+            // }
         })
     }
 
