@@ -41,6 +41,15 @@ model Hero {
   heroRegion         HeroRegion[]
   exploreAction      ExploreAction[] // Added ExploreAction relation
   RegionActionResult RegionActionResult[]
+  resources HeroResource[]
+}
+
+model HeroResource {
+  id       String       @id @default(uuid())
+  heroId   String       @map("hero_id")
+  hero     Hero         @relation(fields: [heroId], references: [id])
+  resource ResourceType
+  amount   Int
 }
 
 model HeroRegion {

@@ -9,13 +9,6 @@ pub enum Resource {
     Silk(i32),
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum MaterialType {
-    Oak,
-    IronOre,
-    Copper,
-    Silk,
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResourceCost {

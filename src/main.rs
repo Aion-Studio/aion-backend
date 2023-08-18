@@ -17,7 +17,7 @@ enum ApplicationError {
     #[display(fmt = "timeout")]
     Timeout,
 }
- 
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // let subscriber = get_subscriber("idle_rpg".into(), "info".into(), std::io::stdout);
@@ -34,7 +34,6 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
 
 fn report_exit(
     task_name: &str,

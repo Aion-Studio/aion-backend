@@ -16,6 +16,7 @@ impl ServiceHeroes {
         let repo = HeroRepo::new(Arc::new(prisma));
         Self { repo }
     }
+
 }
 
 impl HeroService for ServiceHeroes {
@@ -67,3 +68,4 @@ impl HeroService for ServiceHeroes {
         hero.assign_follower(slot);
     }
 }
+
