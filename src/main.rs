@@ -1,9 +1,12 @@
 use aion_server::configuration::get_configuration;
-use aion_server::startup::Application;
-// use aion_server::telemetry::{get_subscriber, init_subscriber};
+use aion_server::webserver::Application;
 use tokio::task::JoinError;
 
 use derive_more::{Display, Error};
+use tracing::{error, info};
+use tracing::log::warn;
+
+extern crate aion_server;
 
 #[allow(unused)]
 #[derive(Debug, Display, Error)]
@@ -20,17 +23,16 @@ enum ApplicationError {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // let subscriber = get_subscriber("idle_rpg".into(), "info".into(), std::io::stdout);
-    // init_subscriber(subscriber);
-
+    if !aion_server::tracing_subscribe() {
+        warn!("no tracing subscriber");
+    }
     let configuration = get_configuration().expect("Failed to read configuration.");
-
     let application = Application::build(configuration).await?;
     let application_task = tokio::spawn(application.run_until_stopped());
-
     tokio::select! {
         o = application_task => report_exit("API", o),
-    };
+    }
+    ;
 
     Ok(())
 }
@@ -41,14 +43,14 @@ fn report_exit(
 ) {
     match outcome {
         Ok(Ok(())) => {
-            println!("{} has exited", task_name)
+            info!("{} has exited", task_name)
         }
         Ok(Err(e)) => {
-            println!("{} has panicked: {:?}", task_name, e)
+            error!("{} has panicked: {:?}", task_name, e)
         }
 
         Err(e) => {
-            println!("{} has panicked: {:?}", task_name, e)
+            error!("{} has panicked: {:?}", task_name, e)
         }
     }
 }

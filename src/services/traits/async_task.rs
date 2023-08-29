@@ -4,8 +4,9 @@ use thiserror::Error;
 use prisma_client_rust::chrono::{self, Duration};
 use uuid::Uuid;
 
-pub type TaskExecReturn = Pin<Box<dyn Future<Output = Result<(), TaskError>> + Send>>;
-pub type TaskReturn = Result<Uuid,TaskError>;
+pub type TaskExecReturn = Pin<Box<dyn Future<Output=Result<(), TaskError>> + Send>>;
+pub type TaskReturn = Result<Uuid, TaskError>;
+
 pub trait Task {
     fn execute(&self) -> TaskExecReturn;
     fn id(&self) -> Uuid;
@@ -29,7 +30,12 @@ pub enum TaskError {
     ExecutionFailed,
     #[error("Insert failed")]
     InsertFailed,
-    #[error("Repository error")]
-    RepoError, // Different types of errors that can occur in a task
-               // This will need to be customized for your application
+    #[error("{0}")]
+    RepoError(String), // Different types of errors that can occur in a task
+}
+
+impl From<prisma_client_rust::QueryError> for TaskError {
+    fn from(e: prisma_client_rust::QueryError) -> Self {
+        TaskError::RepoError(e.to_string())
+    }
 }

@@ -5,16 +5,13 @@ use actix_web::{get, post, HttpResponse, Responder};
 use serde::Serialize;
 
 use crate::models::hero::Hero;
-use crate::models::region::HeroRegion;
+use crate::models::region::{HeroRegion, Region};
 use crate::models::task::TaskKind;
-use crate::services::impls::game_engine_service::GameEngineService;
+use crate::services::impls::action_executor::ActionExecutor;
 use crate::services::impls::hero_service::ServiceHeroes;
-use crate::services::impls::region_service::RegionServiceImpl;
-use crate::services::impls::task_scheduler_service::TaskSchedulerService;
-use crate::services::traits::game_engine::GameEngine;
+use crate::services::impls::region_service::RegionService;
+use crate::services::impls::tasks::TaskManager;
 use crate::services::traits::hero_service::HeroService;
-use crate::services::traits::region::RegionService;
-use crate::services::traits::scheduler::TaskScheduler;
 
 #[derive(Serialize)]
 struct HeroResponse {
@@ -25,10 +22,10 @@ struct HeroResponse {
 #[post("/heroes")]
 async fn create_hero_endpoint(
     hero_service: Data<ServiceHeroes>,
-    region_service: Data<RegionServiceImpl>,
-    game_engine: Data<GameEngineService>,
+    region_service: Data<RegionService>,
+    executor: Data<ActionExecutor>,
 ) -> impl Responder {
-    let hero_data = game_engine.generate_hero().await.unwrap();
+    let hero_data = executor.generate_hero().await.unwrap();
     let created_hero = hero_service.create_hero(hero_data.clone()).await.unwrap();
     let region_hero = region_service.create_region_hero(&created_hero).await;
 
@@ -54,8 +51,8 @@ struct HeroStateResponse {
 #[get("/heroes/{id}")]
 async fn hero_state(
     hero_service: Data<ServiceHeroes>,
-    region_service: Data<Arc<RegionServiceImpl>>,
-    task_scheduler: Data<Arc<TaskSchedulerService>>, // to this line
+    region_service: Data<Arc<RegionService>>,
+    task_scheduler: Data<Arc<TaskManager>>, // to this line
     path: Path<String>,
 ) -> impl Responder {
     let hero_id = path.into_inner();

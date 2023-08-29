@@ -3,9 +3,11 @@ pub mod configuration;
 // pub mod idempotency;
 // pub mod routes;
 // pub mod session_state;
-pub mod startup;
+pub mod webserver;
 pub mod types;
 pub mod utils;
+
+pub mod telemetry;
 
 #[allow(warnings, unused)]
 pub mod prisma;
@@ -31,7 +33,7 @@ mod repos {
 
 mod services {
     pub mod impls {
-        pub mod game_engine_service;
+        pub mod action_executor;
         pub mod hero_service;
         pub mod region_service;
 
@@ -42,7 +44,7 @@ mod services {
         mod region_service_test;
 
         pub mod items_service;
-        pub mod task_scheduler_service;
+        pub mod tasks;
     }
 
     pub mod traits {
@@ -64,3 +66,22 @@ pub mod handlers {
 
 #[cfg(test)]
 pub mod test_helpers;
+
+const LOG_ENV_VAR: &str = "INDEXER_LOG";
+#[cfg(not(all(tokio_unstable, feature = "debug")))]
+pub fn tracing_subscribe() -> bool {
+    use std::env::{set_var, var};
+
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+    if var("INDEXER_LOG").is_err() {
+        set_var("INDEXER_LOG", "debug");
+    }
+
+    println!("Tracing subscriber initialized");
+    let env_filter = fmt::layer().with_filter(EnvFilter::from_env(LOG_ENV_VAR));
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .try_init()
+        .is_ok()
+}

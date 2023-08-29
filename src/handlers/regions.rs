@@ -5,12 +5,15 @@ use actix_web::{
     web::{Data, Json, Path},
     HttpResponse, Responder,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     models::region::{Leyline, RegionName},
-    services::{impls::region_service::RegionServiceImpl, traits::region::RegionService},
+    services::{impls::region_service::RegionService},
 };
+use crate::models::task::TaskKind;
+use crate::services::tasks::explore::ExploreAction;
+use crate::webserver::{Application, AppState};
 
 #[derive(Debug, Deserialize)]
 pub struct RegionPayload {
@@ -18,10 +21,17 @@ pub struct RegionPayload {
     adjacent_regions: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+struct ExploreResponse {
+    message: String,
+    status: String,
+}
+
 #[post("/region/explore/{hero_id}")]
 pub async fn explore_region(
     path: Path<String>,
-    region_service: Data<Arc<RegionServiceImpl>>,
+    region_service: Data<Arc<RegionService>>,
+    app: Data<AppState>,
 ) -> impl Responder {
     let hero_id = path.into_inner();
 
@@ -30,10 +40,14 @@ pub async fn explore_region(
         .await
         .unwrap();
 
-    let id = region_service.start_exploration(hero_id, current_region.region_name.clone());
-
-    match id {
-        Ok(id) => HttpResponse::Ok().json(id),
+    // let id = region_service.start_exploration(hero_id, current_region.region_name.clone());
+    let task = ExploreAction::new(hero_id, current_region.region_name, &app.durations);
+    let sent = app.executor.task_sender.send(TaskKind::Exploration(task));
+    match sent {
+        Ok(()) => HttpResponse::Ok().json(ExploreResponse {
+            message: "Exploration started".to_string(),
+            status: "OK".to_string(),
+        }),
         Err(e) => return HttpResponse::InternalServerError().json(e.to_string()),
     }
 }
@@ -41,7 +55,7 @@ pub async fn explore_region(
 #[post("/region")]
 pub async fn create_region(
     payload: Json<RegionPayload>,
-    region_service: Data<RegionServiceImpl>,
+    region_service: Data<RegionService>,
 ) -> impl Responder {
     let created_region = region_service
         .insert_new_region(payload.region.clone(), payload.adjacent_regions.clone())
@@ -57,7 +71,7 @@ pub async fn create_region(
 pub async fn add_leyline(
     path: Path<String>,
     leyline: Json<Leyline>,
-    region_service: Data<RegionServiceImpl>,
+    region_service: Data<RegionService>,
 ) -> impl Responder {
     let region_name = path.into_inner();
     let created_leyline = region_service

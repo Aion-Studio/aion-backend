@@ -1,24 +1,25 @@
 use std::sync::Arc;
 
-use actix_web::web::Data;
 use prisma_client_rust::QueryError;
 
-use crate::models::hero::{Attributes, BaseStats, Follower, Inventory, Item, Range, RetinueSlot};
-use crate::models::region::RegionActionResult;
-use crate::prisma::{attributes, base_stats, follower, hero, inventory, item, retinue_slot};
-use crate::{models::hero::Hero, prisma::PrismaClient};
+use crate::prisma::{hero};
+use crate::{prisma::PrismaClient};
+use crate::models::task::RegionActionResult;
 
 #[derive(Clone)]
 pub struct GameEngineRepo {
-    prisma: Arc<Data<PrismaClient>>,
+    prisma: Arc<PrismaClient>,
 }
 
 impl GameEngineRepo {
-    pub fn new(prisma: Arc<Data<PrismaClient>>) -> Self {
+    pub fn new(prisma: Arc<PrismaClient>) -> Self {
         Self { prisma }
     }
 
-    pub async fn store_region_action_result(&self, result: RegionActionResult) -> Result<(), QueryError> {
+    pub async fn store_region_action_result(
+        &self,
+        result: RegionActionResult,
+    ) -> Result<(), QueryError> {
         self.prisma
             .region_action_result()
             .create(

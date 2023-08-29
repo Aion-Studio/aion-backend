@@ -90,7 +90,9 @@ impl TryFrom<String> for Environment {
     }
 }
 
-pub fn get_region_durations() -> HashMap<RegionName, Duration> {
+pub type Durations = HashMap<RegionName, Duration>;
+
+pub fn get_region_durations() -> Durations {
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::seconds(3));
     durations.insert(RegionName::Buzna, Duration::seconds(3));

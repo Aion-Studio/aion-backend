@@ -19,14 +19,15 @@ use crate::{
         PrismaClient, ResourceType,
     },
 };
+use crate::models::task::RegionActionResult;
 
 #[derive(Clone)]
 pub struct RegionRepo {
-    prisma: Arc<Data<PrismaClient>>,
+    prisma: Arc<PrismaClient>,
 }
 
 impl RegionRepo {
-    pub fn new(prisma: Arc<Data<PrismaClient>>) -> Self {
+    pub fn new(prisma: Arc<PrismaClient>) -> Self {
         Self { prisma }
     }
 

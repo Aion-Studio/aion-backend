@@ -59,6 +59,7 @@ impl HeroRepo {
                 new_hero.attributes.resilience,
                 new_hero.attributes.agility,
                 new_hero.attributes.intelligence,
+
                 new_hero.attributes.exploration,
                 new_hero.attributes.crafting,
                 vec![],
