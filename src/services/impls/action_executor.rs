@@ -3,31 +3,34 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use rand::Rng;
 
 use crate::{
-    models::hero::{Attributes, BaseStats, Hero, Range},
+    models::{
+        hero::{Attributes, BaseStats, Hero, Range},
+        task::RegionActionResult,
+    },
     prisma::PrismaClient,
     repos::game_engine::GameEngineRepo,
     types::AsyncResult,
 };
 use flume::{unbounded, Receiver, SendError, Sender};
 
-use crate::models::task::{RegionActionResult, TaskAction, TaskKind, TaskLootBox};
+use crate::models::task::{TaskAction, TaskKind, TaskLootBox};
 use crate::repos::region_repo::RegionRepo;
 use crate::services::impls::tasks::TaskManager;
 use crate::services::tasks::explore::ExploreAction;
 use crate::services::traits::async_task::TaskError;
 use tracing::{error, info};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ActionExecutor {
     pub result_sender: Sender<TaskLootBox>,
     pub task_sender: Sender<TaskKind>,
     pub repo: Arc<GameEngineRepo>,
     region_repo: Arc<RegionRepo>,
-    scheduler: Arc<TaskManager>,
+    pub scheduler: Arc<TaskManager>,
 }
 
 impl ActionExecutor {
-    pub fn new(prisma: Arc<PrismaClient>) -> Self {
+    pub fn new(prisma: Arc<PrismaClient>) -> Arc<Self> {
         let (result_sender, result_receiver) = unbounded();
         let (task_sender, task_receiver) = unbounded();
 
@@ -35,40 +38,41 @@ impl ActionExecutor {
         let repo = Arc::new(GameEngineRepo::new(prisma.clone()));
 
         let region_repo = Arc::new(RegionRepo::new(prisma.clone()));
-        let service = Self {
+        let service = Arc::new(Self {
             result_sender,
             task_sender,
             repo,
             region_repo,
             scheduler,
-        };
+        });
 
         // other fields
 
-        let service_clone = service.clone();
+        let service_clone = Arc::clone(&service);
         tokio::spawn(async move {
             service_clone.listen_for_results(result_receiver).await;
         });
 
-        let service_clone = service.clone();
+        let service_clone = Arc::clone(&service);
         tokio::spawn(async move {
             service_clone.handle_tasks(task_receiver).await;
         });
         // Spawn tasks
-
         service
     }
 
     async fn handle_tasks(self: Arc<Self>, receiver: Receiver<TaskKind>) {
+        // create println for self as a ptr
         while let Ok(task) = receiver.recv_async().await {
             let self_clone = self.clone();
             self_clone.handle_task(task).await;
         }
     }
 
-    fn handle_task(self: Arc<Self>, task: TaskKind) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn handle_task(self: Arc<Self>, task: TaskKind) -> Pin<Box<dyn Future<Output=()> + Send>> {
         Box::pin(async move {
             let (task_done_sender, task_done_receiver) = unbounded();
+            info!("Scheduling task: {:?}", task);
             match self.scheduler.schedule(task, task_done_sender) {
                 Ok(_) => {
                     while let Ok(task) = task_done_receiver.recv_async().await {
@@ -80,13 +84,12 @@ impl ActionExecutor {
                 }
                 Err(err) => {
                     error!("Error scheduling task: {}", err);
-                    return;
                 }
             }
         })
     }
 
-    async fn handle_task_completed(self: Arc<Self>, task: TaskKind) {
+    async fn handle_task_completed(&self, task: TaskKind) {
         info!("Task completed: {:?}", task);
         match task {
             TaskKind::Exploration(action) => {
@@ -97,10 +100,7 @@ impl ActionExecutor {
         }
     }
 
-    async fn explore_action_complete(
-        self: Arc<Self>,
-        action: ExploreAction,
-    ) -> Result<(), TaskError> {
+    async fn explore_action_complete(&self, action: ExploreAction) -> Result<(), TaskError> {
         info!("Exploration action complete: {:?}", action);
         let self_clone = self.clone();
         match self.generate_loot_box(&TaskAction::Explore(action)).await {
@@ -112,10 +112,7 @@ impl ActionExecutor {
         }
     }
 
-    async fn generate_loot_box(
-        self: Arc<Self>,
-        action: &TaskAction,
-    ) -> Result<TaskLootBox, TaskError> {
+    async fn generate_loot_box(&self, action: &TaskAction) -> Result<TaskLootBox, TaskError> {
         match action {
             TaskAction::Explore(action) => {
                 let hero = match self.region_repo.get_hero(&action.hero_id).await {
@@ -146,78 +143,78 @@ impl ActionExecutor {
             // Calculate boost factor
             let boost: f64 = 1.0
                 + ((max_value - base_value)
-                    * (1.0 - (-growth_factor * (exploration as f64 - base_value)).exp()))
+                * (1.0 - (-growth_factor * (exploration as f64 - base_value)).exp()))
                 .min(0.40);
 
             boost
         }
+    }
 
-        pub fn result_channels(&self) -> Result<Sender<TaskLootBox>, Box<dyn std::error::Error>> {
-            Ok(self.result_sender.clone())
-        }
+    pub fn result_channels(&self) -> Result<Sender<TaskLootBox>, Box<dyn std::error::Error>> {
+        Ok(self.result_sender.clone())
+    }
 
-        pub fn listen_for_results(
-            self: Arc<Self>,
-            rx: Receiver<TaskLootBox>,
-        ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-            Box::pin(async move {
-                /* Here we add all the cases for every type of action and
-                 * update the state of heroes and data models accordingly.
-                 *
-                 *
-                 *
-                 */
-                while let Ok(result) = rx.recv_async().await {
-                    match result {
-                        TaskResult::Region(result) => {
-                            if let Err(err) = self
-                                .repo
-                                .clone()
-                                .store_region_action_result(result.clone())
-                                .await
-                            {
-                                eprintln!("Error storing region action result: {}", err);
-                                return;
-                            }
-                            println!("Exploration result: {:?}", result);
-                        }
-                    }
+    pub fn listen_for_results(
+        &self,
+        rx: Receiver<TaskLootBox>,
+    ) -> Pin<Box<dyn Future<Output=()> + Send>> {
+        Box::pin(async move {
+            /* Here we add all the cases for every type of action and
+             * update the state of heroes and data models accordingly.
+             *
+             *
+             *
+             */
+            while let Ok(result) = rx.recv_async().await {
+                match result {
+                    TaskLootBox::Region(result) => {} // TaskResult::Region(result) => {
+                    //     if let Err(err) = self
+                    //         .repo
+                    //         .clone()
+                    //         .store_region_action_result(result.clone())
+                    //         .await
+                    //     {
+                    //         eprintln!("Error storing region action result: {}", err);
+                    //         return;
+                    //     }
+                    //     println!("Exploration result: {:?}", result);
+                    // }
                 }
-            })
-        }
+            }
+        })
+    }
 
-        pub fn generate_hero(&self) -> AsyncResult<Hero, Box<dyn std::error::Error>> {
-            Box::pin(async {
-                let mut rng = rand::thread_rng();
+    pub fn generate_hero(&self) -> AsyncResult<Hero, Box<dyn std::error::Error>> {
+        Box::pin(async {
+            let mut rng = rand::thread_rng();
 
-                let hero = Hero::new(
-                    BaseStats {
-                        id: None,
-                        level: 1,
-                        xp: 0,
-                        damage: Range {
-                            min: rng.gen_range(1..5),
-                            max: rng.gen_range(5..10),
-                        },
-                        hit_points: rng.gen_range(90..110),
-                        mana: rng.gen_range(40..60),
-                        armor: rng.gen_range(5..15),
+            let hero = Hero::new(
+                BaseStats {
+                    id: None,
+                    level: 1,
+                    xp: 0,
+                    damage: Range {
+                        min: rng.gen_range(1..5),
+                        max: rng.gen_range(5..10),
                     },
-                    Attributes {
-                        id: None,
-                        strength: rng.gen_range(1..20),
-                        resilience: rng.gen_range(1..20),
-                        agility: rng.gen_range(1..20),
-                        intelligence: rng.gen_range(1..20),
-                        exploration: rng.gen_range(1..20),
-                        crafting: rng.gen_range(1..20),
-                    },
-                    rng.gen_range(80..120),
-                    0,
-                );
+                    hit_points: rng.gen_range(90..110),
+                    mana: rng.gen_range(40..60),
+                    armor: rng.gen_range(5..15),
+                },
+                Attributes {
+                    id: None,
+                    strength: rng.gen_range(1..20),
+                    resilience: rng.gen_range(1..20),
+                    agility: rng.gen_range(1..20),
+                    intelligence: rng.gen_range(1..20),
+                    exploration: rng.gen_range(1..20),
+                    crafting: rng.gen_range(1..20),
+                },
+                rng.gen_range(80..120),
+                0,
+            );
 
-                Ok(hero)
-            })
-        }
+            Ok(hero)
+        })
     }
 }

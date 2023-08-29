@@ -3,6 +3,7 @@ use crate::handlers::heroes::{create_hero_endpoint, hero_state};
 use crate::handlers::regions::{add_leyline, create_region, explore_region};
 use crate::prisma::PrismaClient;
 use crate::services::impls::action_executor::ActionExecutor;
+use crate::services::impls::region_service::RegionService;
 use crate::services::impls::tasks::TaskManager;
 use actix_web::dev::Server;
 use actix_web::{web, App, HttpServer};
@@ -70,15 +71,14 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
     let prisma = Arc::new(prisma_client);
 
     // let hero_service = web::Data::new(ServiceHeroes::new(prisma.clone()));
-    let executor = Arc::new(ActionExecutor::new(prisma.clone()));
+    let executor = ActionExecutor::new(prisma.clone());
     let scheduler = Arc::new(TaskManager::new());
     let task_schedule_service = web::Data::new(scheduler.clone());
-    // let region_service = web::Data::new(RegionService::new(
-    //     scheduler,
-    //     prisma.clone(),
-    //     durations,
-    //     executor.clone().result_channels().unwrap(),
-    // ));
+    let region_service = web::Data::new(RegionService::new(
+        scheduler,
+        prisma.clone(),
+        executor.clone().result_channels().unwrap(),
+    ));
     let app_state = web::Data::new(AppState {
         prisma: prisma.clone(),
         executor: executor.clone(),
@@ -93,6 +93,7 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             // .app_data(hero_service.clone())
             .app_data(app_state.clone())
             .app_data(task_schedule_service.clone())
+            .app_data(region_service.clone())
             .service(create_hero_endpoint)
             .service(explore_region)
             .service(hero_state)

@@ -1,4 +1,6 @@
-#[derive(Clone, Debug, PartialEq)]
+use serde::Serialize;
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Resource {
     Aion(i32),
     Valor(i32),
@@ -8,7 +10,6 @@ pub enum Resource {
     Copper(i32),
     Silk(i32),
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResourceCost {

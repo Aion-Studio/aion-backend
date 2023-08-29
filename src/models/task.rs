@@ -1,7 +1,8 @@
-use actix_web::Resource;
 use serde::Serialize;
 
 use crate::services::tasks::explore::ExploreAction;
+
+use super::resources::Resource;
 
 
 #[derive(Debug, Clone, Serialize)]
@@ -16,6 +17,7 @@ pub enum TaskAction {
     // Quest(QuestAction),
 }
 
+#[derive(Debug, Clone, Serialize)]
 pub enum TaskLootBox {
     Region(RegionActionResult),
 }
@@ -33,7 +35,7 @@ impl TaskLootBox {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct RegionActionResult {
     pub hero_id: String,
     pub resources: Vec<Resource>,

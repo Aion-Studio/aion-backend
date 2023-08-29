@@ -72,21 +72,19 @@ impl ExploreAction {
 }
 
 impl Task for ExploreAction {
-    fn check_status(&self) -> TaskStatus {
-        let start_time = self.start_time.lock().unwrap();
-        if self.duration > (chrono::Utc::now() - start_time.unwrap()) {
-            TaskStatus::InProgress
-        } else {
-            TaskStatus::Completed
-        }
+    fn execute(&self) -> TaskExecReturn {
+        let duration = self.duration;
+        // Create a new Tokio task
+        Box::pin(async move {
+            println!("Exploring for {} seconds...",duration.num_seconds());
+            sleep(duration.to_std().unwrap()).await;
+            println!("Exploration complete!");
+            Ok(())
+        })
     }
 
     fn id(&self) -> Uuid {
         self.id
-    }
-
-    fn hero_id(&self) -> String {
-        self.hero_id.clone()
     }
 
     fn start_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
@@ -98,14 +96,16 @@ impl Task for ExploreAction {
         self.duration
     }
 
-    fn execute(&self) -> TaskExecReturn {
-        let duration = self.duration;
-        // Create a new Tokio task
-        Box::pin(async move {
-            println!("Exploring for {} seconds...",duration.num_seconds());
-            sleep(duration.to_std().unwrap()).await;
-            println!("Exploration complete!");
-            Ok(())
-        })
+    fn check_status(&self) -> TaskStatus {
+        let start_time = self.start_time.lock().unwrap();
+        if self.duration > (chrono::Utc::now() - start_time.unwrap()) {
+            TaskStatus::InProgress
+        } else {
+            TaskStatus::Completed
+        }
+    }
+
+    fn hero_id(&self) -> String {
+        self.hero_id.clone()
     }
 }

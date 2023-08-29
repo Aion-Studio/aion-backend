@@ -1,14 +1,18 @@
 use prisma_client_rust::chrono;
 use uuid::Uuid;
 
-use crate::{services::traits::{
-    async_task::{Task, TaskError},
-    scheduler::{TaskScheduleResult, TaskScheduler},
-}, models::task::TaskKind};
+use crate::{
+    models::task::TaskKind,
+    services::traits::{
+        async_task::{Task, TaskError},
+        scheduler::{TaskScheduleResult, TaskScheduler},
+    },
+};
+use flume::{unbounded, Receiver, Sender};
 use std::{collections::HashMap, future::Future, sync::Arc};
 use std::{pin::Pin, sync::Mutex};
-use flume::{Sender, unbounded};
 
+#[derive(Clone, Debug)]
 pub struct TaskManager {
     // ... fields to manage tasks...
     tasks: Arc<Mutex<HashMap<Uuid, TaskKind>>>,
@@ -48,9 +52,14 @@ impl TaskManager {
     /// Sends the task ID via `tx` when completed.
     /// Sends the completed task via `tx_task` when completed.
     /// Returns the task ID if successfully inserted, error otherwise.
-    pub fn schedule(&self, task: TaskKind, task_done_sender: Sender<TaskKind>) -> TaskScheduleResult {
+    pub fn schedule(
+        &self,
+        task: TaskKind,
+        task_done_sender: Sender<TaskKind>,
+    ) -> TaskScheduleResult {
         match task {
             TaskKind::Exploration(explore_task) => {
+                println!("scheduling task for hero_id {}", explore_task.hero_id());
                 let id = Uuid::parse_str(&explore_task.hero_id()).unwrap();
                 explore_task.set_start_time(chrono::Utc::now());
                 let tx = self.task_complete_sender.clone(); // clone the transmitter
@@ -61,11 +70,11 @@ impl TaskManager {
                         println!("Failed to send completion message: {:?}", err);
                     }
 
-                    let _ = task_done_sender
-                        .send(TaskKind::Exploration(explore_task.clone()));
+                    let _ = task_done_sender.send(TaskKind::Exploration(explore_task.clone()));
                 });
                 match self.tasks.lock() {
                     Ok(mut tasks) => {
+                        println!("inserting task for hero_id {}", id);
                         tasks.insert(id, task_clone);
                         Ok(id)
                     }
@@ -82,8 +91,7 @@ impl TaskManager {
         let tasks = Arc::clone(&self.tasks);
 
         Box::pin(async move {
-            println!("Starting to listen for completions.");
-            while let Some(id) = rx.recv().await {
+            while let Ok(id) = rx.recv_async().await {
                 println!("Received completion message for task {}", id);
 
                 tasks.lock().unwrap().remove(&id);
@@ -100,16 +108,15 @@ impl TaskManager {
     }
 
     pub fn get_current_task(&self, hero_id: &str) -> Option<TaskKind> {
-        match self.tasks.lock() {
-            Ok(tasks) => tasks
-                .values()
-                .find(|task| match task {
-                    TaskKind::Exploration(explore_task) => explore_task.hero_id() == hero_id,
-                })
-                .map(|task| task.clone()),
+        let tasks = match self.tasks.lock() {
+            Ok(tasks) => tasks,
+            Err(_) => return None,
+        };
+        println!("tasks list check: {:?}", tasks.values().collect::<Vec<&TaskKind>>());
 
-            Err(_) => todo!(),
-        }
+        tasks.values().find(|task| {
+            matches!(task, TaskKind::Exploration(t) if t.hero_id() == hero_id)
+        })
+            .cloned()
     }
 }
-

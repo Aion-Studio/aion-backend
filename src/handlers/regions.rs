@@ -7,13 +7,13 @@ use actix_web::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    models::region::{Leyline, RegionName},
-    services::{impls::region_service::RegionService},
-};
 use crate::models::task::TaskKind;
 use crate::services::tasks::explore::ExploreAction;
-use crate::webserver::{Application, AppState};
+use crate::webserver::AppState;
+use crate::{
+    models::region::{Leyline, RegionName},
+    services::impls::region_service::RegionService,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct RegionPayload {
@@ -40,15 +40,15 @@ pub async fn explore_region(
         .await
         .unwrap();
 
-    // let id = region_service.start_exploration(hero_id, current_region.region_name.clone());
     let task = ExploreAction::new(hero_id, current_region.region_name, &app.durations);
     let sent = app.executor.task_sender.send(TaskKind::Exploration(task));
+
     match sent {
         Ok(()) => HttpResponse::Ok().json(ExploreResponse {
             message: "Exploration started".to_string(),
             status: "OK".to_string(),
         }),
-        Err(e) => return HttpResponse::InternalServerError().json(e.to_string()),
+        Err(e) => HttpResponse::InternalServerError().json(e.to_string()),
     }
 }
 

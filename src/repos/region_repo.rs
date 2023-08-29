@@ -3,10 +3,11 @@ use std::sync::Arc;
 use actix_web::web::Data;
 use prisma_client_rust::QueryError;
 
+use crate::models::task::RegionActionResult;
 use crate::{
     models::{
         hero::Hero,
-        region::{HeroRegion, Leyline, Region, RegionActionResult, RegionName},
+        region::{HeroRegion, Leyline, Region, RegionName},
         resources::Resource,
     },
     prisma::{
@@ -19,9 +20,8 @@ use crate::{
         PrismaClient, ResourceType,
     },
 };
-use crate::models::task::RegionActionResult;
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct RegionRepo {
     prisma: Arc<PrismaClient>,
 }

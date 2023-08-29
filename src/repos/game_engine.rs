@@ -6,7 +6,7 @@ use crate::prisma::{hero};
 use crate::{prisma::PrismaClient};
 use crate::models::task::RegionActionResult;
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct GameEngineRepo {
     prisma: Arc<PrismaClient>,
 }
