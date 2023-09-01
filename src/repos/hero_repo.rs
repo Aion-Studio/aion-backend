@@ -1,22 +1,22 @@
 use std::sync::Arc;
-
-use actix_web::web::Data;
-use prisma_client_rust::QueryError;
+use prisma_client_rust::{Direction, QueryError};
 
 use crate::models::hero::{Attributes, BaseStats, Follower, Inventory, Item, Range, RetinueSlot};
 use crate::prisma::{attributes, base_stats, follower, hero, inventory, item, retinue_slot};
 use crate::{models::hero::Hero, prisma::PrismaClient};
+use crate::models::task::RegionActionResult;
+use crate::prisma::region_action_result::{create_time, hero_id};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HeroRepo {
-    prisma: Arc<Data<PrismaClient>>,
+    prisma: Arc<PrismaClient>,
 }
 
 impl HeroRepo {
-    pub fn new(prisma: Arc<Data<PrismaClient>>) -> Self {
+    pub fn new(prisma: Arc<PrismaClient>) -> Self {
         Self { prisma }
     }
-    pub async fn get_hero(&self, hero_id:String) ->Result<Hero, QueryError>{
+    pub async fn get_hero(&self, hero_id: String) -> Result<Hero, QueryError> {
         let hero = self
             .prisma
             .hero()
@@ -27,6 +27,56 @@ impl HeroRepo {
             .exec()
             .await?;
         Ok(hero.unwrap().into())
+    }
+
+    pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
+        let updated_hero = self
+            .prisma
+            .hero()
+            .update(
+                hero::id::equals(hero.get_id()),
+                vec![
+                    hero::aion_capacity::set(hero.aion_capacity),
+                    hero::aion_collected::set(hero.aion_collected),
+                    hero::stamina::set(hero.stamina),
+                    hero::stamina_max::set(hero.stamina_max),
+                    hero::stamina_regen_rate::set(hero.stamina_regen_rate),
+                ],
+            )
+            .with(hero::base_stats::fetch())
+            .with(hero::attributes::fetch())
+            .with(hero::inventory::fetch())
+            .exec()
+            .await?;
+
+        Ok(updated_hero.into())
+    }
+    pub async fn latest_action_result(&self, hero_id: String) -> Result<RegionActionResult, QueryError> {
+        let result = self
+            .prisma
+            .region_action_result()
+            .find_many(vec![hero_id::equals(hero_id.to_string())])
+            .order_by(create_time::order(Direction::Desc))
+            .take(1)
+            .exec()
+            .await
+            .unwrap();
+        //return first item of vec
+        Ok(result.into_iter().next().unwrap().into())
+    }
+    pub async fn action_results_by_hero(
+        &self,
+        hero_id: String,
+    ) -> Result<Vec<RegionActionResult>, QueryError> {
+        let where_param = vec![hero_id::equals(hero_id.to_string())];
+        let results = self
+            .prisma
+            .region_action_result()
+            .find_many(where_param)
+            .exec()
+            .await
+            .unwrap();
+        Ok(results.into_iter().map(|r| r.into()).collect())
     }
     pub async fn create(&self, new_hero: Hero) -> Result<Hero, QueryError> {
         // Use Prisma to create a new Hero in the database
@@ -59,7 +109,6 @@ impl HeroRepo {
                 new_hero.attributes.resilience,
                 new_hero.attributes.agility,
                 new_hero.attributes.intelligence,
-
                 new_hero.attributes.exploration,
                 new_hero.attributes.crafting,
                 vec![],
@@ -84,7 +133,7 @@ impl HeroRepo {
             .with(hero::inventory::fetch())
             .exec()
             .await?;
-        
+
         Ok(result.into())
     }
     pub async fn update_level(&self, hero: Hero) -> Result<Hero, QueryError> {
@@ -146,6 +195,7 @@ impl From<hero::Data> for Hero {
             None => vec![],
         };
 
+
         Self {
             id: Some(data.id),
             base_stats,
@@ -154,9 +204,13 @@ impl From<hero::Data> for Hero {
             retinue_slots,
             aion_capacity: data.aion_capacity,
             aion_collected: data.aion_collected,
+            stamina: data.stamina,
+            stamina_max: data.stamina_max,
+            stamina_regen_rate: data.stamina_regen_rate,
         }
     }
 }
+
 impl From<base_stats::Data> for BaseStats {
     fn from(data: base_stats::Data) -> Self {
         Self {

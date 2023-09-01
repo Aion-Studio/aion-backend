@@ -22,7 +22,7 @@ model Item {
 
 model Inventory {
   id       String @id @default(uuid())
-  active   Item[] @relation("active") 
+  active   Item[] @relation("active")
   backpack Item[] @relation("backpack")
   hero     Hero?
 }
@@ -41,7 +41,10 @@ model Hero {
   heroRegion         HeroRegion[]
   exploreAction      ExploreAction[] // Added ExploreAction relation
   RegionActionResult RegionActionResult[]
-  resources HeroResource[]
+  resources          HeroResource[]
+  stamina            Int @default(100)
+  staminaMax         Int @default(100)
+  staminaRegenRate   Int @default(1)
 }
 
 model HeroResource {
@@ -53,12 +56,12 @@ model HeroResource {
 }
 
 model HeroRegion {
-  id              String  @id @default(uuid())
-  HeroId          String  @map("hero_id")
-  region_name     String  @map("region_name")
-  discovery_level Int     @map("discovery_level")
-  Hero            Hero    @relation(fields: [HeroId], references: [id])
-  Region          Region  @relation(fields: [region_name], references: [name])
+  id               String  @id @default(uuid())
+  HeroId           String  @map("hero_id")
+  region_name      String  @map("region_name")
+  discovery_level  Int     @map("discovery_level")
+  Hero             Hero    @relation(fields: [HeroId], references: [id])
+  Region           Region  @relation(fields: [region_name], references: [name])
   current_location Boolean @default(false) @map("current_location")
 }
 
@@ -130,10 +133,13 @@ model Region {
 
 model Leyline {
   id         String @id @default(uuid())
-  location   String
+  name       String
   xp_reward  Int    @map("xp_reward")
   RegionName String
   Region     Region @relation(fields: [RegionName], references: [name])
+  discovery_required Int 
+  stamina_rate Float
+  aion_rate Float
 }
 
 model ExploreAction {
@@ -146,6 +152,7 @@ model ExploreAction {
   xp              Int
   discovery_level Int
   start_time      DateTime?
+  stamina_cost    Int
 }
 
 model ResourceValue {
@@ -163,4 +170,5 @@ model RegionActionResult {
   discovery_level_increase Float
   heroId                   String          @map("hero_id")
   hero                     Hero            @relation(fields: [heroId], references: [id])
+  create_time              DateTime        @default(now())
 }

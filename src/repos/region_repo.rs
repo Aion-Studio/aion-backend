@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use actix_web::web::Data;
 use prisma_client_rust::QueryError;
 
 use crate::models::task::RegionActionResult;
@@ -15,13 +14,11 @@ use crate::{
         hero_region::{self, current_location, hero_id},
         leyline,
         region::{self, adjacent_regions},
-        region_action_result::{self, resources},
-        resource_value::{self, resource},
-        PrismaClient, ResourceType,
+        region_action_result, resource_value, PrismaClient, ResourceType,
     },
 };
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct RegionRepo {
     prisma: Arc<PrismaClient>,
 }
@@ -31,18 +28,18 @@ impl RegionRepo {
         Self { prisma }
     }
 
-    pub async fn get_hero(&self, hero_id: &str) -> Result<Hero, QueryError> {
-        let h = self
-            .prisma
-            .hero()
-            .find_unique(hero::id::equals(hero_id.to_string()))
-            .with(hero::attributes::fetch())
-            .with(hero::base_stats::fetch())
-            .exec()
-            .await?;
-        let hero = h.unwrap();
-        Ok(hero.into())
-    }
+    // pub async fn get_hero(&self, hero_id: &str) -> Result<Hero, QueryError> {
+    //     let h = self
+    //         .prisma
+    //         .hero()
+    //         .find_unique(hero::id::equals(hero_id.to_string()))
+    //         .with(hero::attributes::fetch())
+    //         .with(hero::base_stats::fetch())
+    //         .exec()
+    //         .await?;
+    //     let hero = h.unwrap();
+    //     Ok(hero.into())
+    // }
 
     pub async fn create_hero_region(&self, hero: &Hero) -> Result<HeroRegion, QueryError> {
         //Select a random enum variant from RegionName
@@ -95,26 +92,26 @@ impl RegionRepo {
         Ok(region.into())
     }
 
-    pub async fn add_leyline(
-        &self,
-        region_name: RegionName,
-        location: String,
-        xp_reward: i32,
-    ) -> Result<Leyline, QueryError> {
-        let leyline = self
-            .prisma
-            .leyline()
-            .create(
-                location,
-                xp_reward,
-                region::name::equals(region_name.to_str()),
-                vec![],
-            )
-            .exec()
-            .await?;
-
-        Ok(leyline.into())
-    }
+    // pub async fn add_leyline(
+    //     &self,
+    //     region_name: RegionName,
+    //     location: String,
+    //     xp_reward: i32,
+    // ) -> Result<Leyline, QueryError> {
+    //     let leyline = self
+    //         .prisma
+    //         .leyline()
+    //         .create(
+    //             location,
+    //             xp_reward,
+    //             region::name::equals(region_name.to_str()),
+    //             vec![],
+    //         )
+    //         .exec()
+    //         .await?;
+    //
+    //     Ok(leyline.into())
+    // }
 
     pub async fn results_by_hero(
         &self,
@@ -162,6 +159,7 @@ impl From<region_action_result::Data> for RegionActionResult {
             resources,
             xp: data.xp,
             discovery_level_increase: data.discovery_level_increase,
+            created_time: Some(data.create_time),
         }
     }
 }
@@ -234,7 +232,7 @@ impl From<region::Data> for Region {
 impl From<leyline::Data> for Leyline {
     fn from(data: leyline::Data) -> Self {
         Self {
-            location: data.location,
+            name: data.name,
             xp_reward: data.xp_reward,
         }
     }

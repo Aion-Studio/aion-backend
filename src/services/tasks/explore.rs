@@ -10,7 +10,7 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::{
-    models::region::RegionName,
+    models::{hero::Hero, region::RegionName},
     services::traits::async_task::{Task, TaskExecReturn, TaskStatus},
 };
 
@@ -18,12 +18,13 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ExploreAction {
     id: Uuid,
-    pub hero_id: String,
+    pub hero: Hero,
     pub duration: Duration,
     pub region_name: RegionName,
     pub xp: i32,
     pub discovery_level: i32,
     pub start_time: Arc<Mutex<Option<chrono::DateTime<chrono::Utc>>>>,
+    pub stamina_cost: i32,
     // Other fields needed for the exploration task...
 }
 
@@ -46,23 +47,29 @@ impl Serialize for ExploreAction {
 
 impl ExploreAction {
     pub fn new(
-        hero_id: String,
+        hero: Hero,
         region_name: RegionName,
         durations: &HashMap<RegionName, Duration>,
-    ) -> Self {
+    ) -> Option<Self> {
         // Implement task creation logic...
         let duration = *durations.get(&region_name).unwrap_or(&Duration::minutes(1));
-        Self {
+        let stamina_cost = get_stamina_cost(&region_name);
+
+        if (hero.stamina - stamina_cost) < 0 {
+            return None;
+        }
+
+        Some(Self {
             id: Uuid::new_v4(),
             duration,
-            hero_id,
+            hero,
             start_time: Arc::new(Mutex::new(None)),
-
-            region_name,
+            region_name: region_name.clone(),
             discovery_level: rand::thread_rng().gen_range(1..5),
             // random number between 15 and 30
             xp: rand::thread_rng().gen_range(15..30),
-        }
+            stamina_cost,
+        })
     }
 
     pub fn set_start_time(&self, start_time: chrono::DateTime<chrono::Utc>) {
@@ -70,15 +77,24 @@ impl ExploreAction {
         *lock = Some(start_time);
     }
 }
-
+fn get_stamina_cost(region_name: &RegionName) -> i32 {
+    match region_name {
+        RegionName::Forest => rand::thread_rng().gen_range(10..20),
+        RegionName::Yezer => rand::thread_rng().gen_range(20..30),
+        RegionName::Buzna => rand::thread_rng().gen_range(15..37),
+        RegionName::Dusane => rand::thread_rng().gen_range(5..20),
+        RegionName::Lindon => rand::thread_rng().gen_range(10..25),
+        RegionName::Emerlad => rand::thread_rng().gen_range(25..45),
+        RegionName::Veladria => rand::thread_rng().gen_range(30..50),
+    }
+}
 impl Task for ExploreAction {
     fn execute(&self) -> TaskExecReturn {
         let duration = self.duration;
         // Create a new Tokio task
         Box::pin(async move {
-            println!("Exploring for {} seconds...",duration.num_seconds());
+            println!("Exploring for {} seconds...", duration.num_seconds());
             sleep(duration.to_std().unwrap()).await;
-            println!("Exploration complete!");
             Ok(())
         })
     }
@@ -106,6 +122,6 @@ impl Task for ExploreAction {
     }
 
     fn hero_id(&self) -> String {
-        self.hero_id.clone()
+        self.hero.id.clone().unwrap()
     }
 }

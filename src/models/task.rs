@@ -1,3 +1,4 @@
+use prisma_client_rust::chrono::{DateTime, FixedOffset};
 use serde::Serialize;
 
 use crate::services::tasks::explore::ExploreAction;
@@ -31,6 +32,7 @@ impl TaskLootBox {
             resources: vec![],
             xp: 0,
             discovery_level_increase: 0.0,
+            created_time: None,
         })
     }
 }
@@ -41,4 +43,5 @@ pub struct RegionActionResult {
     pub resources: Vec<Resource>,
     pub xp: i32,
     pub discovery_level_increase: f64,
+    pub created_time: Option<DateTime<FixedOffset>>,
 }

@@ -8,10 +8,11 @@ use crate::{
         task::RegionActionResult,
     },
     prisma::PrismaClient,
-    repos::game_engine::GameEngineRepo,
+    repos::game_engine_repo::GameEngineRepo,
     types::AsyncResult,
 };
 use flume::{unbounded, Receiver, SendError, Sender};
+use prisma_client_rust::QueryError;
 
 use crate::models::task::{TaskAction, TaskKind, TaskLootBox};
 use crate::repos::region_repo::RegionRepo;
@@ -19,30 +20,40 @@ use crate::services::impls::tasks::TaskManager;
 use crate::services::tasks::explore::ExploreAction;
 use crate::services::traits::async_task::TaskError;
 use tracing::{error, info};
+use crate::services::impls::hero_service::ServiceHeroes;
 
 #[derive(Clone, Debug)]
 pub struct ActionExecutor {
     pub result_sender: Sender<TaskLootBox>,
+    pub result_broadcast_receiver: Receiver<TaskLootBox>,
     pub task_sender: Sender<TaskKind>,
-    pub repo: Arc<GameEngineRepo>,
+    repo: Arc<GameEngineRepo>,
+    hero_service: Arc<ServiceHeroes>,
     region_repo: Arc<RegionRepo>,
     pub scheduler: Arc<TaskManager>,
 }
 
 impl ActionExecutor {
     pub fn new(prisma: Arc<PrismaClient>) -> Arc<Self> {
+        // channel for other crates signaling their results to ActionExecutor
         let (result_sender, result_receiver) = unbounded();
+        // Entry point for other crates to send tasks to ActionExecutor
         let (task_sender, task_receiver) = unbounded();
+        // channel for ActionExecutor to send results to callers
+        let (result_broadcast_sender, result_broadcast_receiver) = unbounded();
 
         let scheduler = Arc::new(TaskManager::new());
         let repo = Arc::new(GameEngineRepo::new(prisma.clone()));
+        let hero_service = Arc::new(ServiceHeroes::new(prisma.clone()));
 
         let region_repo = Arc::new(RegionRepo::new(prisma.clone()));
         let service = Arc::new(Self {
             result_sender,
+            result_broadcast_receiver,
             task_sender,
             repo,
             region_repo,
+            hero_service,
             scheduler,
         });
 
@@ -50,7 +61,9 @@ impl ActionExecutor {
 
         let service_clone = Arc::clone(&service);
         tokio::spawn(async move {
-            service_clone.listen_for_results(result_receiver).await;
+            service_clone
+                .listen_for_results(result_receiver, result_broadcast_sender)
+                .await;
         });
 
         let service_clone = Arc::clone(&service);
@@ -62,7 +75,6 @@ impl ActionExecutor {
     }
 
     async fn handle_tasks(self: Arc<Self>, receiver: Receiver<TaskKind>) {
-        // create println for self as a ptr
         while let Ok(task) = receiver.recv_async().await {
             let self_clone = self.clone();
             self_clone.handle_task(task).await;
@@ -76,6 +88,7 @@ impl ActionExecutor {
             match self.scheduler.schedule(task, task_done_sender) {
                 Ok(_) => {
                     while let Ok(task) = task_done_receiver.recv_async().await {
+                        info!("Task completed: {:?}", task);
                         let self_clone = self.clone();
                         tokio::spawn(async move {
                             self_clone.handle_task_completed(task).await;
@@ -89,8 +102,11 @@ impl ActionExecutor {
         })
     }
 
+    // Generate result
+    // Send notifications
+    // Update any state needed
+    // Metrics?
     async fn handle_task_completed(&self, task: TaskKind) {
-        info!("Task completed: {:?}", task);
         match task {
             TaskKind::Exploration(action) => {
                 if let Err(err) = self.explore_action_complete(action).await {
@@ -102,7 +118,14 @@ impl ActionExecutor {
 
     async fn explore_action_complete(&self, action: ExploreAction) -> Result<(), TaskError> {
         info!("Exploration action complete: {:?}", action);
+
         let self_clone = self.clone();
+
+        let hero_id = action.clone().hero.id.unwrap();
+        self.repo
+            .deduct_stamina(&hero_id, action.stamina_cost)
+            .await?;
+
         match self.generate_loot_box(&TaskAction::Explore(action)).await {
             Ok(res) => match self_clone.result_sender.send(res) {
                 Ok(_) => Ok(()),
@@ -115,16 +138,16 @@ impl ActionExecutor {
     async fn generate_loot_box(&self, action: &TaskAction) -> Result<TaskLootBox, TaskError> {
         match action {
             TaskAction::Explore(action) => {
-                let hero = match self.region_repo.get_hero(&action.hero_id).await {
-                    Ok(hero) => hero,
-                    Err(err) => return Err(err.into()),
-                };
-                let boost_factor = self.calculate_boost_factor(hero.attributes.exploration.clone());
+                let hero = &action.hero;
+                let hero_id = hero.id.as_ref().unwrap();
+                let boost_factor =
+                    self.calculate_boost_factor(action.hero.attributes.exploration.clone());
                 let result = RegionActionResult {
                     xp: (action.xp as f64 * boost_factor) as i32,
-                    hero_id: hero.id.unwrap(),
+                    hero_id: hero_id.clone(),
                     resources: vec![],
                     discovery_level_increase: (action.discovery_level as f64 * boost_factor),
+                    created_time: None,
                 };
 
                 Ok(TaskLootBox::Region(result))
@@ -157,7 +180,9 @@ impl ActionExecutor {
     pub fn listen_for_results(
         &self,
         rx: Receiver<TaskLootBox>,
+        broadcast_sender: Sender<TaskLootBox>,
     ) -> Pin<Box<dyn Future<Output=()> + Send>> {
+        let self_clone = self.clone();
         Box::pin(async move {
             /* Here we add all the cases for every type of action and
              * update the state of heroes and data models accordingly.
@@ -167,16 +192,21 @@ impl ActionExecutor {
              */
             while let Ok(result) = rx.recv_async().await {
                 match result {
-                    TaskLootBox::Region(result) => {} // TaskResult::Region(result) => {
-                    //     if let Err(err) = self
-                    //         .repo
-                    //         .clone()
-                    //         .store_region_action_result(result.clone())
-                    //         .await
-                    //     {
-                    //         eprintln!("Error storing region action result: {}", err);
-                    //         return;
-                    //     }
+                    TaskLootBox::Region(result) => {
+                        broadcast_sender
+                            .send(TaskLootBox::Region(result.clone()))
+                            .unwrap();
+                        if let Err(err) = self_clone
+                            .repo
+                            .clone()
+                            .store_region_action_result(result)
+                            .await
+                        {
+                            eprintln!("Error storing region action result: {}", err);
+                            return;
+                        }
+                    } // TaskResult::Region(result) => {
+
                     //     println!("Exploration result: {:?}", result);
                     // }
                 }

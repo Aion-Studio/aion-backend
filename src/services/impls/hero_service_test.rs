@@ -6,7 +6,7 @@ use crate::test_helpers::{random_hero, setup_test_database};
 #[tokio::test]
 async fn test_create_hero() {
     let prisma_client = setup_test_database().await.unwrap();
-    let service = ServiceHeroes::new(prisma_client.clone());
+    let service = ServiceHeroes::new(prisma_client.into_inner());
 
     let new_hero = Hero::new(
         BaseStats {
@@ -48,7 +48,7 @@ async fn test_create_hero() {
 #[tokio::test]
 async fn test_level_up_hero() {
     let prisma_client = setup_test_database().await.unwrap();
-    let service = ServiceHeroes::new(prisma_client.clone());
+    let service = ServiceHeroes::new(prisma_client.into_inner());
 
     let new_hero = random_hero();
     // First create a hero

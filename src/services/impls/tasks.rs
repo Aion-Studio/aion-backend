@@ -5,12 +5,13 @@ use crate::{
     models::task::TaskKind,
     services::traits::{
         async_task::{Task, TaskError},
-        scheduler::{TaskScheduleResult, TaskScheduler},
+        scheduler::TaskScheduleResult,
     },
 };
 use flume::{unbounded, Receiver, Sender};
 use std::{collections::HashMap, future::Future, sync::Arc};
 use std::{pin::Pin, sync::Mutex};
+use tracing::info;
 
 #[derive(Clone, Debug)]
 pub struct TaskManager {
@@ -59,22 +60,20 @@ impl TaskManager {
     ) -> TaskScheduleResult {
         match task {
             TaskKind::Exploration(explore_task) => {
-                println!("scheduling task for hero_id {}", explore_task.hero_id());
                 let id = Uuid::parse_str(&explore_task.hero_id()).unwrap();
                 explore_task.set_start_time(chrono::Utc::now());
                 let tx = self.task_complete_sender.clone(); // clone the transmitter
                 let task_clone = TaskKind::Exploration(explore_task.clone());
                 tokio::spawn(async move {
+                    // this is the time based work that the tokio task waits for
                     let _ = explore_task.execute().await;
                     if let Err(err) = tx.send(id) {
                         println!("Failed to send completion message: {:?}", err);
                     }
-
                     let _ = task_done_sender.send(TaskKind::Exploration(explore_task.clone()));
                 });
                 match self.tasks.lock() {
                     Ok(mut tasks) => {
-                        println!("inserting task for hero_id {}", id);
                         tasks.insert(id, task_clone);
                         Ok(id)
                     }
@@ -87,16 +86,14 @@ impl TaskManager {
     pub fn update_cache_on_complete(
         &self,
         mut rx: Receiver<Uuid>,
-    ) -> Pin<Box<dyn Future<Output=()> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let tasks = Arc::clone(&self.tasks);
 
         Box::pin(async move {
             while let Ok(id) = rx.recv_async().await {
-                println!("Received completion message for task {}", id);
-
                 tasks.lock().unwrap().remove(&id);
             }
-            println!("Stopped listening for completions.");
+            info!("Stopped listening for completions.");
         })
     }
 
@@ -112,11 +109,10 @@ impl TaskManager {
             Ok(tasks) => tasks,
             Err(_) => return None,
         };
-        println!("tasks list check: {:?}", tasks.values().collect::<Vec<&TaskKind>>());
 
-        tasks.values().find(|task| {
-            matches!(task, TaskKind::Exploration(t) if t.hero_id() == hero_id)
-        })
+        tasks
+            .values()
+            .find(|task| matches!(task, TaskKind::Exploration(t) if t.hero_id() == hero_id))
             .cloned()
     }
 }

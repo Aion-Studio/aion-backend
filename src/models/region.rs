@@ -21,7 +21,7 @@ pub struct Region {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Leyline {
-    pub location: String,
+    pub name: String,
     pub xp_reward: i32,
 }
 

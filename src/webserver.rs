@@ -1,8 +1,9 @@
 use crate::configuration::{get_region_durations, Durations, Settings};
 use crate::handlers::heroes::{create_hero_endpoint, hero_state};
-use crate::handlers::regions::{add_leyline, create_region, explore_region};
+use crate::handlers::regions::{create_region, explore_region};
 use crate::prisma::PrismaClient;
 use crate::services::impls::action_executor::ActionExecutor;
+use crate::services::impls::hero_service::ServiceHeroes;
 use crate::services::impls::region_service::RegionService;
 use crate::services::impls::tasks::TaskManager;
 use actix_web::dev::Server;
@@ -70,7 +71,7 @@ impl Application {
 async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Server, anyhow::Error> {
     let prisma = Arc::new(prisma_client);
 
-    // let hero_service = web::Data::new(ServiceHeroes::new(prisma.clone()));
+    let hero_service = web::Data::new(ServiceHeroes::new(prisma.clone()));
     let executor = ActionExecutor::new(prisma.clone());
     let scheduler = Arc::new(TaskManager::new());
     let task_schedule_service = web::Data::new(scheduler.clone());
@@ -90,15 +91,15 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             // .route("/health_check", web::get().to(health_check))
             // .route("/hero/actions", web::get().to(hero_actions))routes
             // .app_data(prisma.clone())
-            // .app_data(hero_service.clone())
+            .app_data(hero_service.clone())
             .app_data(app_state.clone())
             .app_data(task_schedule_service.clone())
             .app_data(region_service.clone())
             .service(create_hero_endpoint)
             .service(explore_region)
             .service(hero_state)
-            .service(create_region)
-            .service(add_leyline);
+            .service(create_region);
+        // .service(add_leyline);
         app
     })
     .listen(listener)?

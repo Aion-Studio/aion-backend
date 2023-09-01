@@ -104,20 +104,20 @@ impl RegionService {
         })
     }
 
-    pub fn insert_leyline(
-        &self,
-        region_name: RegionName,
-        location: String,
-        xp_reward: i32,
-    ) -> RepoFuture<Leyline> {
-        let repo = self.repo.clone();
-        Box::pin(async move {
-            match repo.add_leyline(region_name, location, xp_reward).await {
-                Ok(leyline) => Ok(leyline),
-                Err(err) => Err(err.into()),
-            }
-        })
-    }
+    // pub fn insert_leyline(
+    //     &self,
+    //     region_name: RegionName,
+    //     location: String,
+    //     xp_reward: i32,
+    // ) -> RepoFuture<Leyline> {
+    //     let repo = self.repo.clone();
+    //     Box::pin(async move {
+    //         match repo.add_leyline(region_name, location, xp_reward).await {
+    //             Ok(leyline) => Ok(leyline),
+    //             Err(err) => Err(err.into()),
+    //         }
+    //     })
+    // }
 
     pub fn create_region_hero(&self, hero: &Hero) -> RepoFuture<HeroRegion> {
         let repo = self.repo.clone();
