@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Error;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use prisma_client_rust::chrono::Duration;
@@ -8,6 +10,7 @@ use crate::models::hero::Hero;
 use crate::models::task::TaskLootBox::Region;
 use crate::models::task::{RegionActionResult, TaskKind};
 use crate::prisma::PrismaClient;
+use crate::repos::region_repo::RegionRepo;
 use crate::services::impls::action_executor::ActionExecutor;
 use crate::services::impls::hero_service::ServiceHeroes;
 use crate::services::traits::async_task::{Task, TaskStatus};
@@ -80,7 +83,12 @@ async fn delay(time: Duration) {
     tokio::time::sleep(time.to_std().unwrap()).await;
 }
 
-async fn random_hero_and_explore() -> (Hero, Arc<ActionExecutor>, Arc<PrismaClient>) {
+async fn random_hero_and_explore() -> (
+    Hero,
+    Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
+    Arc<ActionExecutor>,
+    Arc<PrismaClient>,
+) {
     let prisma_client = setup_test_database().await.unwrap();
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
@@ -88,16 +96,28 @@ async fn random_hero_and_explore() -> (Hero, Arc<ActionExecutor>, Arc<PrismaClie
     let game_engine = ActionExecutor::new(prisma_clone.clone());
 
     let hero_service = ServiceHeroes::new(prisma_clone.clone());
+
     let mut new_hero = random_hero();
     new_hero.attributes.exploration = 17;
     let hero = hero_service.create_hero(new_hero).await.unwrap();
 
-    let region_name = RegionName::Dusane;
-    // Execute the start_exploration function and get the result
-    let task = ExploreAction::new(hero.clone(), region_name.clone(), &durations).unwrap();
-    let _ = game_engine.task_sender.send(TaskKind::Exploration(task));
-    tokio::time::sleep(Duration::milliseconds(600).to_std().unwrap()).await;
-    (hero, game_engine, prisma_clone.clone())
+    let hero_clone = hero.clone();
+    let game_engine_clone = game_engine.clone();
+    // Create a boxed future for the run_the_task logic
+    let run_the_task: Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>> =
+        Box::new(move || {
+            Box::pin(async move {
+                let region_name = RegionName::Dusane;
+                let task = ExploreAction::new(hero_clone.clone(), region_name.clone(), &durations)
+                    .unwrap();
+                let _ = game_engine_clone
+                    .task_sender
+                    .send(TaskKind::Exploration(task));
+                tokio::time::sleep(Duration::milliseconds(600).to_std().unwrap()).await;
+            })
+        });
+
+    (hero, run_the_task, game_engine, prisma_clone.clone())
 }
 
 #[tokio::test]
@@ -153,7 +173,16 @@ async fn test_generate_result_for_exploration() {
 
 #[tokio::test]
 async fn test_hero_status_after_explore() {
-    let (hero, game_engine, prisma_client) = random_hero_and_explore().await;
+    let (hero, run_the_task, _, prisma_client) = random_hero_and_explore().await;
+    // RegionHero Before
+    let region_repo = RegionRepo::new(prisma_client.clone());
+    let current_region_hero = region_repo
+        .get_current_hero_region(hero.get_id().as_ref())
+        .await
+        .unwrap();
+
+    run_the_task().await;
+
     let hero_service = ServiceHeroes::new(prisma_client.clone());
     let mut updated_hero = hero_service.get_hero(hero.get_id()).await.unwrap();
     let latest_action = hero_service
@@ -163,8 +192,24 @@ async fn test_hero_status_after_explore() {
         .iter()
         .cloned()
         .find(|action| action.hero_id == hero.get_id());
-    println!("hero stamina after explore: {:?}", &updated_hero.stamina);
-    delay(Duration::seconds(8)).await;
-    updated_hero.regenerate_stamina(latest_action.clone().unwrap());
-    println!("hero stamina after regen: {:?}", &updated_hero.stamina);
+    let before_stamina = updated_hero.stamina;
+    delay(Duration::seconds(3)).await;
+    let latest_action_result = latest_action.clone().unwrap();
+    updated_hero.regenerate_stamina(latest_action_result);
+    assert!(
+        updated_hero.stamina > before_stamina,
+        "Stamina should be greater than 0"
+    );
+    //Regionhero after
+    //
+    let after_region_hero = region_repo
+        .get_current_hero_region(hero.get_id().as_ref())
+        .await
+        .unwrap();
+
+    println!(
+        "before region hero discovery {:?} and after {:?}",
+        current_region_hero.discovery_level, after_region_hero.discovery_level
+    );
+    assert!(after_region_hero.discovery_level > current_region_hero.discovery_level);
 }

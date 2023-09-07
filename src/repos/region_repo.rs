@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use prisma_client_rust::QueryError;
+use tracing::{info, warn};
 
 use crate::models::task::RegionActionResult;
 use crate::{
@@ -28,19 +29,6 @@ impl RegionRepo {
         Self { prisma }
     }
 
-    // pub async fn get_hero(&self, hero_id: &str) -> Result<Hero, QueryError> {
-    //     let h = self
-    //         .prisma
-    //         .hero()
-    //         .find_unique(hero::id::equals(hero_id.to_string()))
-    //         .with(hero::attributes::fetch())
-    //         .with(hero::base_stats::fetch())
-    //         .exec()
-    //         .await?;
-    //     let hero = h.unwrap();
-    //     Ok(hero.into())
-    // }
-
     pub async fn create_hero_region(&self, hero: &Hero) -> Result<HeroRegion, QueryError> {
         //Select a random enum variant from RegionName
         let region_name = RegionName::random();
@@ -60,11 +48,41 @@ impl RegionRepo {
         Ok(hero_region.into())
     }
 
+    pub async fn update_hero_region_discovery_level(
+        &self,
+        hero_id: &str,
+        discovery_level_increase: i32,
+    ) -> Result<(), QueryError> {
+        let hero_region: HeroRegion = self.get_current_hero_region(hero_id).await?;
+
+        let current_discovery = hero_region.discovery_level.clone();
+        let set_params = HeroRegion::set(&HeroRegion {
+            discovery_level: current_discovery + discovery_level_increase,
+            ..hero_region.clone()
+        });
+
+        let result = self.prisma
+            .hero_region()
+            .update(hero_region::id::equals(hero_region.id.unwrap()), set_params)
+            .exec()
+            .await;
+
+        match result {
+            Ok(_) => {
+                info!("Updated hero region discovery level");
+                Ok(())
+            }
+            Err(e) => {
+                warn!("Error updating hero region discovery level: {}", e);
+                Err(e)
+            }
+        }
+    }
+
     pub async fn get_hero_regions(&self, hero_id: &str) -> Result<Vec<HeroRegion>, QueryError> {
         let hero_region = self
             .prisma
             .hero_region()
-            //find first where hero id is equal to hero_id and current_location is true
             .find_many(vec![hero_id::equals(hero_id.to_string())])
             .with(hero_region::region::fetch())
             .exec()
@@ -72,6 +90,24 @@ impl RegionRepo {
 
         // maps the vec to the from impl
         Ok(hero_region.into_iter().map(HeroRegion::from).collect())
+    }
+
+    pub async fn get_current_hero_region(&self, hero_id: &str) -> Result<HeroRegion, QueryError> {
+        let hero_region = self
+            .prisma
+            .hero_region()
+            .find_first(vec![
+                hero_id::equals(hero_id.to_string()),
+                current_location::equals(true),
+            ])
+            .with(hero_region::region::fetch())
+            .exec()
+            .await;
+
+        match hero_region {
+            Ok(hero_region) => Ok(hero_region.unwrap().into()),
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn insert_new_region(
@@ -94,44 +130,6 @@ impl RegionRepo {
 
     // pub async fn add_leyline(
     //     &self,
-    //     region_name: RegionName,
-    //     location: String,
-    //     xp_reward: i32,
-    // ) -> Result<Leyline, QueryError> {
-    //     let leyline = self
-    //         .prisma
-    //         .leyline()
-    //         .create(
-    //             location,
-    //             xp_reward,
-    //             region::name::equals(region_name.to_str()),
-    //             vec![],
-    //         )
-    //         .exec()
-    //         .await?;
-    //
-    //     Ok(leyline.into())
-    // }
-
-    pub async fn results_by_hero(
-        &self,
-        hero_id: String,
-    ) -> Result<Vec<RegionActionResult>, QueryError> {
-        let results = self
-            .prisma
-            .region_action_result()
-            .find_many(vec![region_action_result::hero::is(vec![
-                hero::id::equals(hero_id),
-            ])])
-            .exec()
-            .await
-            .unwrap();
-
-        let region_action_results: Vec<RegionActionResult> =
-            results.into_iter().map(RegionActionResult::from).collect();
-
-        Ok(region_action_results)
-    }
 }
 
 impl From<region_action_result::Data> for RegionActionResult {
@@ -188,6 +186,7 @@ impl<'a> From<&'a Resource> for ResourceType {
 impl From<hero_region::Data> for HeroRegion {
     fn from(data: hero_region::Data) -> Self {
         Self {
+            id: Some(data.id),
             hero_id: data.hero_id,
             region_name: match data.region_name.as_str() {
                 "Dusane" => RegionName::Dusane,
@@ -234,6 +233,19 @@ impl From<leyline::Data> for Leyline {
         Self {
             name: data.name,
             xp_reward: data.xp_reward,
+            region_name: match data.region_name.as_str() {
+                "Dusane" => RegionName::Dusane,
+                "Yezer" => RegionName::Yezer,
+                "Emerlad" => RegionName::Emerlad,
+                "Forest" => RegionName::Forest,
+                "Buzna" => RegionName::Buzna,
+                "Veladria" => RegionName::Veladria,
+                "Lindon" => RegionName::Lindon,
+                _ => panic!("Unexpected region name"),
+            },
+            discovery_required: data.discovery_required,
+            stamina_rate: data.stamina_rate,
+            aion_rate: data.aion_rate,
         }
     }
 }

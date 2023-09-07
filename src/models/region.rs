@@ -1,11 +1,13 @@
 use std::str::FromStr;
 
-use super::resources::Resource;
 use prisma_client_rust::chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::prisma::hero_region::SetParam;
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct HeroRegion {
+    pub id: Option<String>,
     pub hero_id: String,
     pub region_name: RegionName,
     pub discovery_level: i32,
@@ -23,6 +25,10 @@ pub struct Region {
 pub struct Leyline {
     pub name: String,
     pub xp_reward: i32,
+    pub region_name: RegionName,
+    pub discovery_required: i32,
+    pub stamina_rate: f64,
+    pub aion_rate: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -37,8 +43,6 @@ pub enum ActionError {
     InternalError(String),
     RegionActionError,
 }
-
-
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum RegionName {
@@ -96,5 +100,16 @@ impl FromStr for RegionName {
             "Lindon" => Ok(RegionName::Lindon),
             _ => Err(()),
         }
+    }
+}
+
+impl HeroRegion {
+    pub fn set(hero_region: &HeroRegion) -> Vec<SetParam> {
+        vec![
+            SetParam::SetHeroId(hero_region.hero_id.clone()),
+            SetParam::SetRegionName(hero_region.region_name.clone().to_str()),
+            SetParam::SetDiscoveryLevel(hero_region.discovery_level),
+            SetParam::SetCurrentLocation(hero_region.current_location),
+        ]
     }
 }

@@ -2,9 +2,11 @@ use std::sync::Arc;
 use prisma_client_rust::{Direction, QueryError};
 
 use crate::models::hero::{Attributes, BaseStats, Follower, Inventory, Item, Range, RetinueSlot};
-use crate::prisma::{attributes, base_stats, follower, hero, inventory, item, retinue_slot};
+use crate::prisma::{attributes, base_stats, follower, hero, inventory, item, region, retinue_slot};
 use crate::{models::hero::Hero, prisma::PrismaClient};
+use crate::models::region::RegionName;
 use crate::models::task::RegionActionResult;
+use crate::prisma::hero_region::current_location;
 use crate::prisma::region_action_result::{create_time, hero_id};
 
 #[derive(Clone, Debug)]
@@ -51,7 +53,7 @@ impl HeroRepo {
 
         Ok(updated_hero.into())
     }
-    pub async fn latest_action_result(&self, hero_id: String) -> Result<RegionActionResult, QueryError> {
+    pub async fn latest_action_result(&self, hero_id: String) -> Result<Option<RegionActionResult>, QueryError> {
         let result = self
             .prisma
             .region_action_result()
@@ -62,7 +64,10 @@ impl HeroRepo {
             .await
             .unwrap();
         //return first item of vec
-        Ok(result.into_iter().next().unwrap().into())
+        Ok(match result.into_iter().next() {
+            Some(r) => Some(r.into()),
+            None => None,
+        })
     }
     pub async fn action_results_by_hero(
         &self,
@@ -133,8 +138,22 @@ impl HeroRepo {
             .with(hero::inventory::fetch())
             .exec()
             .await?;
+        let hero: Hero = result.into();
+        let region_name = RegionName::Dusane;
+        println!("region_name: {:?}", region_name);
+        let regions = self.prisma.region().find_many(vec![]).exec().await.unwrap();
+        println!("regions: {:?}", regions);
+        self.prisma.hero_region()
+            .create(
+                0,
+                hero::id::equals(hero.get_id()),
+                region::name::equals(region_name.to_str()),
+                vec![current_location::set(true)],
+            )
+            .exec()
+            .await?;
 
-        Ok(result.into())
+        Ok(hero)
     }
     pub async fn update_level(&self, hero: Hero) -> Result<Hero, QueryError> {
         let updated_base_stats = self

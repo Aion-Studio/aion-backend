@@ -60,12 +60,12 @@ async fn hero_state(
         .get_hero_current_region(hero_id.clone())
         .await
         .unwrap();
-    let current_task = task_scheduler.get_current_task(&hero_id);
+    let active_task = task_scheduler.get_current_task(&hero_id);
     let hero = hero_service.get_hero(hero_id.clone()).await.unwrap();
 
     HttpResponse::Ok().json(HeroStateResponse {
         hero,
         region_hero: current_region,
-        active_task: current_task,
+        active_task,
     })
 }

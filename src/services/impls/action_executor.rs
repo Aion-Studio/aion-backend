@@ -5,22 +5,22 @@ use rand::Rng;
 use crate::{
     models::{
         hero::{Attributes, BaseStats, Hero, Range},
+        region::HeroRegion,
         task::RegionActionResult,
     },
     prisma::PrismaClient,
     repos::game_engine_repo::GameEngineRepo,
     types::AsyncResult,
 };
-use flume::{unbounded, Receiver, SendError, Sender};
-use prisma_client_rust::QueryError;
+use flume::{unbounded, Receiver, Sender};
 
 use crate::models::task::{TaskAction, TaskKind, TaskLootBox};
 use crate::repos::region_repo::RegionRepo;
+use crate::services::impls::hero_service::ServiceHeroes;
 use crate::services::impls::tasks::TaskManager;
 use crate::services::tasks::explore::ExploreAction;
 use crate::services::traits::async_task::TaskError;
 use tracing::{error, info};
-use crate::services::impls::hero_service::ServiceHeroes;
 
 #[derive(Clone, Debug)]
 pub struct ActionExecutor {
@@ -122,15 +122,30 @@ impl ActionExecutor {
         let self_clone = self.clone();
 
         let hero_id = action.clone().hero.id.unwrap();
+        // Stamina cost
         self.repo
             .deduct_stamina(&hero_id, action.stamina_cost)
             .await?;
 
+        // Get loot reward
         match self.generate_loot_box(&TaskAction::Explore(action)).await {
-            Ok(res) => match self_clone.result_sender.send(res) {
-                Ok(_) => Ok(()),
-                Err(err) => Err(TaskError::RepoError(err.to_string())),
-            },
+            Ok(task_loot_box) => {
+                // Increase  HeroRegion
+                let discovery_level_increase = match &task_loot_box {
+                    TaskLootBox::Region(result) => result.discovery_level_increase,
+                };
+                self.region_repo
+                    .update_hero_region_discovery_level(
+                        &hero_id,
+                        discovery_level_increase.round() as i32,
+                    )
+                    .await?;
+                // send lootbox result to results channel
+                match self_clone.result_sender.send(task_loot_box) {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(TaskError::RepoError(err.to_string())),
+                }
+            }
             Err(_) => todo!(),
         }
     }
@@ -205,10 +220,7 @@ impl ActionExecutor {
                             eprintln!("Error storing region action result: {}", err);
                             return;
                         }
-                    } // TaskResult::Region(result) => {
-
-                    //     println!("Exploration result: {:?}", result);
-                    // }
+                    }
                 }
             }
         })

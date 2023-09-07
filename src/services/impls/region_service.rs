@@ -1,6 +1,6 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
-use flume::{Sender};
+use flume::Sender;
 
 use crate::models::task::{RegionActionResult, TaskLootBox};
 use crate::services::impls::tasks::TaskManager;
@@ -11,7 +11,6 @@ use crate::{
     },
     prisma::PrismaClient,
     repos::region_repo::RegionRepo,
-
     types::RepoFuture,
 };
 
@@ -39,27 +38,6 @@ impl RegionService {
         service
     }
 
-    // pub fn start_exploration(
-    //     &self,
-    //     hero_id: String,
-    //     region_name: RegionName,
-    // ) -> TaskScheduleResult {
-    //     // create an ExplorationTask
-    //     let task = ExploreAction::new(hero_id, region_name, &self.durations.clone());
-    //
-    //     // wrap the task in a TaskKind
-    //     let task_kind = TaskKind::Exploration(task);
-    //
-    //     // schedule the task
-    //     let task_id = match self.scheduler.schedule(task_kind, self.tx.clone()) {
-    //         Ok(id) => id,
-    //         Err(err) => return Err(err),
-    //     };
-    //
-    //     // return the task ID for later retrieval
-    //     Ok(task_id)
-    // }
-
     pub fn get_hero_regions(&self, hero_id: String) -> RepoFuture<Vec<HeroRegion>> {
         let repo = self.repo.clone();
 
@@ -71,6 +49,14 @@ impl RegionService {
         })
     }
 
+    // pub fn visible_leylines(&self, hero_id: String, discovery_points: ) -> RepoFuture<Vec<Leyline>> {
+    //     let repo = self.repo.clone();
+    //
+    //     Box::pin(async move {
+    //        match self.repo.leylines_by_discovery() 
+    //     })
+    // }
+    //
     pub fn get_hero_current_region(&self, hero_id: String) -> RepoFuture<HeroRegion> {
         let repo = self.repo.clone();
 
@@ -104,21 +90,6 @@ impl RegionService {
         })
     }
 
-    // pub fn insert_leyline(
-    //     &self,
-    //     region_name: RegionName,
-    //     location: String,
-    //     xp_reward: i32,
-    // ) -> RepoFuture<Leyline> {
-    //     let repo = self.repo.clone();
-    //     Box::pin(async move {
-    //         match repo.add_leyline(region_name, location, xp_reward).await {
-    //             Ok(leyline) => Ok(leyline),
-    //             Err(err) => Err(err.into()),
-    //         }
-    //     })
-    // }
-
     pub fn create_region_hero(&self, hero: &Hero) -> RepoFuture<HeroRegion> {
         let repo = self.repo.clone();
 
@@ -129,22 +100,17 @@ impl RegionService {
         })
     }
 
-    //         //     Err(err) => Err(err.into()),
-    //         // }
+    // // historical lookup
+    // pub fn results_by_hero(&self, hero_id: String) -> RepoFuture<Vec<RegionActionResult>> {
+    //     let repo = self.repo.clone();
+    //
+    //     Box::pin(async move {
+    //         let results = match repo.clone().results_by_hero(hero_id).await {
+    //             Ok(results) => results,
+    //             Err(err) => return Err(err.into()),
+    //         };
+    //
+    //         Ok(results)
     //     })
     // }
-
-    // historical lookup
-    pub fn results_by_hero(&self, hero_id: String) -> RepoFuture<Vec<RegionActionResult>> {
-        let repo = self.repo.clone();
-
-        Box::pin(async move {
-            let results = match repo.clone().results_by_hero(hero_id).await {
-                Ok(results) => results,
-                Err(err) => return Err(err.into()),
-            };
-
-            Ok(results)
-        })
-    }
 }

@@ -4,8 +4,7 @@ use prisma_client_rust::QueryError;
 
 use crate::models::hero::Hero;
 use crate::models::task::RegionActionResult;
-use crate::prisma::hero::{self, stamina};
-use crate::prisma::region_action_result::hero_id;
+use crate::prisma::hero;
 use crate::prisma::PrismaClient;
 
 #[derive(Clone, Debug)]
@@ -74,19 +73,4 @@ impl GameEngineRepo {
             .await?;
         Ok(())
     }
-
-    // pub async fn action_results_by_hero(
-    //     &self,
-    //     hero_id: String,
-    // ) -> Result<Vec<RegionActionResult>, QueryError> {
-    //     let where_param = vec![hero_id::equals(hero_id.to_string())];
-    //     let results = self
-    //         .prisma
-    //         .region_action_result()
-    //         .find_many(where_param)
-    //         .exec()
-    //         .await
-    //         .unwrap();
-    //     Ok(results.into_iter().map(|r| r.into()).collect())
-    // }
 }

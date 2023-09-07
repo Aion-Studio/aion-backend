@@ -39,7 +39,7 @@ async fn setup_once() -> Result<(), Box<dyn std::error::Error>> {
     drop(prisma_client);
 
     let _output = Command::new("cargo")
-        .args(&["prisma", "migrate", "dev", "--skip-generate"])
+        .args(&["prisma", "migrate", "dev"])
         .env("DATABASE_URL", format!("{}/testdb", URL.to_string())) // make sure to use the new database name
         .output()
         .expect("failed to execute process");
@@ -60,8 +60,29 @@ pub async fn setup_test_database() -> Result<Data<PrismaClient>, Box<dyn std::er
         .with_url(format!("{}/testdb", URL.to_string())) // make sure to use the new database name
         .build()
         .await?;
+    let seeded = seed_database(&prisma_client).await?;
 
     Ok(Data::new(prisma_client))
+}
+
+async fn seed_database(client: &PrismaClient) -> Result<bool, Box<dyn std::error::Error>> {
+    client
+        ._execute_raw(raw!(
+            r#"
+            INSERT INTO "Region" (name) 
+            VALUES 
+              ('Buzna'),
+              ('Dusane'),
+              ('Emerald'),
+              ('Forest'),
+              ('Lindon'),
+              ('Veladria'),
+              ('Yezer');
+        "#
+        ))
+        .exec()
+        .await?;
+    Ok(true)
 }
 
 pub fn random_hero() -> Hero {

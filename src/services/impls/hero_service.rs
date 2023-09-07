@@ -39,11 +39,15 @@ impl ServiceHeroes {
                 Ok(hero) => {
                     let last_action = self.repo.latest_action_result(hero.get_id()).await;
                     match last_action {
-                        Ok(action) => {
+                        Ok(action_result) => {
                             let mut hero = hero.clone();
-                            hero.regenerate_stamina(action);
-                            let updated = self.repo.update_hero(hero.clone()).await;
-                            updated
+                            match action_result {
+                                Some(action) => {
+                                    hero.regenerate_stamina(action);
+                                    self.repo.update_hero(hero.clone()).await
+                                }
+                                None => Ok(hero)
+                            }
                         }
                         Err(e) => {
                             eprintln!("Error getting last action: {}", e);
