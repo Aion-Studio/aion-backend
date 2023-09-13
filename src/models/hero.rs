@@ -1,7 +1,11 @@
 use prisma_client_rust::chrono;
 use serde::{Deserialize, Serialize};
-use crate::models::task::RegionActionResult;
 
+use crate::events::game::RegionActionResult;
+
+use super::resources::Resource;
+
+//TODO:Add hero resource to model
 #[allow(dead_code)]
 #[allow(unused_variables)]
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -12,6 +16,7 @@ pub struct Hero {
     pub attributes: Attributes,
     pub inventory: Option<Inventory>,
     pub retinue_slots: Vec<RetinueSlot>,
+    pub resources: Vec<Resource>,
     pub aion_capacity: i32,
     pub aion_collected: i32,
     pub stamina: i32,
@@ -33,6 +38,7 @@ impl Hero {
             attributes,
             retinue_slots: vec![],
             aion_capacity,
+            resources: vec![],
             aion_collected,
             stamina: 100,
             stamina_max: 100,
@@ -115,7 +121,7 @@ pub struct Attributes {
 pub struct AttributeModifier {
     attribute: Attributes,
     // which attribute this modifier affects
-    change: i32,           // positive for increase, negative for decrease
+    change: i32, // positive for increase, negative for decrease
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]

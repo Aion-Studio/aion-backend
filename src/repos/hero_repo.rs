@@ -1,13 +1,15 @@
-use std::sync::Arc;
 use prisma_client_rust::{Direction, QueryError};
+use std::sync::Arc;
 
+use crate::events::game::RegionActionResult;
 use crate::models::hero::{Attributes, BaseStats, Follower, Inventory, Item, Range, RetinueSlot};
-use crate::prisma::{attributes, base_stats, follower, hero, inventory, item, region, retinue_slot};
-use crate::{models::hero::Hero, prisma::PrismaClient};
 use crate::models::region::RegionName;
-use crate::models::task::RegionActionResult;
 use crate::prisma::hero_region::current_location;
 use crate::prisma::region_action_result::{create_time, hero_id};
+use crate::prisma::{
+    attributes, base_stats, follower, hero, inventory, item, region, retinue_slot,
+};
+use crate::{models::hero::Hero, prisma::PrismaClient};
 
 #[derive(Clone, Debug)]
 pub struct HeroRepo {
@@ -53,7 +55,10 @@ impl HeroRepo {
 
         Ok(updated_hero.into())
     }
-    pub async fn latest_action_result(&self, hero_id: String) -> Result<Option<RegionActionResult>, QueryError> {
+    pub async fn latest_action_result(
+        &self,
+        hero_id: String,
+    ) -> Result<Option<RegionActionResult>, QueryError> {
         let result = self
             .prisma
             .region_action_result()
@@ -140,10 +145,8 @@ impl HeroRepo {
             .await?;
         let hero: Hero = result.into();
         let region_name = RegionName::Dusane;
-        println!("region_name: {:?}", region_name);
-        let regions = self.prisma.region().find_many(vec![]).exec().await.unwrap();
-        println!("regions: {:?}", regions);
-        self.prisma.hero_region()
+        self.prisma
+            .hero_region()
             .create(
                 0,
                 hero::id::equals(hero.get_id()),
@@ -213,7 +216,6 @@ impl From<hero::Data> for Hero {
             Some(rslots) => rslots.into_iter().map(RetinueSlot::from).collect(),
             None => vec![],
         };
-
 
         Self {
             id: Some(data.id),

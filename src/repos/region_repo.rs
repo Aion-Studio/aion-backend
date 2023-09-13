@@ -3,8 +3,8 @@ use std::sync::Arc;
 use prisma_client_rust::QueryError;
 use tracing::{info, warn};
 
-use crate::models::task::RegionActionResult;
 use crate::{
+    events::game::{ChannelActionResult, RegionActionResult},
     models::{
         hero::Hero,
         region::{HeroRegion, Leyline, Region, RegionName},
@@ -20,13 +20,82 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct RegionRepo {
+pub struct Repo {
     prisma: Arc<PrismaClient>,
 }
 
-impl RegionRepo {
+impl Repo {
     pub fn new(prisma: Arc<PrismaClient>) -> Self {
         Self { prisma }
+    }
+
+    pub async fn store_region_action_result(
+        &self,
+        result: RegionActionResult,
+    ) -> Result<(), QueryError> {
+        self.prisma
+            .region_action_result()
+            .create(
+                result.xp,
+                result.discovery_level_increase,
+                hero::id::equals(result.hero_id),
+                // vec resu lt.resources
+                vec![],
+            )
+            .exec()
+            .await
+            .unwrap(); // Implement result storage logic...
+
+        Ok(())
+    }
+    pub async fn deduct_stamina(&self, hero_id: &str, stamina: i32) -> Result<(), QueryError> {
+        let hero = self
+            .prisma
+            .hero()
+            .find_unique(hero::id::equals(hero_id.clone().to_string()))
+            .exec()
+            .await;
+
+        let hero = hero.unwrap();
+        let new_stamina = match hero {
+            Some(h) => h.stamina - stamina,
+            None => 0,
+        };
+
+        self.prisma
+            .hero()
+            .update(
+                hero::id::equals(hero_id.to_string()),
+                vec![hero::stamina::set(new_stamina)],
+            )
+            .exec()
+            .await?;
+        Ok(())
+    }
+
+    pub async fn consume_channelling_loot(
+        &self,
+        hero: &Hero,
+        loot: &ChannelActionResult,
+    ) -> Result<(), QueryError> {
+        let hero_id = hero.id.as_ref().unwrap();
+        let stamina = loot.stamina_gained;
+        let xp = loot.xp;
+        let resources = loot.resources.clone();
+
+        self.deduct_stamina(hero_id, stamina).await?;
+        self.prisma
+            .hero()
+            .update(
+                hero::id::equals(hero_id.to_string()),
+                vec![
+                    hero::resources::increment(resources),
+                ],
+            )
+            .exec()
+            .await?;
+
+        Ok(())
     }
 
     pub async fn create_hero_region(&self, hero: &Hero) -> Result<HeroRegion, QueryError> {
@@ -61,7 +130,8 @@ impl RegionRepo {
             ..hero_region.clone()
         });
 
-        let result = self.prisma
+        let result = self
+            .prisma
             .hero_region()
             .update(hero_region::id::equals(hero_region.id.unwrap()), set_params)
             .exec()
@@ -69,7 +139,10 @@ impl RegionRepo {
 
         match result {
             Ok(_) => {
-                info!("Updated hero region discovery level");
+                println!(
+                    "updated hero region discover {:?}",
+                    current_discovery + discovery_level_increase
+                );
                 Ok(())
             }
             Err(e) => {
@@ -77,6 +150,29 @@ impl RegionRepo {
                 Err(e)
             }
         }
+    }
+
+    pub async fn leylines_by_discovery(&self, hero_id: &str) -> Result<Vec<Leyline>, QueryError> {
+        let hero_region = self.get_current_hero_region(hero_id).await?;
+        let region_name = hero_region.region_name.clone();
+
+        println!(
+            "REPO:: hero region discovery_level {:?}",
+            hero_region.discovery_level
+        );
+
+        // find leylines that have region_name as their region_name and discovery_required <= discovery_level
+        let leylines = self
+            .prisma
+            .leyline()
+            .find_many(vec![
+                leyline::region_name::equals(region_name.to_str()),
+                leyline::discovery_required::lte(hero_region.discovery_level),
+            ])
+            .exec()
+            .await?;
+
+        Ok(leylines.into_iter().map(Leyline::from).collect())
     }
 
     pub async fn get_hero_regions(&self, hero_id: &str) -> Result<Vec<HeroRegion>, QueryError> {

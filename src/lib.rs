@@ -20,7 +20,6 @@ mod models {
     pub mod hero;
     pub mod region;
     pub mod resources;
-    pub mod task;
 }
 
 mod repos {
@@ -31,11 +30,21 @@ mod repos {
     // pub mod resources_repo;
 }
 
+mod events {
+    pub mod dispatcher;
+    pub mod game;
+    pub mod handle_channeling;
+    pub mod handle_explore;
+    pub mod handle_lootbox;
+    pub mod initialize;
+}
+
 mod services {
     pub mod impls {
-        pub mod action_executor;
+        // pub mod action_executor;
         pub mod hero_service;
         pub mod region_service;
+        pub mod task_management;
 
         #[cfg(test)]
         mod hero_service_test;
@@ -53,6 +62,7 @@ mod services {
         pub mod scheduler;
     }
     pub mod tasks {
+        pub mod channel;
         pub mod explore;
     }
 }
@@ -61,6 +71,8 @@ pub mod handlers {
     pub mod heroes;
     pub mod regions;
 }
+
+pub mod infra;
 
 #[cfg(test)]
 pub mod test_helpers;

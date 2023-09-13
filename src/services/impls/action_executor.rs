@@ -6,15 +6,13 @@ use crate::{
     models::{
         hero::{Attributes, BaseStats, Hero, Range},
         region::HeroRegion,
-        task::RegionActionResult,
     },
     prisma::PrismaClient,
     repos::game_engine_repo::GameEngineRepo,
-    types::AsyncResult,
+    types::AsyncResult, events::{dispatcher::EventDispatcher, game::{GameEvent, TaskLootBox}}, infra::Infra,
 };
 use flume::{unbounded, Receiver, Sender};
 
-use crate::models::task::{TaskAction, TaskKind, TaskLootBox};
 use crate::repos::region_repo::RegionRepo;
 use crate::services::impls::hero_service::ServiceHeroes;
 use crate::services::impls::tasks::TaskManager;
@@ -26,7 +24,7 @@ use tracing::{error, info};
 pub struct ActionExecutor {
     pub result_sender: Sender<TaskLootBox>,
     pub result_broadcast_receiver: Receiver<TaskLootBox>,
-    pub task_sender: Sender<TaskKind>,
+    pub task_sender: Sender<GameEvent>,
     repo: Arc<GameEngineRepo>,
     hero_service: Arc<ServiceHeroes>,
     region_repo: Arc<RegionRepo>,
@@ -74,14 +72,14 @@ impl ActionExecutor {
         service
     }
 
-    async fn handle_tasks(self: Arc<Self>, receiver: Receiver<TaskKind>) {
+    async fn handle_tasks(self: Arc<Self>, receiver: Receiver<GameEvent>) {
         while let Ok(task) = receiver.recv_async().await {
             let self_clone = self.clone();
             self_clone.handle_task(task).await;
         }
     }
 
-    fn handle_task(self: Arc<Self>, task: TaskKind) -> Pin<Box<dyn Future<Output=()> + Send>> {
+    fn handle_task(self: Arc<Self>, task: GameEvent) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(async move {
             let (task_done_sender, task_done_receiver) = unbounded();
             info!("Scheduling task: {:?}", task);
@@ -106,13 +104,17 @@ impl ActionExecutor {
     // Send notifications
     // Update any state needed
     // Metrics?
-    async fn handle_task_completed(&self, task: TaskKind) {
+    async fn handle_task_completed(&self, task: GameEvent) {
         match task {
-            TaskKind::Exploration(action) => {
+            GameEvent::Exploration(action) => {
+                Infra::dispatch(GameEvent::ExploreCompleted(action.clone()));
                 if let Err(err) = self.explore_action_complete(action).await {
                     error!("Error handling exploration: {}", err);
                 }
             }
+            GameEvent::HeroExplores(_) => todo!(),
+            GameEvent::ExploreCompleted(_) => todo!(),
+            GameEvent::LootBoxCreated(_) => todo!(),
         }
     }
 
@@ -181,7 +183,7 @@ impl ActionExecutor {
             // Calculate boost factor
             let boost: f64 = 1.0
                 + ((max_value - base_value)
-                * (1.0 - (-growth_factor * (exploration as f64 - base_value)).exp()))
+                    * (1.0 - (-growth_factor * (exploration as f64 - base_value)).exp()))
                 .min(0.40);
 
             boost
@@ -196,7 +198,7 @@ impl ActionExecutor {
         &self,
         rx: Receiver<TaskLootBox>,
         broadcast_sender: Sender<TaskLootBox>,
-    ) -> Pin<Box<dyn Future<Output=()> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let self_clone = self.clone();
         Box::pin(async move {
             /* Here we add all the cases for every type of action and

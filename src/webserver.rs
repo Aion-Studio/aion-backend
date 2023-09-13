@@ -1,10 +1,13 @@
 use crate::configuration::{get_region_durations, Durations, Settings};
+use crate::events::dispatcher::EventDispatcher;
+use crate::events::initialize::initialize_handlers;
 use crate::handlers::heroes::{create_hero_endpoint, hero_state};
 use crate::handlers::regions::{create_region, explore_region};
+use crate::infra::Infra;
 use crate::prisma::PrismaClient;
-use crate::services::impls::action_executor::ActionExecutor;
-use crate::services::impls::hero_service::ServiceHeroes;
+use crate::services::impls::hero_service::{HeroService, ServiceHeroes};
 use crate::services::impls::region_service::RegionService;
+use crate::services::impls::task_management::TaskManagementService;
 use crate::services::impls::tasks::TaskManager;
 use actix_web::dev::Server;
 use actix_web::{web, App, HttpServer};
@@ -20,7 +23,6 @@ pub struct Application {
 #[derive(Clone)]
 pub struct AppState {
     pub prisma: Arc<PrismaClient>,
-    pub executor: Arc<ActionExecutor>,
     pub durations: Durations,
 }
 
@@ -71,20 +73,26 @@ impl Application {
 async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Server, anyhow::Error> {
     let prisma = Arc::new(prisma_client);
 
+    Infra::initialize(prisma.clone());
+    initialize_handlers();
     let hero_service = web::Data::new(ServiceHeroes::new(prisma.clone()));
-    let executor = ActionExecutor::new(prisma.clone());
     let scheduler = Arc::new(TaskManager::new());
     let task_schedule_service = web::Data::new(scheduler.clone());
-    let region_service = web::Data::new(RegionService::new(
-        scheduler,
-        prisma.clone(),
-        executor.clone().result_channels().unwrap(),
-    ));
+    let region_service = web::Data::new(RegionService::new(scheduler, prisma.clone()));
     let app_state = web::Data::new(AppState {
         prisma: prisma.clone(),
-        executor: executor.clone(),
         durations: get_region_durations(),
     });
+
+    let hero_service_new = HeroService {
+        // ... other initializations
+    };
+
+    let task_management_service = TaskManagementService {
+        // ... other initializations
+    };
+
+    // Subscribe the task management service to the HeroExplored event
 
     let server = HttpServer::new(move || {
         let app = App::new()

@@ -1,10 +1,13 @@
-use crate::models::hero::{Hero, Item, RetinueSlot};
+use crate::events::game::{GameEvent, RegionActionResult};
+use crate::infra::Infra;
+use crate::models::hero::{Hero, Item, RetinueSlot, BaseStats, Range, Attributes};
 use crate::prisma::PrismaClient;
 use crate::repos::hero_repo::HeroRepo;
-use crate::types::RepoFuture;
-use std::sync::Arc;
+use crate::services::tasks::explore::ExploreAction;
+use crate::types::{RepoFuture, AsyncResult};
 use prisma_client_rust::QueryError;
-use crate::models::task::RegionActionResult;
+use rand::Rng;
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct ServiceHeroes {
@@ -28,9 +31,45 @@ impl ServiceHeroes {
         })
     }
 
-    pub async fn latest_action_results(&self, hero_id: String) -> Result<Vec<RegionActionResult>, QueryError> {
-        self.repo
-            .action_results_by_hero(hero_id).await
+    pub async fn latest_action_results(
+        &self,
+        hero_id: String,
+    ) -> Result<Vec<RegionActionResult>, QueryError> {
+        self.repo.action_results_by_hero(hero_id).await
+    }
+
+    pub fn generate_hero(&self) -> AsyncResult<Hero, Box<dyn std::error::Error>> {
+        Box::pin(async {
+            let mut rng = rand::thread_rng();
+
+            let hero = Hero::new(
+                BaseStats {
+                    id: None,
+                    level: 1,
+                    xp: 0,
+                    damage: Range {
+                        min: rng.gen_range(1..5),
+                        max: rng.gen_range(5..10),
+                    },
+                    hit_points: rng.gen_range(90..110),
+                    mana: rng.gen_range(40..60),
+                    armor: rng.gen_range(5..15),
+                },
+                Attributes {
+                    id: None,
+                    strength: rng.gen_range(1..20),
+                    resilience: rng.gen_range(1..20),
+                    agility: rng.gen_range(1..20),
+                    intelligence: rng.gen_range(1..20),
+                    exploration: rng.gen_range(1..20),
+                    crafting: rng.gen_range(1..20),
+                },
+                rng.gen_range(80..120),
+                0,
+            );
+
+            Ok(hero)
+        })
     }
 
     pub fn get_hero(&self, hero_id: String) -> RepoFuture<Hero> {
@@ -46,7 +85,7 @@ impl ServiceHeroes {
                                     hero.regenerate_stamina(action);
                                     self.repo.update_hero(hero.clone()).await
                                 }
-                                None => Ok(hero)
+                                None => Ok(hero),
                             }
                         }
                         Err(e) => {
@@ -85,5 +124,13 @@ impl ServiceHeroes {
 
     fn assign_follower_to_hero(&self, hero: &mut Hero, slot: RetinueSlot) {
         hero.assign_follower(slot);
+    }
+}
+
+pub struct HeroService {}
+
+impl HeroService {
+    pub async fn explore(&self, action: ExploreAction) {
+        Infra::dispatch(GameEvent::HeroExplores(action));
     }
 }

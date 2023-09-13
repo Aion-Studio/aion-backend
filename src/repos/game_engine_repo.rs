@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use prisma_client_rust::QueryError;
 
+use crate::events::game::RegionActionResult;
 use crate::models::hero::Hero;
-use crate::models::task::RegionActionResult;
 use crate::prisma::hero;
 use crate::prisma::PrismaClient;
 

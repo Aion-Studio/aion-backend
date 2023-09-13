@@ -1,19 +1,23 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use actix_web::{
     post,
     web::{Data, Json, Path},
     HttpResponse, Responder,
 };
+use prisma_client_rust::chrono::Duration;
 use serde::{Deserialize, Serialize};
 
-use crate::services::{tasks::explore::ExploreAction, traits::hero_service::HeroService};
-use crate::webserver::AppState;
+use crate::{
+    events::{dispatcher::EventDispatcher, game::GameEvent},
+    services::{tasks::explore::ExploreAction, traits::hero_service::HeroService},
+};
+use crate::{infra::Infra, webserver::AppState};
+use crate::{models::hero::Hero, services::impls::hero_service::ServiceHeroes};
 use crate::{
     models::region::{Leyline, RegionName},
     services::impls::region_service::RegionService,
 };
-use crate::{models::task::TaskKind, services::impls::hero_service::ServiceHeroes};
 
 #[derive(Debug, Deserialize)]
 pub struct RegionPayload {
@@ -42,20 +46,33 @@ pub async fn explore_region(
         .await
         .unwrap();
 
-    let task = ExploreAction::new(hero, current_region.region_name, &app.durations);
+    match do_explore(&hero, &current_region.region_name, &app.durations) {
+        Ok(_) => HttpResponse::Ok().json(ExploreResponse {
+            message: "Exploration started".to_string(),
+            status: "Ok".to_string(),
+        }),
+        Err(e) => HttpResponse::InternalServerError().json(ExploreResponse {
+            message: e.to_string(),
+            status: "Error".to_string(),
+        }),
+    }
+}
+
+pub fn do_explore(
+    hero: &Hero,
+    region_name: &RegionName,
+    durations: &HashMap<RegionName, Duration>,
+) -> Result<(), anyhow::Error> {
+    let task = ExploreAction::new(hero.to_owned(), region_name.to_owned(), durations);
     match task {
         Some(task) => {
-            let sent = app.executor.task_sender.send(TaskKind::Exploration(task));
-
-            match sent {
-                Ok(()) => HttpResponse::Ok().json(ExploreResponse {
-                    message: "Exploration started".to_string(),
-                    status: "OK".to_string(),
-                }),
-                Err(e) => HttpResponse::InternalServerError().json(e.to_string()),
-            }
+            //EVENT STUFF
+            Infra::dispatch(GameEvent::HeroExplores(task.clone()));
+            // END EVENT
+            // let sent = app.executor.task_sender.send(GameEvent::Exploration(task));
+            Ok(())
         }
-        None => HttpResponse::InternalServerError().json("Not enough stamina"),
+        None => Err(anyhow::Error::msg("Not enough stamina")),
     }
 }
 
@@ -73,23 +90,3 @@ pub async fn create_region(
         Err(e) => return HttpResponse::InternalServerError().json(e.to_string()),
     }
 }
-
-// #[post("/region/{region_name}/leyline")]
-// pub async fn add_leyline(
-//     path: Path<String>,
-//     leyline: Json<Leyline>,
-//     region_service: Data<RegionService>,
-// ) -> impl Responder {
-//     let region_name = path.into_inner();
-//     let created_leyline = region_service
-//         .insert_leyline(
-//             region_name.parse().unwrap(),
-//             leyline.location.clone(),
-//             leyline.xp_reward.clone(),
-//         )
-//         .await;
-//     match created_leyline {
-//         Ok(leyline) => HttpResponse::Created().json(leyline),
-//         Err(e) => return HttpResponse::InternalServerError().json(e.to_string()),
-//     }
-// }

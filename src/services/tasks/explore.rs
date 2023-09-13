@@ -6,18 +6,17 @@ use std::{
 use prisma_client_rust::chrono::{self, Duration};
 use rand::Rng;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::{
     models::{hero::Hero, region::RegionName},
-    services::traits::async_task::{Task, TaskExecReturn, TaskStatus},
+    services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
 };
 
-//TODO: move to models
 #[derive(Clone, Debug)]
 pub struct ExploreAction {
     id: Uuid,
+    base: BaseTask,
     pub hero: Hero,
     pub duration: Duration,
     pub region_name: RegionName,
@@ -61,6 +60,7 @@ impl ExploreAction {
 
         Some(Self {
             id: Uuid::new_v4(),
+            base: BaseTask::new(duration, hero.clone()),
             duration,
             hero,
             start_time: Arc::new(Mutex::new(None)),
@@ -77,6 +77,7 @@ impl ExploreAction {
         *lock = Some(start_time);
     }
 }
+
 fn get_stamina_cost(region_name: &RegionName) -> i32 {
     match region_name {
         RegionName::Forest => rand::thread_rng().gen_range(10..20),
@@ -88,40 +89,21 @@ fn get_stamina_cost(region_name: &RegionName) -> i32 {
         RegionName::Veladria => rand::thread_rng().gen_range(30..50),
     }
 }
+
 impl Task for ExploreAction {
     fn execute(&self) -> TaskExecReturn {
-        let duration = self.duration;
-        // Create a new Tokio task
-        Box::pin(async move {
-            println!("Exploring for {} seconds...", duration.num_seconds());
-            sleep(duration.to_std().unwrap()).await;
-            Ok(())
-        })
-    }
-
-    fn id(&self) -> Uuid {
-        self.id
-    }
-
-    fn start_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        let locked_start_time = self.start_time.lock().unwrap();
-        locked_start_time.clone()
-    }
-
-    fn duration(&self) -> Duration {
-        self.duration
+        self.base.execute()
     }
 
     fn check_status(&self) -> TaskStatus {
-        let start_time = self.start_time.lock().unwrap();
-        if self.duration > (chrono::Utc::now() - start_time.unwrap()) {
-            TaskStatus::InProgress
-        } else {
-            TaskStatus::Completed
-        }
+        self.base.check_status()
     }
 
     fn hero_id(&self) -> String {
-        self.hero.id.clone().unwrap()
+        self.base.hero_id()
+    }
+
+    fn task_id(&self) -> Uuid {
+        self.base.task_id()
     }
 }

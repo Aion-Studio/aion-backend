@@ -1,8 +1,6 @@
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use std::sync::Arc;
 
-use flume::Sender;
-
-use crate::models::task::{RegionActionResult, TaskLootBox};
+use crate::repos::region_repo::Repo;
 use crate::services::impls::tasks::TaskManager;
 use crate::{
     models::{
@@ -10,30 +8,20 @@ use crate::{
         region::{HeroRegion, Leyline, Region, RegionName},
     },
     prisma::PrismaClient,
-    repos::region_repo::RegionRepo,
     types::RepoFuture,
 };
 
 pub struct RegionService {
     scheduler: Arc<TaskManager>,
-    repo: RegionRepo,
+    repo: Repo,
     // other dependencies...
-    result_sender: Sender<TaskLootBox>,
 }
 
 impl RegionService {
-    pub fn new(
-        scheduler: Arc<TaskManager>,
-        prisma: Arc<PrismaClient>,
-        result_sender: Sender<TaskLootBox>,
-    ) -> Arc<Self> {
-        let repo = RegionRepo::new(prisma);
+    pub fn new(scheduler: Arc<TaskManager>, prisma: Arc<PrismaClient>) -> Arc<Self> {
+        let repo = Repo::new(prisma);
 
-        let service = Arc::new(Self {
-            result_sender,
-            scheduler,
-            repo,
-        });
+        let service = Arc::new(Self { scheduler, repo });
 
         service
     }
@@ -53,7 +41,7 @@ impl RegionService {
     //     let repo = self.repo.clone();
     //
     //     Box::pin(async move {
-    //        match self.repo.leylines_by_discovery() 
+    //        match self.repo.leylines_by_discovery()
     //     })
     // }
     //

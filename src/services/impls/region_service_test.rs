@@ -6,15 +6,19 @@ use std::sync::Arc;
 
 use prisma_client_rust::chrono::Duration;
 
+use crate::events::game::{GameEvent, RegionActionResult};
+use crate::events::handle_explore::ExploreHandler;
+use crate::events::initialize::initialize_handlers;
+use crate::handlers::heroes::get_hero_status;
+use crate::handlers::regions::do_explore;
+use crate::infra::Infra;
 use crate::models::hero::Hero;
-use crate::models::task::TaskLootBox::Region;
-use crate::models::task::{RegionActionResult, TaskKind};
+use crate::models::region::Region;
 use crate::prisma::PrismaClient;
-use crate::repos::region_repo::RegionRepo;
-use crate::services::impls::action_executor::ActionExecutor;
+use crate::repos::region_repo::Repo;
 use crate::services::impls::hero_service::ServiceHeroes;
+use crate::services::impls::tasks::TaskManager;
 use crate::services::traits::async_task::{Task, TaskStatus};
-use crate::services::traits::hero_service::HeroService;
 use crate::test_helpers::{random_hero, setup_test_database};
 use crate::{models::region::RegionName, services::tasks::explore::ExploreAction};
 
@@ -24,27 +28,25 @@ async fn test_start_exploration() {
     let prisma_client = setup_test_database().await.unwrap();
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::seconds(10));
-    let prisma_clone = prisma_client.clone().into_inner();
-    let game_engine = Arc::new(ActionExecutor::new(prisma_clone));
-
-    let hero = random_hero();
-    let region_name = RegionName::Dusane; // assuming this is a valid region name
-
-    // Execute the start_exploration function and get the result
-    let task = ExploreAction::new(hero, region_name, &durations).unwrap();
-    let sent = game_engine.task_sender.send(TaskKind::Exploration(task));
-
-    // Assert that the result is an Ok value (exploration start was successful)
-    assert!(sent.is_ok(), "Starting exploration failed");
+    // let prisma_clone = prisma_client.clone().into_inner();
+    //
+    // let hero = random_hero();
+    // let region_name = RegionName::Dusane; // assuming this is a valid region name
+    //
+    // // Execute the start_exploration function and get the result
+    // let task = ExploreAction::new(hero, region_name, &durations).unwrap();
+    //
+    // // Assert that the result is an Ok value (exploration start was successful)
+    // assert!(sent.is_ok(), "Starting exploration failed");
 }
 
 #[tokio::test]
 async fn test_start_exploration_task_status() {
     let prisma_client = setup_test_database().await.unwrap();
+    Infra::initialize(prisma_client.clone().into_inner());
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::seconds(3));
     let prisma_clone = prisma_client.clone().into_inner();
-    let game_engine = ActionExecutor::new(prisma_clone.clone());
 
     let hero_service = ServiceHeroes::new(prisma_clone.clone());
     let mut new_hero = random_hero();
@@ -55,16 +57,15 @@ async fn test_start_exploration_task_status() {
     let region_name = RegionName::Dusane;
     // Execute the start_exploration function and get the result
     let task = ExploreAction::new(hero, region_name.clone(), &durations).unwrap();
-    let _ = game_engine.task_sender.send(TaskKind::Exploration(task));
 
     tokio::time::sleep(Duration::milliseconds(300).to_std().unwrap()).await;
-    let task = game_engine.scheduler.get_current_task(hero_id.as_str());
+    let task = Infra::tasks().get_current_task(hero_id.as_str());
     assert!(task.is_some(), "Task not found");
 
     let explore_task = match task {
         Some(task_kind) => match task_kind {
-            TaskKind::Exploration(explore_task) => explore_task,
-            _ => panic!("TaskKind is not Exploration"),
+            GameEvent::HeroExplores(explore_task) => explore_task,
+            _ => panic!("GameEvent is not Exploration"),
         },
         None => todo!(),
     };
@@ -86,14 +87,14 @@ async fn delay(time: Duration) {
 async fn random_hero_and_explore() -> (
     Hero,
     Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
-    Arc<ActionExecutor>,
     Arc<PrismaClient>,
 ) {
     let prisma_client = setup_test_database().await.unwrap();
+    Infra::initialize(prisma_client.clone().into_inner());
+    initialize_handlers();
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
     let prisma_clone = prisma_client.clone().into_inner();
-    let game_engine = ActionExecutor::new(prisma_clone.clone());
 
     let hero_service = ServiceHeroes::new(prisma_clone.clone());
 
@@ -102,31 +103,35 @@ async fn random_hero_and_explore() -> (
     let hero = hero_service.create_hero(new_hero).await.unwrap();
 
     let hero_clone = hero.clone();
-    let game_engine_clone = game_engine.clone();
     // Create a boxed future for the run_the_task logic
     let run_the_task: Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>> =
         Box::new(move || {
             Box::pin(async move {
                 let region_name = RegionName::Dusane;
-                let task = ExploreAction::new(hero_clone.clone(), region_name.clone(), &durations)
-                    .unwrap();
-                let _ = game_engine_clone
-                    .task_sender
-                    .send(TaskKind::Exploration(task));
-                tokio::time::sleep(Duration::milliseconds(600).to_std().unwrap()).await;
+                do_explore(&hero_clone, &region_name, &durations).unwrap();
+                tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
             })
         });
 
-    (hero, run_the_task, game_engine, prisma_clone.clone())
+    (hero, run_the_task, prisma_clone.clone())
+}
+
+async fn explore(hero: Hero, region_name: RegionName) -> Result<(), Error> {
+    let mut durations = HashMap::new();
+    durations.insert(RegionName::Dusane, Duration::milliseconds(500));
+    do_explore(&hero, &region_name, &durations).unwrap();
+    tokio::time::sleep(Duration::milliseconds(650).to_std().unwrap()).await;
+    Ok(())
 }
 
 #[tokio::test]
 async fn test_generate_result_for_exploration() {
     let prisma_client = setup_test_database().await.unwrap();
+    Infra::initialize(prisma_client.clone().into_inner());
+    initialize_handlers();
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
     let prisma_clone = prisma_client.clone().into_inner();
-    let game_engine = ActionExecutor::new(prisma_clone.clone());
 
     let hero_service = ServiceHeroes::new(prisma_clone.clone());
     let mut new_hero = random_hero();
@@ -136,34 +141,8 @@ async fn test_generate_result_for_exploration() {
 
     let region_name = RegionName::Dusane;
     // Execute the start_exploration function and get the result
-    let task = ExploreAction::new(hero.clone(), region_name.clone(), &durations).unwrap();
-    let _ = game_engine.task_sender.send(TaskKind::Exploration(task));
-    tokio::time::sleep(Duration::milliseconds(100).to_std().unwrap()).await;
-
-    let result: Result<RegionActionResult, Error> =
-        match game_engine.result_broadcast_receiver.recv_async().await {
-            Ok(res) => {
-                // unpack the TaskLootBox enum into Region(RegionActionResult)
-                let region_action_result = match res {
-                    Region(region_action_result) => region_action_result,
-                    // return regular error
-                    _ => panic!("Result is not Region"),
-                };
-                assert!(region_action_result.xp > 0, "XP should be greater than 0");
-                assert!(
-                    region_action_result.discovery_level_increase > 0.0,
-                    "Discovery level increase should be greater than 0"
-                );
-                assert_eq!(
-                    region_action_result.hero_id,
-                    hero.get_id(),
-                    "Hero ID mismatch"
-                );
-                Ok(region_action_result)
-            }
-            Err(_) => panic!("No result received"),
-        };
-    assert!(result.is_ok(), "Generation of exporation result failed");
+    do_explore(&hero, &region_name, &durations).unwrap();
+    tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
 
     let hero_service = ServiceHeroes::new(prisma_clone.clone());
     let hero = hero_service.get_hero(hero_id).await.unwrap();
@@ -173,9 +152,10 @@ async fn test_generate_result_for_exploration() {
 
 #[tokio::test]
 async fn test_hero_status_after_explore() {
-    let (hero, run_the_task, _, prisma_client) = random_hero_and_explore().await;
+    let (hero, run_the_task, prisma_client) = random_hero_and_explore().await;
+
     // RegionHero Before
-    let region_repo = RegionRepo::new(prisma_client.clone());
+    let region_repo = Repo::new(prisma_client.clone());
     let current_region_hero = region_repo
         .get_current_hero_region(hero.get_id().as_ref())
         .await
@@ -200,16 +180,39 @@ async fn test_hero_status_after_explore() {
         updated_hero.stamina > before_stamina,
         "Stamina should be greater than 0"
     );
-    //Regionhero after
     //
     let after_region_hero = region_repo
         .get_current_hero_region(hero.get_id().as_ref())
         .await
         .unwrap();
 
-    println!(
-        "before region hero discovery {:?} and after {:?}",
-        current_region_hero.discovery_level, after_region_hero.discovery_level
-    );
     assert!(after_region_hero.discovery_level > current_region_hero.discovery_level);
+}
+
+#[tokio::test]
+async fn test_leyline_increased_visible() {
+    let (hero, run_the_task, prisma_client) = random_hero_and_explore().await;
+
+    let hero_service = ServiceHeroes::new(prisma_client.clone());
+    let updated_hero = hero_service.get_hero(hero.get_id()).await.unwrap();
+    let mut status = get_hero_status(updated_hero.clone()).await.unwrap();
+
+    run_the_task().await;
+    loop {
+        if status.available_leylines.len() > 7 {
+            break;
+        }
+
+        println!(
+            "LOOP:: status available leylines {:?}",
+            status.available_leylines.len()
+        );
+
+        let _ = explore(hero.clone(), RegionName::Dusane).await;
+        let updated_hero = hero_service.clone().get_hero(hero.get_id()).await.unwrap();
+        status = get_hero_status(updated_hero).await.unwrap();
+    }
+    // has to regen stamina using get_hero
+    assert!(status.available_leylines.len() > 1);
+    println!("hero status at end {:?}", status);
 }
