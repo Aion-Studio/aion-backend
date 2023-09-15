@@ -1,11 +1,11 @@
 use prisma_client_rust::chrono;
 use serde::{Deserialize, Serialize};
 
-use crate::events::game::RegionActionResult;
-
+use crate::events::game::{RegionActionResult, TaskLootBox};
+use anyhow::Result;
+use crate::infra::Infra;
 use super::resources::Resource;
 
-//TODO:Add hero resource to model
 #[allow(dead_code)]
 #[allow(unused_variables)]
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -59,6 +59,60 @@ impl Hero {
                 self.stamina = self.stamina_max;
             }
         }
+    }
+    pub fn add_resources(&mut self, new_resources: Vec<Resource>) {
+        for new_resource in new_resources {
+            let mut found = false;
+            for existing_resource in &mut self.resources {
+                if std::mem::discriminant(existing_resource) == std::mem::discriminant(&new_resource) {
+                    // If the type of resource matches, add the values together
+                    match (existing_resource, &new_resource) {
+                        (Resource::Aion(ref mut value), Resource::Aion(new_value)) => {
+                            *value += new_value;
+                        }
+                        (Resource::Valor(ref mut value), Resource::Valor(new_value)) => {
+                            *value += new_value;
+                        }
+                        // ... handle other Resource variants similarly
+                        _ => {}
+                    }
+                    found = true;
+                    break;
+                }
+            }
+            // If the resource type was not found in the existing resources, push it to the list
+            if !found {
+                self.resources.push(new_resource);
+            }
+        }
+    }
+
+    pub async fn update_stats(&mut self, loot_box: &TaskLootBox) -> Result<()> {
+        match loot_box {
+            TaskLootBox::Region(result) => {
+                let xp = result.xp;
+                self.gain_experience(xp);
+                // find the resource enum type in the  self.resources and increase the amount by result.resources
+                result.resources.iter().for_each(|result_resource| {
+                    match result_resource {
+                        Resource::Aion(amount) => {
+                            self.aion_collected += amount;
+                        }
+                        Resource::
+                    }
+                })
+                // Infra::repo().update_hero(&hero).await?;
+            }
+            TaskLootBox::Channel(result) => {
+                let hero_id = result.hero_id.clone();
+                let xp = result.xp;
+                // let hero = Infra::repo().get_hero_by_id(&hero_id).await?;
+                // let mut hero = hero.unwrap();
+                // hero.gain_experience(xp);
+                // Infra::repo().update_hero(&hero).await?
+            }
+        }
+        Ok(())
     }
     // Add other methods as per your game logic
 }

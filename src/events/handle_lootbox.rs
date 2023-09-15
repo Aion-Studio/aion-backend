@@ -54,9 +54,7 @@ impl LootBoxHandler {
         action_result: &RegionActionResult,
         action: ExploreAction,
     ) -> Result<(), QueryError> {
-        // let discovery_level_increase = match &task_loot_box {
-        //     TaskLootBox::Region(result) => result.discovery_level_increase,
-        // };
+
         let hero_id = action.clone().hero.id.unwrap();
         Infra::repo()
             .update_hero_region_discovery_level(
@@ -100,7 +98,7 @@ impl EventHandler for LootBoxHandler {
 
                     }
                 }
-                GameEvent::ExploreCompleted(action) => {
+                GameEvent::ExploreCompleted(mut action) => {
                     let task_action = TaskAction::Explore(action.clone());
                     let hero_id = action.clone().hero.id.unwrap();
 
@@ -113,6 +111,7 @@ impl EventHandler for LootBoxHandler {
 
                     let loot = handler.generate_loot_box(&task_action).await;
                     if let Ok(TaskLootBox::Region(result)) = &loot {
+                        //NOTE: inconsistency here  mix of repo use and method
                         if let Err(e) = handler.hero_region_update(&result, action.clone()).await {
                             eprintln!("Error updating hero region: {:?}", e);
                             panic!("Error updating hero region: {:?}", e);
@@ -123,8 +122,12 @@ impl EventHandler for LootBoxHandler {
                         {
                             eprintln!("Error storing region action result: {}", err);
                         }
-
                         //TODO: update hero stats from loot box items
+                    }
+
+                    let loot_box = &loot.unwrap();
+                    if let Err(err) = action.hero.update_stats(loot_box).await {
+                        eprintln!("Error updating hero stats: {}", err);
                     }
                 }
                 _ => {}

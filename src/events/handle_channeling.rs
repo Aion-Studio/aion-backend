@@ -13,7 +13,6 @@ impl ChannelingHandler {
         handler.subscribe();
         handler
     }
-
     fn subscribe(&self) {
         Infra::subscribe(GameEvent::channeling(), Arc::new(self.clone()));
         Infra::subscribe(GameEvent::channeling_completed(), Arc::new(self.clone()));
