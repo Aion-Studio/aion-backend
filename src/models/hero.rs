@@ -1,14 +1,22 @@
+use std::collections::HashMap;
+
 use prisma_client_rust::chrono;
 use serde::{Deserialize, Serialize};
 
-use crate::events::game::{RegionActionResult, TaskLootBox};
-use anyhow::Result;
-use crate::infra::Infra;
 use super::resources::Resource;
+use crate::infra::Infra;
+use crate::{
+    events::game::{ActionCompleted, TaskLootBox},
+    prisma::{
+        attributes, base_stats, follower, hero, hero_resource, inventory, item, retinue_slot,
+        ResourceType,
+    },
+};
+use anyhow::Result;
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Hero {
     pub id: Option<String>,
@@ -16,7 +24,7 @@ pub struct Hero {
     pub attributes: Attributes,
     pub inventory: Option<Inventory>,
     pub retinue_slots: Vec<RetinueSlot>,
-    pub resources: Vec<Resource>,
+    pub resources: HashMap<Resource, i32>,
     pub aion_capacity: i32,
     pub aion_collected: i32,
     pub stamina: i32,
@@ -24,6 +32,7 @@ pub struct Hero {
     pub stamina_regen_rate: i32,
 }
 
+// methods to only update the model struct based on some calculation
 impl Hero {
     pub fn new(
         base_stats: BaseStats,
@@ -38,53 +47,59 @@ impl Hero {
             attributes,
             retinue_slots: vec![],
             aion_capacity,
-            resources: vec![],
+            resources: HashMap::new(),
             aion_collected,
             stamina: 100,
             stamina_max: 100,
             stamina_regen_rate: 1,
         }
     }
-    pub fn regenerate_stamina(&mut self, res: RegionActionResult) {
+
+    pub fn regenerate_stamina(&mut self, res: &ActionCompleted) {
         // set the self.stamina to number of seconds since last regionactionresult.created time and now
         // multiplied by self.stamina_regen_rate
-        if let Some(created_time) = res.created_time {
-            let now = chrono::Utc::now();
-            let seconds = now.signed_duration_since(created_time).num_seconds() as i32;
-            let stamina = seconds * self.stamina_regen_rate;
-            // add to self.stamina only if it is less than self.stamina_max
-            if self.stamina + stamina < self.stamina_max {
-                self.stamina += stamina;
-            } else {
-                self.stamina = self.stamina_max;
+        let now = chrono::Utc::now();
+        let seconds = now.signed_duration_since(res.updated_at).num_seconds() as i32;
+
+        let stamina = seconds * self.stamina_regen_rate;
+        println!("updating stamina by {}", stamina);
+        // add to self.stamina only if it is less than self.stamina_max
+        if self.stamina + stamina < self.stamina_max {
+            self.stamina += stamina;
+        } else {
+            self.stamina = self.stamina_max;
+        }
+    }
+
+    pub fn deduct_stamina(&mut self, stamina: i32) {
+        self.stamina -= stamina;
+    }
+
+    // adds the loot onto the hero struct
+    pub fn equip_loot(&mut self, loot: TaskLootBox) {
+        match loot {
+            TaskLootBox::Region(result) => {
+                let xp = result.xp;
+                self.gain_experience(xp);
+                // find the resource enum type in the  self.resources and increase the amount by result.resources
+                self.add_resources(result.resources);
+            }
+            TaskLootBox::Channel(result) => {
+                let hero_id = result.hero_id.clone();
+                let xp = result.xp;
+                self.gain_experience(xp);
+                self.stamina += result.stamina_gained;
+                self.add_resources(result.resources);
             }
         }
     }
-    pub fn add_resources(&mut self, new_resources: Vec<Resource>) {
-        for new_resource in new_resources {
-            let mut found = false;
-            for existing_resource in &mut self.resources {
-                if std::mem::discriminant(existing_resource) == std::mem::discriminant(&new_resource) {
-                    // If the type of resource matches, add the values together
-                    match (existing_resource, &new_resource) {
-                        (Resource::Aion(ref mut value), Resource::Aion(new_value)) => {
-                            *value += new_value;
-                        }
-                        (Resource::Valor(ref mut value), Resource::Valor(new_value)) => {
-                            *value += new_value;
-                        }
-                        // ... handle other Resource variants similarly
-                        _ => {}
-                    }
-                    found = true;
-                    break;
-                }
-            }
-            // If the resource type was not found in the existing resources, push it to the list
-            if !found {
-                self.resources.push(new_resource);
-            }
-        }
+
+    fn add_resources(&mut self, resources: HashMap<Resource, i32>) {
+        resources.iter().for_each(|resource| {
+            self.resources
+                .entry(resource.0.clone())
+                .and_modify(|r| *r += resource.1);
+        });
     }
 
     pub async fn update_stats(&mut self, loot_box: &TaskLootBox) -> Result<()> {
@@ -92,27 +107,26 @@ impl Hero {
             TaskLootBox::Region(result) => {
                 let xp = result.xp;
                 self.gain_experience(xp);
-                // find the resource enum type in the  self.resources and increase the amount by result.resources
-                result.resources.iter().for_each(|result_resource| {
-                    match result_resource {
-                        Resource::Aion(amount) => {
-                            self.aion_collected += amount;
-                        }
-                        Resource::
-                    }
-                })
-                // Infra::repo().update_hero(&hero).await?;
             }
             TaskLootBox::Channel(result) => {
                 let hero_id = result.hero_id.clone();
                 let xp = result.xp;
-                // let hero = Infra::repo().get_hero_by_id(&hero_id).await?;
-                // let mut hero = hero.unwrap();
-                // hero.gain_experience(xp);
-                // Infra::repo().update_hero(&hero).await?
             }
         }
         Ok(())
+    }
+
+    pub async fn can_channel(&self, leyline_name: &str) -> bool {
+        let leylines = Infra::repo().leylines_by_discovery(&self.get_id()).await;
+        match leylines {
+            Ok(leylines) => {
+                return leylines.iter().any(|leyline| leyline.name == leyline_name);
+            }
+            Err(e) => {
+                println!("Error getting leylines: {}", e);
+                return false;
+            }
+        }
     }
     // Add other methods as per your game logic
 }
@@ -213,4 +227,165 @@ pub struct Item {
 pub struct Range<T> {
     pub min: T,
     pub max: T,
+}
+
+impl From<hero::Data> for Hero {
+    fn from(data: hero::Data) -> Self {
+        // Unwrapping the Option values and converting the data from each field
+        // If the field is None, we provide a default value using the Default trait
+        let base_stats = match data.base_stats {
+            Some(bs) => (*bs).into(),     // Convert from base_stats::Data to BaseStats
+            None => BaseStats::default(), // Provide a default value
+        };
+
+        let attributes = match data.attributes {
+            Some(attr) => (*attr).into(), // Convert from attributes::Data to Attributes
+            None => Attributes::default(), // Provide a default value
+        };
+
+        let inventory = match data.inventory {
+            Some(inv) => (*inv).into(),   // Convert from inventory::Data to Inventory
+            None => Inventory::default(), // Provide a default value
+        };
+
+        let retinue_slots = match data.retinue_slots {
+            Some(rslots) => rslots.into_iter().map(RetinueSlot::from).collect(),
+            None => vec![],
+        };
+        let resources = match data.resources {
+            Some(resources) => HashMap::from_iter(resources.into_iter().map(|r| {
+                let resource_type = r.clone().into();
+                let amount = r.amount;
+                (resource_type, amount)
+            })),
+            None => HashMap::new(),
+        };
+
+        Self {
+            id: Some(data.id),
+            base_stats,
+            attributes,
+            inventory: Some(inventory),
+            retinue_slots,
+            aion_capacity: data.aion_capacity,
+            aion_collected: data.aion_collected,
+            stamina: data.stamina,
+            stamina_max: data.stamina_max,
+            stamina_regen_rate: data.stamina_regen_rate,
+            resources,
+        }
+    }
+}
+
+impl From<base_stats::Data> for BaseStats {
+    fn from(data: base_stats::Data) -> Self {
+        Self {
+            id: Some(data.id),
+            level: data.level,
+            xp: data.xp,
+            damage: Range {
+                min: data.damage_min,
+                max: data.damage_max,
+            },
+            hit_points: data.hit_points,
+            mana: data.mana,
+            armor: data.armor,
+        }
+    }
+}
+
+impl From<attributes::Data> for Attributes {
+    fn from(data: attributes::Data) -> Self {
+        Self {
+            id: Some(data.id),
+            resilience: data.resilience,
+            strength: data.strength,
+            agility: data.agility,
+            intelligence: data.intelligence,
+            exploration: data.exploration,
+            crafting: data.crafting,
+        }
+    }
+}
+
+impl From<item::Data> for Item {
+    fn from(data: item::Data) -> Self {
+        Item {
+            id: data.id,
+            name: data.name,
+            weight: data.weight,
+            value: data.value,
+        }
+    }
+}
+
+impl From<inventory::Data> for Inventory {
+    fn from(data: inventory::Data) -> Self {
+        let active = data
+            .active
+            .unwrap_or_else(Vec::new)
+            .into_iter()
+            .map(Item::from)
+            .collect();
+
+        let backpack = data
+            .backpack
+            .unwrap_or_else(Vec::new)
+            .into_iter()
+            .map(Item::from)
+            .collect();
+        Inventory {
+            hero_id: data.id,
+            active,
+            backpack,
+        }
+    }
+}
+
+impl From<follower::Data> for Follower {
+    fn from(data: follower::Data) -> Self {
+        let attributes = match data.attributes {
+            Some(attr) => (*attr).into(), // Convert from prisma::attributes::Data to Attributes
+            None => Attributes::default(), // Provide a default value
+        };
+
+        Self {
+            name: data.name,
+            level: data.level,
+            bonus_attributes: attributes,
+        }
+    }
+}
+
+impl From<retinue_slot::Data> for RetinueSlot {
+    fn from(data: retinue_slot::Data) -> Self {
+        let follower = data
+            .follower
+            .and_then(|f| f) // This line is used to flatten Option<Option<T>> to Option<T>
+            .map(|f| (*f).into()) // Convert prisma::follower::Data to Follower
+            .unwrap_or_default(); // Provide a default Follower if None
+
+        match data.slot_type.as_str() {
+            "Mage" => RetinueSlot::Mage(follower),
+            "Warrior" => RetinueSlot::Warrior(follower),
+            "Priest" => RetinueSlot::Priest(follower),
+            "Ranger" => RetinueSlot::Ranger(follower),
+            "Alchemist" => RetinueSlot::Alchemist(follower),
+            _ => panic!("Invalid slot type!"), // Handle invalid slot_type appropriately
+        }
+    }
+}
+
+impl From<hero_resource::Data> for Resource {
+    fn from(data: hero_resource::Data) -> Self {
+        match data.resource {
+            ResourceType::Aion => Resource::Aion,
+            ResourceType::Valor => Resource::Valor,
+            ResourceType::NexusShard => Resource::NexusShard,
+            ResourceType::Oak => Resource::Oak,
+            ResourceType::IronOre => Resource::IronOre,
+            ResourceType::Copper => Resource::Copper,
+            ResourceType::Silk => Resource::Silk,
+        }
+    }
 }

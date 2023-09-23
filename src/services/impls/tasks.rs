@@ -1,17 +1,8 @@
 use prisma_client_rust::chrono;
 use uuid::Uuid;
 
-use crate::{
-    events::game::GameEvent,
-    infra::Infra,
-    services::{
-        tasks::{channel::ChannelingAction, explore::ExploreAction},
-        traits::{
-            async_task::{Task, TaskError},
-            scheduler::TaskScheduleResult,
-        },
-    },
-};
+use crate::events::game::TaskAction;
+use crate::{events::game::GameEvent, infra::Infra, services::traits::async_task::Task};
 use flume::{unbounded, Receiver, Sender};
 use std::{collections::HashMap, future::Future, sync::Arc};
 use std::{pin::Pin, sync::Mutex};
@@ -20,7 +11,7 @@ use tracing::info;
 #[derive(Clone, Debug)]
 pub struct TaskManager {
     // ... fields to manage tasks...
-    tasks: Arc<Mutex<HashMap<Uuid, GameEvent>>>,
+    tasks: Arc<Mutex<HashMap<Uuid, TaskAction>>>,
     task_complete_sender: Sender<Uuid>,
 }
 
@@ -39,50 +30,18 @@ impl TaskManager {
         service
     }
     /// Schedules a task to be executed asynchronously.
-    pub fn schedule(&self, task: GameEvent) -> TaskScheduleResult {
-        match task {
-            GameEvent::HeroExplores(explore_task) => {
-                let id = Uuid::parse_str(&explore_task.hero_id()).unwrap();
-                explore_task.set_start_time(chrono::Utc::now());
-                let tx = self.task_complete_sender.clone(); // clone the transmitter
-                let event_clone = GameEvent::HeroExplores(explore_task.clone());
-                tokio::spawn(async move {
-                    // this is the time based work that the tokio task waits for
-                    let _ = explore_task.execute().await;
-                    if let Err(err) = tx.send(id) {
-                        println!("Failed to send completion message: {:?}", err);
-                    }
-                });
-                match self.tasks.lock() {
-                    Ok(mut tasks) => {
-                        tasks.insert(id, event_clone);
-                        Ok(id)
-                    }
-                    Err(_) => Err(TaskError::InsertFailed),
-                }
-            }
-            GameEvent::ExploreCompleted(_) => todo!(),
-            GameEvent::LootBoxCreated(_) => todo!(),
-            GameEvent::Channeling(_) => todo!(),
-            GameEvent::ChannelingCompleted(_) => todo!(),
-        }
-    }
-
-    pub fn schedule_action(&self, event: GameEvent) {
+    pub fn schedule_action(&self, event: TaskAction) {
         let event_clone = event.clone();
 
         let (action, id): (Box<dyn Task>, Uuid) = match event.clone() {
-            GameEvent::Channeling(action) => (
+            TaskAction::Channel(action) => (
                 Box::new(action.clone()),
                 Uuid::parse_str(&action.hero_id()).unwrap(),
             ),
-            GameEvent::HeroExplores(action) => (
+            TaskAction::Explore(action) => (
                 Box::new(action.clone()),
                 Uuid::parse_str(&action.hero_id()).unwrap(),
             ),
-            GameEvent::ExploreCompleted(_) => todo!(),
-            GameEvent::LootBoxCreated(_) => todo!(),
-            GameEvent::ChannelingCompleted(_) => todo!(),
             // ... other cases
         };
         match self.tasks.lock() {
@@ -103,10 +62,10 @@ impl TaskManager {
              *
              * */
             match &event_clone {
-                GameEvent::Channeling(channeling_action) => {
+                TaskAction::Channel(channeling_action) => {
                     Infra::dispatch(GameEvent::ChannelingCompleted(channeling_action.clone()));
                 }
-                GameEvent::HeroExplores(explore_action) => {
+                TaskAction::Explore(explore_action) => {
                     Infra::dispatch(GameEvent::ExploreCompleted(explore_action.clone()));
                 }
                 _ => {}
@@ -132,14 +91,14 @@ impl TaskManager {
         })
     }
 
-    pub fn get_task(&self, id: Uuid) -> Option<GameEvent> {
+    pub fn get_task(&self, id: Uuid) -> Option<TaskAction> {
         match self.tasks.lock() {
             Ok(tasks) => tasks.get(&id).map(|task| task.clone()),
             Err(_) => None,
         }
     }
 
-    pub fn get_current_task(&self, hero_id: &str) -> Option<GameEvent> {
+    pub fn get_current_task(&self, hero_id: &str) -> Option<TaskAction> {
         let tasks = match self.tasks.lock() {
             Ok(tasks) => tasks,
             Err(_) => return None,
@@ -147,7 +106,7 @@ impl TaskManager {
 
         tasks
             .values()
-            .find(|task| matches!(task, GameEvent::HeroExplores(t) if t.hero_id() == hero_id))
+            .find(|task| matches!(task, TaskAction::Explore(t) if t.hero_id() == hero_id))
             .cloned()
     }
 }

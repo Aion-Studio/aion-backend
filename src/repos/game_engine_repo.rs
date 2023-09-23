@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use prisma_client_rust::QueryError;
 
-use crate::events::game::RegionActionResult;
+use crate::events::game::ActionResult;
 use crate::models::hero::Hero;
 use crate::prisma::hero;
 use crate::prisma::PrismaClient;
@@ -19,7 +19,7 @@ impl GameEngineRepo {
 
     pub async fn store_region_action_result(
         &self,
-        result: RegionActionResult,
+        result: ActionResult,
     ) -> Result<(), QueryError> {
         self.prisma
             .region_action_result()

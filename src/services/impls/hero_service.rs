@@ -1,10 +1,10 @@
-use crate::events::game::{GameEvent, RegionActionResult};
+use crate::events::game::{ExploreResult, GameEvent, ActionCompleted};
 use crate::infra::Infra;
-use crate::models::hero::{Hero, Item, RetinueSlot, BaseStats, Range, Attributes};
+use crate::models::hero::{Attributes, BaseStats, Hero, Item, Range, RetinueSlot};
 use crate::prisma::PrismaClient;
 use crate::repos::hero_repo::HeroRepo;
 use crate::services::tasks::explore::ExploreAction;
-use crate::types::{RepoFuture, AsyncResult};
+use crate::types::{AsyncResult, RepoFuture};
 use prisma_client_rust::QueryError;
 use rand::Rng;
 use std::sync::Arc;
@@ -31,10 +31,10 @@ impl ServiceHeroes {
         })
     }
 
-    pub async fn latest_action_results(
+    pub async fn latest_action_completed(
         &self,
         hero_id: String,
-    ) -> Result<Vec<RegionActionResult>, QueryError> {
+    ) -> Result<Vec<ActionCompleted>, QueryError> {
         self.repo.action_results_by_hero(hero_id).await
     }
 

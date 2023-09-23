@@ -1,17 +1,17 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Serialize,Deserialize)]
+#[derive(Clone, Debug, Serialize, Hash, Deserialize, Eq, PartialEq)]
 pub enum Resource {
-    Aion(i32),
-    Valor(i32),
-    NexusShard(i32),
-    Oak(i32),
-    IronOre(i32),
-    Copper(i32),
-    Silk(i32),
+    Aion,
+    Valor,
+    NexusShard,
+    Oak,
+    IronOre,
+    Copper,
+    Silk,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ResourceCost {
     resource_type: Resource,
     amount: i32,

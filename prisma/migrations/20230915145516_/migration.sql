@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "ActionResult" ADD COLUMN     "create_time" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

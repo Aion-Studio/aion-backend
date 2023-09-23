@@ -1,22 +1,23 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use prisma_client_rust::QueryError;
+use prisma_client_rust::{chrono, Direction, QueryError};
 use tracing::{info, warn};
 
 use crate::{
-    events::game::{ChannelActionResult, RegionActionResult},
+    events::game::{ActionCompleted, ChannelResult, TaskLootBox},
     models::{
         hero::Hero,
         region::{HeroRegion, Leyline, Region, RegionName},
         resources::Resource,
     },
     prisma::{
-        hero,
+        action_completed, attributes, base_stats, hero,
         hero_region::{self, current_location, hero_id},
-        leyline,
+        hero_resource, inventory, leyline,
         region::{self, adjacent_regions},
-        region_action_result, resource_value, PrismaClient, ResourceType,
+        PrismaClient, ResourceType,
     },
+    types::RepoFuture,
 };
 
 #[derive(Clone, Debug)]
@@ -29,19 +30,68 @@ impl Repo {
         Self { prisma }
     }
 
-    pub async fn store_region_action_result(
-        &self,
-        result: RegionActionResult,
-    ) -> Result<(), QueryError> {
+    pub fn get_hero(&self, hero_id: String) -> RepoFuture<Hero> {
+        Box::pin(async move {
+            match self.hero_by_id(hero_id).await {
+                Ok(hero) => {
+                    let last_action = self.latest_action_completed(hero.get_id()).await;
+                    match last_action {
+                        Ok(action_result) => {
+                            let mut hero = hero.clone();
+                            match action_result {
+                                Some(action) => {
+                                    println!(
+                                        "latest action_result  seconds {:?}",
+                                        action.updated_at.timestamp()
+                                    );
+                                    hero.regenerate_stamina(&action);
+                                    self.prisma
+                                        .action_completed()
+                                        .update(
+                                            action_completed::id::equals(action.id),
+                                            //Update updated_at to now
+                                            vec![action_completed::updated_at::set(
+                                                chrono::Utc::now().into(),
+                                            )],
+                                        )
+                                        .exec()
+                                        .await
+                                        .unwrap();
+                                    self.update_hero(hero.clone()).await
+                                }
+                                None => Ok(hero),
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Error getting last action: {}", e);
+                            return Err(e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error getting hero: {}", e);
+                    Err(e)
+                }
+            }
+        })
+    }
+    async fn hero_by_id(&self, hero_id: String) -> Result<Hero, QueryError> {
+        let hero = self
+            .prisma
+            .hero()
+            .find_unique(hero::id::equals(hero_id))
+            .with(hero::base_stats::fetch())
+            .with(hero::attributes::fetch())
+            .with(hero::inventory::fetch())
+            .exec()
+            .await?;
+        Ok(hero.unwrap().into())
+    }
+
+    pub async fn store_action_completed(&self, result: ActionCompleted) -> Result<(), QueryError> {
         self.prisma
-            .region_action_result()
-            .create(
-                result.xp,
-                result.discovery_level_increase,
-                hero::id::equals(result.hero_id),
-                // vec resu lt.resources
-                vec![],
-            )
+            .action_completed()
+            .create(result.action_name, hero::id::equals(result.hero_id), vec![])
             .exec()
             .await
             .unwrap(); // Implement result storage logic...
@@ -73,29 +123,24 @@ impl Repo {
         Ok(())
     }
 
-    pub async fn consume_channelling_loot(
+    pub async fn latest_action_completed(
         &self,
-        hero: &Hero,
-        loot: &ChannelActionResult,
-    ) -> Result<(), QueryError> {
-        let hero_id = hero.id.as_ref().unwrap();
-        let stamina = loot.stamina_gained;
-        let xp = loot.xp;
-        let resources = loot.resources.clone();
-
-        self.deduct_stamina(hero_id, stamina).await?;
-        self.prisma
-            .hero()
-            .update(
-                hero::id::equals(hero_id.to_string()),
-                vec![
-                    hero::resources::increment(resources),
-                ],
-            )
+        hero_id: String,
+    ) -> Result<Option<ActionCompleted>, QueryError> {
+        let result = self
+            .prisma
+            .action_completed()
+            .find_many(vec![action_completed::hero_id::equals(hero_id.to_string())])
+            .order_by(action_completed::created_at::order(Direction::Desc))
+            .take(1)
             .exec()
-            .await?;
-
-        Ok(())
+            .await
+            .unwrap();
+        //return first item of vec
+        Ok(match result.into_iter().next() {
+            Some(r) => Some(r.into()),
+            None => None,
+        })
     }
 
     pub async fn create_hero_region(&self, hero: &Hero) -> Result<HeroRegion, QueryError> {
@@ -117,13 +162,106 @@ impl Repo {
         Ok(hero_region.into())
     }
 
+    pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
+        let updated_hero = self
+            .prisma
+            .hero()
+            .update(
+                hero::id::equals(hero.get_id()),
+                vec![
+                    hero::aion_capacity::set(hero.aion_capacity),
+                    hero::aion_collected::set(hero.aion_collected),
+                    hero::stamina::set(hero.stamina),
+                    hero::stamina_max::set(hero.stamina_max),
+                    hero::stamina_regen_rate::set(hero.stamina_regen_rate),
+                ],
+            )
+            .with(hero::base_stats::fetch())
+            .with(hero::attributes::fetch())
+            .with(hero::inventory::fetch())
+            .exec()
+            .await?;
+
+        Ok(updated_hero.into())
+    }
+
+    pub async fn insert_hero(&self, new_hero: Hero) -> Result<Hero, QueryError> {
+        // Use Prisma to create a new Hero in the database
+        // Convert the resulting record into a Hero struct and return it
+        // ...
+        let base_inventory = self.prisma.inventory().create(vec![]).exec().await.unwrap();
+
+        let base_stats = self
+            .prisma
+            .base_stats()
+            .create(
+                new_hero.base_stats.level,
+                new_hero.base_stats.xp,
+                new_hero.base_stats.damage.min,
+                new_hero.base_stats.damage.max,
+                new_hero.base_stats.hit_points,
+                new_hero.base_stats.mana,
+                new_hero.base_stats.armor,
+                vec![],
+            )
+            .exec()
+            .await
+            .unwrap();
+
+        let base_attributes = self
+            .prisma
+            .attributes()
+            .create(
+                new_hero.attributes.strength,
+                new_hero.attributes.resilience,
+                new_hero.attributes.agility,
+                new_hero.attributes.intelligence,
+                new_hero.attributes.exploration,
+                new_hero.attributes.crafting,
+                vec![],
+            )
+            .exec()
+            .await
+            .unwrap();
+
+        let result = self
+            .prisma
+            .hero()
+            .create(
+                new_hero.aion_capacity,
+                new_hero.aion_collected,
+                base_stats::id::equals(base_stats.clone().id),
+                attributes::id::equals(base_attributes.clone().id),
+                inventory::id::equals(base_inventory.clone().id),
+                vec![],
+            )
+            .with(hero::base_stats::fetch())
+            .with(hero::attributes::fetch())
+            .with(hero::inventory::fetch())
+            .exec()
+            .await?;
+        let hero: Hero = result.into();
+        let region_name = RegionName::Dusane;
+        self.prisma
+            .hero_region()
+            .create(
+                0,
+                hero::id::equals(hero.get_id()),
+                region::name::equals(region_name.to_str()),
+                vec![current_location::set(true)],
+            )
+            .exec()
+            .await?;
+
+        Ok(hero)
+    }
+
     pub async fn update_hero_region_discovery_level(
         &self,
         hero_id: &str,
         discovery_level_increase: i32,
     ) -> Result<(), QueryError> {
         let hero_region: HeroRegion = self.get_current_hero_region(hero_id).await?;
-
         let current_discovery = hero_region.discovery_level.clone();
         let set_params = HeroRegion::set(&HeroRegion {
             discovery_level: current_discovery + discovery_level_increase,
@@ -138,11 +276,8 @@ impl Repo {
             .await;
 
         match result {
-            Ok(_) => {
-                println!(
-                    "updated hero region discover {:?}",
-                    current_discovery + discovery_level_increase
-                );
+            Ok(d) => {
+                println!("RIGHT AFTER HEOR_REGION_UPDATE {:?}", d);
                 Ok(())
             }
             Err(e) => {
@@ -155,11 +290,6 @@ impl Repo {
     pub async fn leylines_by_discovery(&self, hero_id: &str) -> Result<Vec<Leyline>, QueryError> {
         let hero_region = self.get_current_hero_region(hero_id).await?;
         let region_name = hero_region.region_name.clone();
-
-        println!(
-            "REPO:: hero region discovery_level {:?}",
-            hero_region.discovery_level
-        );
 
         // find leylines that have region_name as their region_name and discovery_required <= discovery_level
         let leylines = self
@@ -223,58 +353,56 @@ impl Repo {
 
         Ok(region.into())
     }
-
-    // pub async fn add_leyline(
-    //     &self,
 }
 
-impl From<region_action_result::Data> for RegionActionResult {
-    fn from(data: region_action_result::Data) -> Self {
-        let mut resources = Vec::new();
+// impl From<action_result::Data> for ActionResult {
+//     fn from(data: action_result::Data) -> Self {
+//         let mut resources = HashMap::new();
+//
+//         // Unwrap the resources, replacing with an empty vector if None
+//         let data_resources = data.resources;
+//
+//         for result_resource in data_resources.unwrap() {
+//             let resource_type = result_resource.r#type;
+//             let resource_amount = result_resource.amount;
+//
+//             resources.insert(resource_type.into(), resource_amount);
+//         }
+//
+//         Self {
+//             hero_id: data.hero_id,
+//             resources,
+//             xp: data.xp,
+//             discovery_level_increase: data.discovery_level_increase,
+//             created_time: Some(data.create_time),
+//         }
+//     }
+// }
 
-        // Unwrap the resources, replacing with an empty vector if None
-        let data_resources = data.resources.unwrap_or_else(Vec::new);
-
-        for data_resource in data_resources.iter() {
-            // Convert data_resource.resource to a String or &str
-            let resource_str = data_resource.resource.to_string();
-
-            let resource = match resource_str.as_str() {
-                "Aion" => Resource::Aion(0),
-                "Valor" => Resource::Valor(0),
-                "NexusShard" => Resource::NexusShard(0),
-                _ => continue,
-            };
-            resources.push(resource);
-        }
-
-        Self {
-            hero_id: data.hero_id,
-            resources,
-            xp: data.xp,
-            discovery_level_increase: data.discovery_level_increase,
-            created_time: Some(data.create_time),
-        }
-    }
-}
-
-impl From<resource_value::resource::Set> for ResourceType {
-    fn from(set: resource_value::resource::Set) -> Self {
-        set.0
-    }
-}
+// impl From<HashMap<Resource, i32>> for Resource {
+//     fn from(resource_type: ResourceType) -> Self {
+//         match resource_type {
+//             ResourceType::Aion => Resource::Aion,
+//             ResourceType::Valor => Resource::Valor,
+//             ResourceType::IronOre => Resource::IronOre,
+//             ResourceType::NexusShard => Resource::NexusShard,
+//             ResourceType::Oak => Resource::Oak,
+//             ResourceType::Copper => Resource::Copper,
+//             ResourceType::Silk => Resource::Silk,
+//         }
+//     }
+// }
 
 impl<'a> From<&'a Resource> for ResourceType {
     fn from(resource: &'a Resource) -> Self {
         match resource {
-            Resource::Aion(_) => ResourceType::Aion,
-
-            Resource::Valor(_) => ResourceType::Valor,
-            Resource::NexusShard(_) => ResourceType::NexusShard,
-            Resource::Oak(_) => todo!(),
-            Resource::IronOre(_) => todo!(),
-            Resource::Copper(_) => todo!(),
-            Resource::Silk(_) => todo!(),
+            Resource::Aion => ResourceType::Aion,
+            Resource::Valor => ResourceType::Valor,
+            Resource::IronOre => ResourceType::IronOre,
+            Resource::NexusShard => ResourceType::NexusShard,
+            Resource::Oak => ResourceType::Oak,
+            Resource::Copper => ResourceType::Copper,
+            Resource::Silk => ResourceType::Silk,
         }
     }
 }

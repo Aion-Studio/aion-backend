@@ -23,8 +23,8 @@ mod models {
 }
 
 mod repos {
-    pub mod game_engine_repo;
-    pub mod hero_repo;
+    // pub mod game_engine_repo;
+    // pub mod hero_repo;
     pub mod region_repo;
     // pub mod action_repo;
     // pub mod resources_repo;
@@ -42,12 +42,12 @@ mod events {
 mod services {
     pub mod impls {
         // pub mod action_executor;
-        pub mod hero_service;
+        // pub mod hero_service;
         pub mod region_service;
         pub mod task_management;
-
-        #[cfg(test)]
-        mod hero_service_test;
+        //
+        // #[cfg(test)]
+        // mod hero_service_test;
 
         #[cfg(test)]
         mod region_service_test;
@@ -76,6 +76,7 @@ pub mod infra;
 
 #[cfg(test)]
 pub mod test_helpers;
+mod logger;
 
 const LOG_ENV_VAR: &str = "INDEXER_LOG";
 #[cfg(not(all(tokio_unstable, feature = "debug")))]

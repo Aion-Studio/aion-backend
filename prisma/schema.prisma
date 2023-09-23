@@ -9,42 +9,24 @@ generator client {
   output   = "../src/prisma.rs"
 }
 
-model Item {
-  id                  String     @id @default(uuid())
-  name                String
-  weight              Int
-  value               Int
-  activeInventoryId   String?    @map("active_inventory_id")
-  activeInventory     Inventory? @relation("active", fields: [activeInventoryId], references: [id])
-  backpackInventoryId String?    @map("backpack_inventory_id")
-  backpackInventory   Inventory? @relation("backpack", fields: [backpackInventoryId], references: [id])
-}
-
-model Inventory {
-  id       String @id @default(uuid())
-  active   Item[] @relation("active")
-  backpack Item[] @relation("backpack")
-  hero     Hero?
-}
-
 model Hero {
-  id                 String               @id @default(uuid())
-  aionCapacity       Int
-  aionCollected      Int
-  baseStatsId        String               @unique @map("base_stats_id")
-  attributesId       String               @unique @map("attributes_id")
-  baseStats          BaseStats            @relation(fields: [baseStatsId], references: [id])
-  attributes         Attributes           @relation(fields: [attributesId], references: [id])
-  inventory          Inventory            @relation(fields: [inventoryId], references: [id])
-  inventoryId        String               @unique @map("inventory_id")
-  retinueSlots       RetinueSlot[]
-  heroRegion         HeroRegion[]
-  exploreAction      ExploreAction[] // Added ExploreAction relation
-  RegionActionResult RegionActionResult[]
-  resources          HeroResource[]
-  stamina            Int @default(100)
-  staminaMax         Int @default(100)
-  staminaRegenRate   Int @default(1)
+  id               String            @id @default(uuid())
+  aionCapacity     Int
+  aionCollected    Int
+  baseStatsId      String            @unique @map("base_stats_id")
+  attributesId     String            @unique @map("attributes_id")
+  baseStats        BaseStats         @relation(fields: [baseStatsId], references: [id])
+  attributes       Attributes        @relation(fields: [attributesId], references: [id])
+  inventory        Inventory         @relation(fields: [inventoryId], references: [id])
+  inventoryId      String            @unique @map("inventory_id")
+  retinueSlots     RetinueSlot[]
+  heroRegion       HeroRegion[]
+  exploreAction    ExploreAction[] // Added ExploreAction relation
+  actionsCompleted ActionCompleted[]
+  resources        HeroResource[]
+  stamina          Int               @default(100)
+  staminaMax       Int               @default(100)
+  staminaRegenRate Int               @default(1)
 }
 
 model HeroResource {
@@ -53,6 +35,15 @@ model HeroResource {
   hero     Hero         @relation(fields: [heroId], references: [id])
   resource ResourceType
   amount   Int
+}
+
+model ActionCompleted {
+  id         String   @id @default(uuid())
+  actionName String   @map("action_name")
+  heroId     String   @map("hero_id")
+  hero       Hero     @relation(fields: [heroId], references: [id])
+  updatedAt  DateTime @default(now()) @map("updated_at")
+  createdAt  DateTime @default(now()) @map("created_at")
 }
 
 model HeroRegion {
@@ -89,6 +80,23 @@ model Attributes {
   Follower     Follower[]
 }
 
+model Item {
+  id                  String     @id @default(uuid())
+  name                String
+  weight              Int
+  value               Int
+  activeInventoryId   String?    @map("active_inventory_id")
+  activeInventory     Inventory? @relation("active", fields: [activeInventoryId], references: [id])
+  backpackInventoryId String?    @map("backpack_inventory_id")
+  backpackInventory   Inventory? @relation("backpack", fields: [backpackInventoryId], references: [id])
+}
+
+model Inventory {
+  id       String @id @default(uuid())
+  active   Item[] @relation("active")
+  backpack Item[] @relation("backpack")
+  hero     Hero?
+}
 model RetinueSlot {
   id         String    @id @default(uuid())
   slotType   String
@@ -132,14 +140,14 @@ model Region {
 }
 
 model Leyline {
-  id         String @id @default(uuid())
-  name       String
-  xp_reward  Int    @map("xp_reward")
-  RegionName String
-  Region     Region @relation(fields: [RegionName], references: [name])
-  discovery_required Int 
-  stamina_rate Float
-  aion_rate Float
+  id                 String @id @default(uuid())
+  name               String
+  xp_reward          Int    @map("xp_reward")
+  RegionName         String
+  Region             Region @relation(fields: [RegionName], references: [name])
+  discovery_required Int
+  stamina_rate       Float
+  aion_rate          Float
 }
 
 model ExploreAction {
@@ -155,20 +163,10 @@ model ExploreAction {
   stamina_cost    Int
 }
 
-model ResourceValue {
-  id                   String             @id @default(uuid())
-  resource             ResourceType
-  value                Int
-  RegionActionResult   RegionActionResult @relation(fields: [regionActionResultId], references: [id])
-  regionActionResultId String
-}
-
-model RegionActionResult {
-  id                       String          @id @default(uuid())
-  resources                ResourceValue[]
-  xp                       Int
-  discovery_level_increase Float
-  heroId                   String          @map("hero_id")
-  hero                     Hero            @relation(fields: [heroId], references: [id])
-  create_time              DateTime        @default(now())
-}
+// model ResourceValue {
+//   id                   String             @id @default(uuid())
+//   resource             ResourceType
+//   value                Int
+//   RegionActionResult   RegionActionResult @relation(fields: [regionActionResultId], references: [id])
+//   regionActionResultId String
+// }

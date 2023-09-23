@@ -1,16 +1,19 @@
-use crate::configuration::{get_region_durations, Durations, Settings};
+use crate::configuration::{
+    get_durations, get_region_durations, DurationType, Durations, Settings,
+};
 use crate::events::dispatcher::EventDispatcher;
+use crate::events::game::TaskAction;
 use crate::events::initialize::initialize_handlers;
 use crate::handlers::heroes::{create_hero_endpoint, hero_state};
-use crate::handlers::regions::{create_region, explore_region};
+use crate::handlers::regions::{channel_leyline, create_region, explore_region};
 use crate::infra::Infra;
 use crate::prisma::PrismaClient;
-use crate::services::impls::hero_service::{HeroService, ServiceHeroes};
 use crate::services::impls::region_service::RegionService;
 use crate::services::impls::task_management::TaskManagementService;
 use crate::services::impls::tasks::TaskManager;
 use actix_web::dev::Server;
 use actix_web::{web, App, HttpServer};
+use std::collections::HashMap;
 use std::net::TcpListener;
 use std::sync::Arc;
 use tracing::info;
@@ -23,7 +26,7 @@ pub struct Application {
 #[derive(Clone)]
 pub struct AppState {
     pub prisma: Arc<PrismaClient>,
-    pub durations: Durations,
+    pub durations: HashMap<String, DurationType>,
 }
 
 impl Application {
@@ -75,18 +78,13 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
 
     Infra::initialize(prisma.clone());
     initialize_handlers();
-    let hero_service = web::Data::new(ServiceHeroes::new(prisma.clone()));
     let scheduler = Arc::new(TaskManager::new());
     let task_schedule_service = web::Data::new(scheduler.clone());
     let region_service = web::Data::new(RegionService::new(scheduler, prisma.clone()));
     let app_state = web::Data::new(AppState {
         prisma: prisma.clone(),
-        durations: get_region_durations(),
+        durations: get_durations(),
     });
-
-    let hero_service_new = HeroService {
-        // ... other initializations
-    };
 
     let task_management_service = TaskManagementService {
         // ... other initializations
@@ -99,12 +97,12 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             // .route("/health_check", web::get().to(health_check))
             // .route("/hero/actions", web::get().to(hero_actions))routes
             // .app_data(prisma.clone())
-            .app_data(hero_service.clone())
             .app_data(app_state.clone())
             .app_data(task_schedule_service.clone())
             .app_data(region_service.clone())
             .service(create_hero_endpoint)
             .service(explore_region)
+            .service(channel_leyline)
             .service(hero_state)
             .service(create_region);
         // .service(add_leyline);

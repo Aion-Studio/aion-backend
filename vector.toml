@@ -1,0 +1,28 @@
+# Set global options
+data_dir = "/var/lib/vector"
+
+# Vector's API (disabled by default)
+[api]
+enabled = false
+
+# Ingest data from a TCP socket
+[sources.my_source]
+type = "socket"
+address = "0.0.0.0:9000"
+mode = "tcp"
+
+# Structure and parse via Vector's Remap Language
+[transforms.my_parser]
+inputs = ["my_source"]
+type   = "remap"
+source = '''
+# Example: Add a new field
+.new_field = "new_value"
+'''
+
+# Send structured data to Elasticsearch
+[sinks.es_cluster]
+inputs     = ["my_parser"]
+type       = "elasticsearch"
+endpoint   = "http://elasticsearch:9200"
+doc_type   = "_doc" # This is the default document type for Elasticsearch 7.x and later

@@ -32,8 +32,8 @@ lazy_static = "1.4.0"
 derive_more = "0.99.17"
 thiserror = "1.0.40"
 flume = "0.11.0"
-
-[dev-dependencies]
+fruently = "0.10.0"
+tokio-tungstenite = "0.20.0"
 serde_json = "1"
 
 [workspace]

@@ -4,13 +4,13 @@ use actix_web::web::{Data, Path};
 use actix_web::{get, post, HttpResponse, Responder};
 use prisma_client_rust::serde_json::json;
 use prisma_client_rust::QueryError;
+use rand::Rng;
 use serde::Serialize;
 
 use crate::events::game::GameEvent;
 use crate::infra::Infra;
-use crate::models::hero::Hero;
+use crate::models::hero::{Attributes, BaseStats, Hero, Range};
 use crate::models::region::{HeroRegion, Leyline, Region};
-use crate::services::impls::hero_service::ServiceHeroes;
 use crate::services::impls::region_service::RegionService;
 use crate::services::impls::tasks::TaskManager;
 use crate::services::traits::hero_service::HeroService;
@@ -22,12 +22,36 @@ struct HeroResponse {
 }
 
 #[post("/heroes")]
-async fn create_hero_endpoint(
-    hero_service: Data<ServiceHeroes>,
-    region_service: Data<RegionService>,
-) -> impl Responder {
-    let hero_data = hero_service.generate_hero().await.unwrap();
-    let created_hero = hero_service.create_hero(hero_data.clone()).await.unwrap();
+async fn create_hero_endpoint(region_service: Data<RegionService>) -> impl Responder {
+    let mut rng = rand::thread_rng();
+
+    let hero = Hero::new(
+        BaseStats {
+            id: None,
+            level: 1,
+            xp: 0,
+            damage: Range {
+                min: rng.gen_range(1..5),
+                max: rng.gen_range(5..10),
+            },
+            hit_points: rng.gen_range(90..110),
+            mana: rng.gen_range(40..60),
+            armor: rng.gen_range(5..15),
+        },
+        Attributes {
+            id: None,
+            strength: rng.gen_range(1..20),
+            resilience: rng.gen_range(1..20),
+            agility: rng.gen_range(1..20),
+            intelligence: rng.gen_range(1..20),
+            exploration: rng.gen_range(1..20),
+            crafting: rng.gen_range(1..20),
+        },
+        rng.gen_range(80..120),
+        0,
+    );
+
+    let created_hero = Infra::repo().insert_hero(hero).await.unwrap();
     let region_hero = region_service.create_region_hero(&created_hero).await;
 
     match region_hero {
@@ -42,7 +66,7 @@ async fn create_hero_endpoint(
     }
 }
 
-#[derive(Serialize,Debug)]
+#[derive(Serialize, Debug)]
 pub struct HeroStateResponse {
     hero: Hero,
     region_hero: HeroRegion,
@@ -51,9 +75,9 @@ pub struct HeroStateResponse {
 }
 
 #[get("/heroes/{id}")]
-async fn hero_state(hero_service: Data<ServiceHeroes>, path: Path<String>) -> impl Responder {
+async fn hero_state(path: Path<String>) -> impl Responder {
     let hero_id = path.into_inner();
-    let hero = hero_service.get_hero(hero_id.clone()).await.unwrap();
+    let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
     match get_hero_status(hero).await {
         Ok(hero_state) => HttpResponse::Ok().json(hero_state),
         Err(e) => {

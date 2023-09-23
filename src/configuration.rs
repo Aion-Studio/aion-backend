@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
+use crate::events::game::TaskAction;
 use prisma_client_rust::chrono::Duration;
 use secrecy::Secret;
 use serde::Deserialize;
 
-use crate::models::region::RegionName;
+use crate::models::region::{leyline_map, RegionName};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Settings {
@@ -90,11 +91,46 @@ impl TryFrom<String> for Environment {
     }
 }
 
-pub type Durations = HashMap<RegionName, Duration>;
+// region name to duration
+#[derive(Clone)]
+pub struct ExploreDurations(pub HashMap<RegionName, Duration>);
+impl ExploreDurations {
+    pub fn get_durations() -> Self {
+        let mut durations = HashMap::new();
+        durations.insert(RegionName::Dusane, Duration::seconds(3));
+        durations.insert(RegionName::Buzna, Duration::seconds(3));
+        Self(durations)
+    }
+}
+// leyline to duration
+#[derive(Clone)]
+pub struct ChannelDurations(pub HashMap<String, Duration>);
+impl ChannelDurations {
+    pub fn get_durations() -> Self {
+        let mut durations = HashMap::new();
 
-pub fn get_region_durations() -> Durations {
+        let all_leylines = leyline_map();
+        for (name, _) in all_leylines.iter() {
+            durations.insert(name.clone(), Duration::seconds(3));
+        }
+        Self(durations)
+    }
+}
+
+#[derive(Clone)]
+pub enum DurationType {
+    Explore(ExploreDurations),
+    Channel(ChannelDurations),
+}
+pub fn get_durations() -> HashMap<String, DurationType> {
     let mut durations = HashMap::new();
-    durations.insert(RegionName::Dusane, Duration::seconds(3));
-    durations.insert(RegionName::Buzna, Duration::seconds(3));
+    durations.insert(
+        "Explore".to_string(),
+        DurationType::Explore(ExploreDurations::get_durations()),
+    );
+    durations.insert(
+        "Channel".to_string(),
+        DurationType::Channel(ChannelDurations::get_durations()),
+    );
     durations
 }

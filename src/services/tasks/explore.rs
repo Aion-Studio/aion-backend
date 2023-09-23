@@ -8,6 +8,7 @@ use rand::Rng;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uuid::Uuid;
 
+use crate::configuration::ExploreDurations;
 use crate::{
     models::{hero::Hero, region::RegionName},
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
@@ -21,10 +22,12 @@ pub struct ExploreAction {
     pub duration: Duration,
     pub region_name: RegionName,
     pub xp: i32,
+    /// The discovery level increase for doing the exploration.
+    /// This is a randomly generated integer between 1 and 5 for now
+    ///
     pub discovery_level: i32,
     pub start_time: Arc<Mutex<Option<chrono::DateTime<chrono::Utc>>>>,
     pub stamina_cost: i32,
-    // Other fields needed for the exploration task...
 }
 
 impl Serialize for ExploreAction {
@@ -45,13 +48,14 @@ impl Serialize for ExploreAction {
 }
 
 impl ExploreAction {
-    pub fn new(
-        hero: Hero,
-        region_name: RegionName,
-        durations: &HashMap<RegionName, Duration>,
-    ) -> Option<Self> {
+    pub fn new(hero: Hero, region_name: RegionName, durations: &ExploreDurations) -> Option<Self> {
         // Implement task creation logic...
-        let duration = *durations.get(&region_name).unwrap_or(&Duration::minutes(1));
+        let duration = *durations
+            .0
+            .get(&region_name)
+            .clone()
+            .to_owned()
+            .unwrap_or(&Duration::minutes(1));
         let stamina_cost = get_stamina_cost(&region_name);
 
         if (hero.stamina - stamina_cost) < 0 {
@@ -70,6 +74,29 @@ impl ExploreAction {
             xp: rand::thread_rng().gen_range(15..30),
             stamina_cost,
         })
+    }
+
+    pub fn name(&self) -> String {
+        "explore".to_string()
+    }
+
+    pub fn calculate_boost_factor(&self, exploration: i32) -> f64 {
+        if exploration <= 10 {
+            1.0
+        } else {
+            // Apply an exponential function where base_value = 10, max_value = 40, and growth_factor = 0.03
+            let base_value = 10.0;
+            let max_value = 40.0;
+            let growth_factor = 0.03;
+
+            // Calculate boost factor
+            let boost: f64 = 1.0
+                + ((max_value - base_value)
+                    * (1.0 - (-growth_factor * (exploration as f64 - base_value)).exp()))
+                .min(0.40);
+
+            boost
+        }
     }
 
     pub fn set_start_time(&self, start_time: chrono::DateTime<chrono::Utc>) {

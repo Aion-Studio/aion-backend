@@ -7,8 +7,9 @@ use prisma_client_rust::chrono::{self, Duration};
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use uuid::Uuid;
 
+use crate::configuration::ChannelDurations;
 use crate::{
-    models::{hero::Hero, region::Leyline},
+    models::hero::Hero,
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
 };
 
@@ -17,7 +18,7 @@ pub struct ChannelingAction {
     id: Uuid,
     base: BaseTask,
     pub hero: Hero,
-    pub leyline: Leyline,
+    pub leyline: String,
     pub start_time: Arc<Mutex<Option<chrono::DateTime<chrono::Utc>>>>,
 }
 
@@ -36,16 +37,17 @@ impl Serialize for ChannelingAction {
 
 //TODO:add leyline name to duration to hashmap of durations
 impl ChannelingAction {
-    pub fn new(hero: Hero, leyline: Leyline, durations: &HashMap<&str, Duration>) -> Option<Self> {
+    pub fn new(hero: Hero, leyline_name: &str, durations: &ChannelDurations) -> Option<Self> {
         let duration = *durations
-            .get(leyline.name.as_str())
+            .0
+            .get(leyline_name)
             .unwrap_or(&Duration::minutes(1));
 
         Some(Self {
             id: Uuid::new_v4(),
             base: BaseTask::new(duration, hero.clone()),
             hero,
-            leyline,
+            leyline: leyline_name.to_string(),
             start_time: Arc::new(Mutex::new(None)),
         })
     }
