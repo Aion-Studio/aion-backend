@@ -1,5 +1,4 @@
 use std::{
-    println,
     process::Command,
     sync::{Arc, Mutex},
 };
@@ -60,7 +59,7 @@ pub async fn setup_test_database() -> Result<Data<PrismaClient>, Box<dyn std::er
         .with_url(format!("{}/testdb", URL.to_string())) // make sure to use the new database name
         .build()
         .await?;
-    let seeded = seed_database(&prisma_client).await?;
+    let _ = seed_database(&prisma_client).await?;
 
     Ok(Data::new(prisma_client))
 }

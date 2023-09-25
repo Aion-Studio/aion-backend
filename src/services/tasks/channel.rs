@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use prisma_client_rust::chrono::{self, Duration};
 use serde::{ser::SerializeStruct, Serialize, Serializer};
@@ -35,7 +32,6 @@ impl Serialize for ChannelingAction {
     }
 }
 
-//TODO:add leyline name to duration to hashmap of durations
 impl ChannelingAction {
     pub fn new(hero: Hero, leyline_name: &str, durations: &ChannelDurations) -> Option<Self> {
         let duration = *durations
@@ -56,6 +52,10 @@ impl ChannelingAction {
 impl Task for ChannelingAction {
     fn execute(&self) -> TaskExecReturn {
         self.base.execute()
+    }
+
+    fn name(&self) -> String {
+        "channeling".to_string()
     }
 
     fn check_status(&self) -> TaskStatus {

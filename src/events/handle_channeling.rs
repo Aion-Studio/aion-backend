@@ -17,7 +17,6 @@ impl ChannelingHandler {
     }
     fn subscribe(&self) {
         Infra::subscribe(GameEvent::channeling(), Arc::new(self.clone()));
-        Infra::subscribe(GameEvent::channeling_completed(), Arc::new(self.clone()));
     }
 }
 
@@ -28,7 +27,7 @@ impl EventHandler for ChannelingHandler {
                 Infra::tasks().schedule_action(TaskAction::Channel(action.clone()));
                 info!("Scheduled channeling action for hero {:?}", action.hero.id);
             }
-            GameEvent::ChannelingCompleted(action) => {
+            GameEvent::ChannelingCompleted(_) => {
                 info!("Channeling completed received inn channel handler");
             }
             _ => {}

@@ -1,15 +1,10 @@
-use crate::configuration::{
-    get_durations, get_region_durations, DurationType, Durations, Settings,
-};
-use crate::events::dispatcher::EventDispatcher;
-use crate::events::game::TaskAction;
+use crate::configuration::{get_durations, DurationType, Settings};
 use crate::events::initialize::initialize_handlers;
 use crate::handlers::heroes::{create_hero_endpoint, hero_state};
-use crate::handlers::regions::{channel_leyline, create_region, explore_region};
+use crate::handlers::regions::{channel_leyline, explore_region};
 use crate::infra::Infra;
+use crate::logger::Logger;
 use crate::prisma::PrismaClient;
-use crate::services::impls::region_service::RegionService;
-use crate::services::impls::task_management::TaskManagementService;
 use crate::services::impls::tasks::TaskManager;
 use actix_web::dev::Server;
 use actix_web::{web, App, HttpServer};
@@ -78,17 +73,13 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
 
     Infra::initialize(prisma.clone());
     initialize_handlers();
+    Logger::init("localhost:9000");
     let scheduler = Arc::new(TaskManager::new());
     let task_schedule_service = web::Data::new(scheduler.clone());
-    let region_service = web::Data::new(RegionService::new(scheduler, prisma.clone()));
     let app_state = web::Data::new(AppState {
         prisma: prisma.clone(),
         durations: get_durations(),
     });
-
-    let task_management_service = TaskManagementService {
-        // ... other initializations
-    };
 
     // Subscribe the task management service to the HeroExplored event
 
@@ -99,12 +90,10 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             // .app_data(prisma.clone())
             .app_data(app_state.clone())
             .app_data(task_schedule_service.clone())
-            .app_data(region_service.clone())
             .service(create_hero_endpoint)
             .service(explore_region)
             .service(channel_leyline)
-            .service(hero_state)
-            .service(create_region);
+            .service(hero_state);
         // .service(add_leyline);
         app
     })

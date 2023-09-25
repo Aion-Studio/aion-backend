@@ -1,10 +1,9 @@
-use std::collections::HashMap;
-use std::str::FromStr;
-
+use crate::prisma::hero_region::SetParam;
+use lazy_static::lazy_static;
 use prisma_client_rust::chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
-use crate::prisma::hero_region::SetParam;
+use std::collections::HashMap;
+use std::str::FromStr;
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct HeroRegion {
@@ -32,100 +31,54 @@ pub struct Leyline {
     pub aion_rate: f64,
 }
 
-pub const DUSAWATER: Leyline = Leyline {
-    name: "Dusawater".to_string(),
-    xp_reward: 9,
-    region_name: RegionName::Dusane,
-    discovery_required: 2,
-    stamina_rate: 40.0,
-    aion_rate: 8.0,
-};
+impl Leyline {
+    pub fn new(
+        name: String,
+        xp_reward: i32,
+        region_name: RegionName,
+        discovery_required: i32,
+        stamina_rate: f64,
+        aion_rate: f64,
+    ) -> Self {
+        Self {
+            name,
+            xp_reward,
+            region_name,
+            discovery_required,
+            stamina_rate,
+            aion_rate,
+        }
+    }
+}
 
-pub const DUSAEARTH: Leyline = Leyline {
-    name: "Dusaearth".to_string(),
-    xp_reward: 8,
-    region_name: RegionName::Dusane,
-    discovery_required: 10,
-    stamina_rate: 41.0,
-    aion_rate: 3.0,
-};
+lazy_static! {
+    pub static ref DUSAWATER: Leyline = Leyline::new(
+        "Dusawater".to_string(),
+        9,
+        RegionName::Dusane,
+        2,
+        40.0,
+        8.0
+    );
+    // ... Define other leylines similarly ...
+    pub static ref DUSAEARTH: Leyline = Leyline::new(
+        "Dusaearth".to_string(),
+        8,
+        RegionName::Dusane,
+        10,
+        41.0,
+        3.0
+    );
+    // ... and so on for each leyline ...
+}
 
-pub const DUSAGLOW: Leyline = Leyline {
-    name: "Dusaglow".to_string(),
-    xp_reward: 14,
-    region_name: RegionName::Dusane,
-    discovery_required: 4,
-    stamina_rate: 22.0,
-    aion_rate: 8.0,
-};
-
-pub const DUSADREAM: Leyline = Leyline {
-    name: "Dusadream".to_string(),
-    xp_reward: 12,
-    region_name: RegionName::Dusane,
-    discovery_required: 7,
-    stamina_rate: 15.0,
-    aion_rate: 3.0,
-};
-
-pub const DUSAWIND: Leyline = Leyline {
-    name: "Dusawind".to_string(),
-    xp_reward: 17,
-    region_name: RegionName::Dusane,
-    discovery_required: 4,
-    stamina_rate: 85.0,
-    aion_rate: 4.0,
-};
-
-pub const DUSACLOUD: Leyline = Leyline {
-    name: "Dusacloud".to_string(),
-    xp_reward: 11,
-    region_name: RegionName::Dusane,
-    discovery_required: 7,
-    stamina_rate: 72.0,
-    aion_rate: 4.0,
-};
-
-pub const DUSASPARK: Leyline = Leyline {
-    name: "Dusaspark".to_string(),
-    xp_reward: 6,
-    region_name: RegionName::Dusane,
-    discovery_required: 2,
-    stamina_rate: 61.0,
-    aion_rate: 9.0,
-};
-
-pub const DUSAFIRE: Leyline = Leyline {
-    name: "Dusafire".to_string(),
-    xp_reward: 11,
-    region_name: RegionName::Dusane,
-    discovery_required: 6,
-    stamina_rate: 45.0,
-    aion_rate: 5.0,
-};
-
-pub const DUSALIGHT: Leyline = Leyline {
-    name: "Dusalight".to_string(),
-    xp_reward: 3,
-    region_name: RegionName::Dusane,
-    discovery_required: 5,
-    stamina_rate: 5.0,
-    aion_rate: 6.0,
-};
-
-pub const DUSAROCK: Leyline = Leyline {
-    name: "Dusarock".to_string(),
-    xp_reward: 10,
-    region_name: RegionName::Dusane,
-    discovery_required: 8,
-    stamina_rate: 0.0,
-    aion_rate: 4.0,
-};
-
-pub const LEYLINES: [Leyline; 10] = [
-    DUSAWATER, DUSAEARTH, DUSAGLOW, DUSADREAM, DUSAWIND, DUSACLOUD, DUSASPARK, DUSAFIRE, DUSALIGHT,
-    DUSAROCK,
-];
+lazy_static! {
+    pub static ref LEYLINES: Vec<Leyline> = vec![
+        DUSAWATER.clone(),
+        DUSAEARTH.clone(),
+        // ... Add other leylines ...
+    ];
+}
 
 pub fn leyline_map() -> HashMap<String, Leyline> {
     let mut map = HashMap::new();

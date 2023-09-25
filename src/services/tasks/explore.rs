@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use prisma_client_rust::chrono::{self, Duration};
 use rand::Rng;
@@ -16,7 +13,6 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct ExploreAction {
-    id: Uuid,
     base: BaseTask,
     pub hero: Hero,
     pub duration: Duration,
@@ -63,7 +59,6 @@ impl ExploreAction {
         }
 
         Some(Self {
-            id: Uuid::new_v4(),
             base: BaseTask::new(duration, hero.clone()),
             duration,
             hero,
@@ -74,10 +69,6 @@ impl ExploreAction {
             xp: rand::thread_rng().gen_range(15..30),
             stamina_cost,
         })
-    }
-
-    pub fn name(&self) -> String {
-        "explore".to_string()
     }
 
     pub fn calculate_boost_factor(&self, exploration: i32) -> f64 {
@@ -132,5 +123,8 @@ impl Task for ExploreAction {
 
     fn task_id(&self) -> Uuid {
         self.base.task_id()
+    }
+    fn name(&self) -> String {
+        "explore".to_string()
     }
 }

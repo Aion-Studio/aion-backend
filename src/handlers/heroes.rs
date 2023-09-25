@@ -1,19 +1,13 @@
-use std::sync::Arc;
-
-use actix_web::web::{Data, Path};
+use actix_web::web::Path;
 use actix_web::{get, post, HttpResponse, Responder};
 use prisma_client_rust::serde_json::json;
-use prisma_client_rust::QueryError;
 use rand::Rng;
 use serde::Serialize;
 
-use crate::events::game::GameEvent;
+use crate::events::game::TaskAction;
 use crate::infra::Infra;
 use crate::models::hero::{Attributes, BaseStats, Hero, Range};
-use crate::models::region::{HeroRegion, Leyline, Region};
-use crate::services::impls::region_service::RegionService;
-use crate::services::impls::tasks::TaskManager;
-use crate::services::traits::hero_service::HeroService;
+use crate::models::region::{HeroRegion, Leyline};
 
 #[derive(Serialize)]
 struct HeroResponse {
@@ -22,7 +16,7 @@ struct HeroResponse {
 }
 
 #[post("/heroes")]
-async fn create_hero_endpoint(region_service: Data<RegionService>) -> impl Responder {
+async fn create_hero_endpoint() -> impl Responder {
     let mut rng = rand::thread_rng();
 
     let hero = Hero::new(
@@ -52,7 +46,7 @@ async fn create_hero_endpoint(region_service: Data<RegionService>) -> impl Respo
     );
 
     let created_hero = Infra::repo().insert_hero(hero).await.unwrap();
-    let region_hero = region_service.create_region_hero(&created_hero).await;
+    let region_hero = Infra::repo().create_hero_region(&created_hero).await;
 
     match region_hero {
         Ok(region_hero) => {
@@ -70,7 +64,7 @@ async fn create_hero_endpoint(region_service: Data<RegionService>) -> impl Respo
 pub struct HeroStateResponse {
     hero: Hero,
     region_hero: HeroRegion,
-    pub active_task: Option<GameEvent>,
+    pub active_task: Option<TaskAction>,
     pub available_leylines: Vec<Leyline>,
 }
 

@@ -41,13 +41,6 @@ mod events {
 
 mod services {
     pub mod impls {
-        // pub mod action_executor;
-        // pub mod hero_service;
-        pub mod region_service;
-        pub mod task_management;
-        //
-        // #[cfg(test)]
-        // mod hero_service_test;
 
         #[cfg(test)]
         mod region_service_test;
@@ -74,9 +67,9 @@ pub mod handlers {
 
 pub mod infra;
 
+mod logger;
 #[cfg(test)]
 pub mod test_helpers;
-mod logger;
 
 const LOG_ENV_VAR: &str = "INDEXER_LOG";
 #[cfg(not(all(tokio_unstable, feature = "debug")))]

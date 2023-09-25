@@ -1,4 +1,3 @@
-use prisma_client_rust::chrono;
 use uuid::Uuid;
 
 use crate::events::game::TaskAction;
@@ -68,7 +67,6 @@ impl TaskManager {
                 TaskAction::Explore(explore_action) => {
                     Infra::dispatch(GameEvent::ExploreCompleted(explore_action.clone()));
                 }
-                _ => {}
             }
 
             if let Err(err) = tx.send(id) {
@@ -79,7 +77,7 @@ impl TaskManager {
 
     pub fn update_cache_on_complete(
         &self,
-        mut rx: Receiver<Uuid>,
+        rx: Receiver<Uuid>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let tasks = Arc::clone(&self.tasks);
 

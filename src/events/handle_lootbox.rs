@@ -5,18 +5,16 @@ use crate::services::traits::async_task::Task;
 use crate::{
     infra::Infra,
     models::resources::Resource,
-    services::{
-        tasks::{channel::ChannelingAction, explore::ExploreAction},
-        traits::async_task::TaskError,
-    },
+    services::tasks::{channel::ChannelingAction, explore::ExploreAction},
 };
 use anyhow::Result;
-use prisma_client_rust::{chrono, QueryError};
+use rand::Rng;
 use tracing::error;
+use TaskLootBox::Channel;
 
 use super::{
     dispatcher::EventHandler,
-    game::{ChannelResult, ExploreResult, GameEvent, TaskAction, TaskLootBox},
+    game::{ChannelResult, ExploreResult, GameEvent, TaskLootBox},
 };
 
 #[derive(Clone, Debug)]
@@ -31,21 +29,7 @@ impl LootBoxHandler {
 
     fn subscribe(&self) {
         Infra::subscribe(GameEvent::explore_completed(), Arc::new(self.clone()));
-    }
-
-    async fn hero_region_update(
-        &self,
-        action_result: &ExploreResult,
-        action: ExploreAction,
-    ) -> Result<(), QueryError> {
-        let hero_id = action.clone().hero.id.unwrap();
-        Infra::repo()
-            .update_hero_region_discovery_level(
-                &hero_id,
-                action_result.discovery_level_increase.round() as i32,
-            )
-            .await?;
-        Ok(())
+        Infra::subscribe(GameEvent::channeling_completed(), Arc::new(self.clone()));
     }
 }
 
@@ -54,7 +38,27 @@ impl EventHandler for LootBoxHandler {
         tokio::spawn(async move {
             match event {
                 GameEvent::ChannelingCompleted(action) => {
-                    let loot = action.generate_loot_box();
+                    if let Ok(Channel(result)) = action.generate_loot_box() {
+                        let mut hero = Infra::repo().get_hero(action.hero.get_id()).await.unwrap();
+                        hero.equip_loot(Channel(result));
+                        if let Err(e) = Infra::repo()
+                            .store_action_completed(ActionCompleted::new(
+                                action.name(),
+                                action.hero.get_id(),
+                            ))
+                            .await
+                        {
+                            error!("Error storing action completed: {}", e);
+                            eprintln!("Error storing action completed: {}", e);
+                        }
+                        // update hero in db
+                        println!("hero with stats about to be updated {:?}", hero);
+                        if let Err(e) = Infra::repo().update_hero(hero).await {
+                            eprintln!("Error updating hero: {}", e);
+                            error!("Error updating hero: {}", e);
+                        }
+                        println!("db updated for hero");
+                    }
                 }
                 GameEvent::ExploreCompleted(action) => {
                     let hero_id = action.clone().hero.id.unwrap();
@@ -142,12 +146,12 @@ impl GeneratesResources for ChannelingAction {
 
 impl LootBoxGenerator for ChannelingAction {
     fn generate_loot_box(&self) -> Result<TaskLootBox> {
-        Ok(TaskLootBox::Channel(ChannelResult {
-            xp: 0,
+        Ok(Channel(ChannelResult {
+            xp: rand::thread_rng().gen_range(4..25),
             hero_id: self.hero.get_id(),
             resources: self.generate_resources(),
-            stamina_gained: 15,
-            //now
+            // random number between 5 and 20
+            stamina_gained: rand::thread_rng().gen_range(5..20),
             created_time: None,
         }))
     }

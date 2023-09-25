@@ -4,18 +4,18 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::configuration::{ChannelDurations, ExploreDurations};
 use prisma_client_rust::chrono::Duration;
 
 use crate::events::initialize::initialize_handlers;
 use crate::handlers::heroes::get_hero_status;
-use crate::handlers::regions::do_explore;
+use crate::handlers::regions::{do_channel, do_explore};
 use crate::infra::Infra;
 use crate::models::hero::Hero;
 use crate::models::region::RegionName;
-use crate::prisma::hero_region::current_location;
-use crate::prisma::{hero, region, PrismaClient};
+use crate::models::resources::Resource;
+use crate::prisma::PrismaClient;
 use crate::repos::region_repo::Repo;
-use crate::services::traits::async_task::{Task, TaskStatus};
 use crate::test_helpers::{random_hero, setup_test_database};
 
 async fn delay(time: Duration) {
@@ -43,7 +43,7 @@ async fn random_hero_and_explore() -> (
         Box::new(move || {
             Box::pin(async move {
                 let region_name = RegionName::Dusane;
-                do_explore(&hero_clone, &region_name, &durations).unwrap();
+                do_explore(&hero_clone, &region_name, &ExploreDurations(durations)).unwrap();
                 tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
             })
         });
@@ -54,7 +54,8 @@ async fn random_hero_and_explore() -> (
 async fn explore(hero: Hero, region_name: RegionName) -> Result<(), Error> {
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
-    do_explore(&hero, &region_name, &durations).unwrap();
+    let wrap = ExploreDurations(durations);
+    do_explore(&hero, &region_name, &wrap).unwrap();
     tokio::time::sleep(Duration::milliseconds(650).to_std().unwrap()).await;
     Ok(())
 }
@@ -74,7 +75,7 @@ async fn test_generate_result_for_exploration() {
 
     let region_name = RegionName::Dusane;
     // Execute the start_exploration function and get the result
-    do_explore(&hero, &region_name, &durations).unwrap();
+    do_explore(&hero, &region_name, &ExploreDurations(durations)).unwrap();
     tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
 
     let hero = Infra::repo().get_hero(hero_id).await.unwrap();
@@ -138,4 +139,21 @@ async fn test_leyline_increased_visible() {
     // has to regen stamina using get_hero
     assert!(status.available_leylines.len() > 1);
     println!("hero status at end {:?}", status);
+}
+
+#[tokio::test]
+async fn test_channeling_leyline() {
+    let leyline_name = "Dusarock".to_string();
+    //alias hero as hero_before
+    let (hero_before, _, _) = random_hero_and_explore().await;
+    let mut leyline_durations = HashMap::new();
+    leyline_durations.insert(leyline_name.clone(), Duration::milliseconds(500));
+
+    let durations = ChannelDurations(leyline_durations);
+    let _ = do_channel(&hero_before, &leyline_name, &durations).unwrap();
+    delay(Duration::milliseconds(800)).await;
+    let hero = Infra::repo().get_hero(hero_before.get_id()).await.unwrap();
+
+    assert!(hero.base_stats.xp > hero_before.base_stats.xp);
+    assert!(hero.resources.get(&Resource::Aion) > hero_before.resources.get(&Resource::Aion));
 }

@@ -7,18 +7,25 @@ use thiserror::Error;
 
 use prisma_client_rust::chrono::{self, Duration};
 use tokio::time::sleep;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::models::hero::Hero;
 
 pub type TaskExecReturn = Pin<Box<dyn Future<Output = Result<(), TaskError>> + Send>>;
-pub type TaskReturn = Result<Uuid, TaskError>;
 
 pub trait Task: Send + Sync {
     fn execute(&self) -> TaskExecReturn;
     fn check_status(&self) -> TaskStatus;
     fn hero_id(&self) -> String;
     fn task_id(&self) -> Uuid;
+
+    fn name(&self) -> String;
+}
+
+pub trait GameAction<'a> {
+    fn name(&self) -> String;
+    fn hero_id(&self) -> String;
 }
 
 #[derive(Clone, Debug)]
@@ -37,11 +44,6 @@ impl BaseTask {
             hero,
             start_time: Arc::new(Mutex::new(None)),
         }
-    }
-
-    pub fn set_start_time(&self, start_time: chrono::DateTime<chrono::Utc>) {
-        let mut lock = self.start_time.lock().unwrap();
-        *lock = Some(start_time);
     }
 }
 
@@ -75,22 +77,26 @@ impl Task for BaseTask {
     fn task_id(&self) -> Uuid {
         self.id
     }
+
+    fn name(&self) -> String {
+        "base".to_string()
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum TaskStatus {
     InProgress,
     Completed,
-    Error(TaskError),
-    Failed,
+    // Error(TaskError),
+    // Failed,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum TaskError {
-    #[error("Execution failed")]
-    ExecutionFailed,
-    #[error("Insert failed")]
-    InsertFailed,
+    // #[error("Execution failed")]
+    // ExecutionFailed,
+    // #[error("Insert failed")]
+    // InsertFailed,
     #[error("{0}")]
     RepoError(String), // Different types of errors that can occur in a task
 }

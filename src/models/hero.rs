@@ -62,7 +62,6 @@ impl Hero {
         let seconds = now.signed_duration_since(res.updated_at).num_seconds() as i32;
 
         let stamina = seconds * self.stamina_regen_rate;
-        println!("updating stamina by {}", stamina);
         // add to self.stamina only if it is less than self.stamina_max
         if self.stamina + stamina < self.stamina_max {
             self.stamina += stamina;
@@ -88,7 +87,7 @@ impl Hero {
                 let hero_id = result.hero_id.clone();
                 let xp = result.xp;
                 self.gain_experience(xp);
-                self.stamina += result.stamina_gained;
+                self.gain_stamina(result.stamina_gained);
                 self.add_resources(result.resources);
             }
         }
@@ -144,6 +143,15 @@ impl Hero {
     pub fn gain_experience(&mut self, xp: i32) {
         self.base_stats.xp += xp;
         // Check for level up
+    }
+
+    pub fn gain_stamina(&mut self, stamina: i32) {
+        // add stamina up to stamina_max
+        if self.stamina + stamina > self.stamina_max {
+            self.stamina = self.stamina_max;
+            return;
+        }
+        self.stamina += stamina;
     }
 
     pub fn equip(&mut self, item: Item) {

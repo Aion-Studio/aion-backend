@@ -16,7 +16,7 @@ pub struct EventDispatcher {
 
 impl EventDispatcher {
     pub fn new() -> Self {
-        let mut subscribers = HashMap::new();
+        let subscribers = HashMap::new();
         Self { subscribers }
     }
 

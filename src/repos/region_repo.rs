@@ -1,10 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use prisma_client_rust::{chrono, Direction, QueryError};
-use tracing::{info, warn};
+use tracing::warn;
 
+use crate::models::hero::{Attributes, BaseStats};
 use crate::{
-    events::game::{ActionCompleted, ChannelResult, TaskLootBox},
+    events::game::ActionCompleted,
     models::{
         hero::Hero,
         region::{HeroRegion, Leyline, Region, RegionName},
@@ -30,6 +31,106 @@ impl Repo {
         Self { prisma }
     }
 
+    pub async fn insert_hero(&self, new_hero: Hero) -> Result<Hero, QueryError> {
+        // Use Prisma to create a new Hero in the database
+        // Convert the resulting record into a Hero struct and return it
+        // ...
+        let base_inventory = self.prisma.inventory().create(vec![]).exec().await.unwrap();
+
+        let base_stats = self
+            .prisma
+            .base_stats()
+            .create(
+                new_hero.base_stats.level,
+                new_hero.base_stats.xp,
+                new_hero.base_stats.damage.min,
+                new_hero.base_stats.damage.max,
+                new_hero.base_stats.hit_points,
+                new_hero.base_stats.mana,
+                new_hero.base_stats.armor,
+                vec![],
+            )
+            .exec()
+            .await
+            .unwrap();
+
+        let base_attributes = self
+            .prisma
+            .attributes()
+            .create(
+                new_hero.attributes.strength,
+                new_hero.attributes.resilience,
+                new_hero.attributes.agility,
+                new_hero.attributes.intelligence,
+                new_hero.attributes.exploration,
+                new_hero.attributes.crafting,
+                vec![],
+            )
+            .exec()
+            .await
+            .unwrap();
+
+        let result = self
+            .prisma
+            .hero()
+            .create(
+                new_hero.aion_capacity,
+                new_hero.aion_collected,
+                base_stats::id::equals(base_stats.clone().id),
+                attributes::id::equals(base_attributes.clone().id),
+                inventory::id::equals(base_inventory.clone().id),
+                vec![],
+            )
+            .with(hero::base_stats::fetch())
+            .with(hero::attributes::fetch())
+            .with(hero::inventory::fetch())
+            .exec()
+            .await?;
+        let hero: Hero = result.into();
+        let region_name = RegionName::Dusane;
+        self.prisma
+            .hero_region()
+            .create(
+                0,
+                hero::id::equals(hero.get_id()),
+                region::name::equals(region_name.to_str()),
+                vec![current_location::set(true)],
+            )
+            .exec()
+            .await?;
+
+        let mut resources = HashMap::new();
+        resources.insert(Resource::Aion, 0);
+        resources.insert(Resource::Valor, 0);
+        resources.insert(Resource::IronOre, 0);
+        resources.insert(Resource::NexusShard, 0);
+        resources.insert(Resource::Oak, 0);
+        resources.insert(Resource::Copper, 0);
+        resources.insert(Resource::Silk, 0);
+
+        let _ = self
+            .prisma
+            .hero_resource()
+            .create_many(
+                resources
+                    .iter()
+                    .map(|(resource, amount)| {
+                        hero_resource::create_unchecked(
+                            hero.get_id(),
+                            resource.into(),
+                            *amount,
+                            vec![],
+                        )
+                    })
+                    .collect(),
+            )
+            .exec()
+            .await
+            .unwrap();
+
+        let hero = self.hero_by_id(hero.get_id()).await.unwrap();
+        Ok(hero)
+    }
     pub fn get_hero(&self, hero_id: String) -> RepoFuture<Hero> {
         Box::pin(async move {
             match self.hero_by_id(hero_id).await {
@@ -40,10 +141,6 @@ impl Repo {
                             let mut hero = hero.clone();
                             match action_result {
                                 Some(action) => {
-                                    println!(
-                                        "latest action_result  seconds {:?}",
-                                        action.updated_at.timestamp()
-                                    );
                                     hero.regenerate_stamina(&action);
                                     self.prisma
                                         .action_completed()
@@ -79,13 +176,95 @@ impl Repo {
         let hero = self
             .prisma
             .hero()
-            .find_unique(hero::id::equals(hero_id))
+            .find_unique(hero::id::equals(hero_id.clone()))
             .with(hero::base_stats::fetch())
             .with(hero::attributes::fetch())
             .with(hero::inventory::fetch())
+            .with(hero::hero_region::fetch(vec![hero_id::equals(
+                hero_id.clone(),
+            )]))
+            .with(hero::resources::fetch(vec![
+                hero_resource::hero_id::equals(hero_id.clone()),
+            ]))
             .exec()
             .await?;
         Ok(hero.unwrap().into())
+    }
+    pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
+        self.update_base_stats(&hero.base_stats).await?;
+        self.update_attributes(&hero.attributes).await?;
+        self.update_hero_resources(&hero.resources, &hero.get_id())
+            .await?;
+
+        let updated_hero = self
+            .prisma
+            .hero()
+            .update(
+                hero::id::equals(hero.get_id()),
+                vec![
+                    hero::aion_capacity::set(hero.aion_capacity),
+                    hero::aion_collected::set(hero.aion_collected),
+                    hero::stamina::set(hero.stamina),
+                    hero::stamina_max::set(hero.stamina_max),
+                    hero::stamina_regen_rate::set(hero.stamina_regen_rate),
+                    //update base_stats with hero.base_stats
+                ],
+            )
+            .with(hero::base_stats::fetch())
+            .with(hero::attributes::fetch())
+            .with(hero::inventory::fetch())
+            .with(hero::resources::fetch(vec![
+                hero_resource::hero_id::equals(hero.get_id()),
+            ]))
+            .exec()
+            .await?;
+
+        Ok(updated_hero.into())
+    }
+
+    pub async fn update_hero_resources(
+        &self,
+        resources: &HashMap<Resource, i32>,
+        hero_id: &str,
+    ) -> Result<(), QueryError> {
+        for (resource, amount) in resources {
+            self.prisma
+                .hero_resource()
+                .update_many(
+                    vec![
+                        hero_resource::hero_id::equals(hero_id.to_string()),
+                        hero_resource::resource::equals(resource.into()),
+                    ],
+                    resources_update_params((resource.clone(), *amount)),
+                )
+                .exec()
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn update_base_stats(&self, base_stats: &BaseStats) -> Result<(), QueryError> {
+        self.prisma
+            .base_stats()
+            .update(
+                base_stats::id::equals(base_stats.clone().id.unwrap()),
+                base_stats_update_params(&base_stats),
+            )
+            .exec()
+            .await?;
+        Ok(())
+    }
+
+    async fn update_attributes(&self, attributes: &Attributes) -> Result<(), QueryError> {
+        self.prisma
+            .attributes()
+            .update(
+                attributes::id::equals(attributes.clone().id.unwrap()),
+                attributes_update_params(&attributes),
+            )
+            .exec()
+            .await?;
+        Ok(())
     }
 
     pub async fn store_action_completed(&self, result: ActionCompleted) -> Result<(), QueryError> {
@@ -162,100 +341,6 @@ impl Repo {
         Ok(hero_region.into())
     }
 
-    pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
-        let updated_hero = self
-            .prisma
-            .hero()
-            .update(
-                hero::id::equals(hero.get_id()),
-                vec![
-                    hero::aion_capacity::set(hero.aion_capacity),
-                    hero::aion_collected::set(hero.aion_collected),
-                    hero::stamina::set(hero.stamina),
-                    hero::stamina_max::set(hero.stamina_max),
-                    hero::stamina_regen_rate::set(hero.stamina_regen_rate),
-                ],
-            )
-            .with(hero::base_stats::fetch())
-            .with(hero::attributes::fetch())
-            .with(hero::inventory::fetch())
-            .exec()
-            .await?;
-
-        Ok(updated_hero.into())
-    }
-
-    pub async fn insert_hero(&self, new_hero: Hero) -> Result<Hero, QueryError> {
-        // Use Prisma to create a new Hero in the database
-        // Convert the resulting record into a Hero struct and return it
-        // ...
-        let base_inventory = self.prisma.inventory().create(vec![]).exec().await.unwrap();
-
-        let base_stats = self
-            .prisma
-            .base_stats()
-            .create(
-                new_hero.base_stats.level,
-                new_hero.base_stats.xp,
-                new_hero.base_stats.damage.min,
-                new_hero.base_stats.damage.max,
-                new_hero.base_stats.hit_points,
-                new_hero.base_stats.mana,
-                new_hero.base_stats.armor,
-                vec![],
-            )
-            .exec()
-            .await
-            .unwrap();
-
-        let base_attributes = self
-            .prisma
-            .attributes()
-            .create(
-                new_hero.attributes.strength,
-                new_hero.attributes.resilience,
-                new_hero.attributes.agility,
-                new_hero.attributes.intelligence,
-                new_hero.attributes.exploration,
-                new_hero.attributes.crafting,
-                vec![],
-            )
-            .exec()
-            .await
-            .unwrap();
-
-        let result = self
-            .prisma
-            .hero()
-            .create(
-                new_hero.aion_capacity,
-                new_hero.aion_collected,
-                base_stats::id::equals(base_stats.clone().id),
-                attributes::id::equals(base_attributes.clone().id),
-                inventory::id::equals(base_inventory.clone().id),
-                vec![],
-            )
-            .with(hero::base_stats::fetch())
-            .with(hero::attributes::fetch())
-            .with(hero::inventory::fetch())
-            .exec()
-            .await?;
-        let hero: Hero = result.into();
-        let region_name = RegionName::Dusane;
-        self.prisma
-            .hero_region()
-            .create(
-                0,
-                hero::id::equals(hero.get_id()),
-                region::name::equals(region_name.to_str()),
-                vec![current_location::set(true)],
-            )
-            .exec()
-            .await?;
-
-        Ok(hero)
-    }
-
     pub async fn update_hero_region_discovery_level(
         &self,
         hero_id: &str,
@@ -276,10 +361,7 @@ impl Repo {
             .await;
 
         match result {
-            Ok(d) => {
-                println!("RIGHT AFTER HEOR_REGION_UPDATE {:?}", d);
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(e) => {
                 warn!("Error updating hero region discovery level: {}", e);
                 Err(e)
@@ -355,43 +437,37 @@ impl Repo {
     }
 }
 
-// impl From<action_result::Data> for ActionResult {
-//     fn from(data: action_result::Data) -> Self {
-//         let mut resources = HashMap::new();
-//
-//         // Unwrap the resources, replacing with an empty vector if None
-//         let data_resources = data.resources;
-//
-//         for result_resource in data_resources.unwrap() {
-//             let resource_type = result_resource.r#type;
-//             let resource_amount = result_resource.amount;
-//
-//             resources.insert(resource_type.into(), resource_amount);
-//         }
-//
-//         Self {
-//             hero_id: data.hero_id,
-//             resources,
-//             xp: data.xp,
-//             discovery_level_increase: data.discovery_level_increase,
-//             created_time: Some(data.create_time),
-//         }
-//     }
-// }
+fn attributes_update_params(
+    attributes: &crate::models::hero::Attributes,
+) -> Vec<attributes::SetParam> {
+    vec![
+        attributes::strength::set(attributes.strength),
+        attributes::resilience::set(attributes.resilience),
+        attributes::agility::set(attributes.agility),
+        attributes::intelligence::set(attributes.intelligence),
+        attributes::exploration::set(attributes.exploration),
+        attributes::crafting::set(attributes.crafting),
+    ]
+}
+fn base_stats_update_params(base_stats: &BaseStats) -> Vec<base_stats::SetParam> {
+    vec![
+        base_stats::level::set(base_stats.level),
+        base_stats::xp::set(base_stats.xp),
+        base_stats::damage_min::set(base_stats.damage.min),
+        base_stats::damage_max::set(base_stats.damage.max),
+        base_stats::hit_points::set(base_stats.hit_points),
+        base_stats::mana::set(base_stats.mana),
+        base_stats::armor::set(base_stats.armor),
+    ]
+}
 
-// impl From<HashMap<Resource, i32>> for Resource {
-//     fn from(resource_type: ResourceType) -> Self {
-//         match resource_type {
-//             ResourceType::Aion => Resource::Aion,
-//             ResourceType::Valor => Resource::Valor,
-//             ResourceType::IronOre => Resource::IronOre,
-//             ResourceType::NexusShard => Resource::NexusShard,
-//             ResourceType::Oak => Resource::Oak,
-//             ResourceType::Copper => Resource::Copper,
-//             ResourceType::Silk => Resource::Silk,
-//         }
-//     }
-// }
+fn resources_update_params(resources: (Resource, i32)) -> Vec<hero_resource::SetParam> {
+    let mut params = vec![];
+    let res_type = &resources.0;
+    params.push(hero_resource::amount::set(resources.1));
+    params.push(hero_resource::resource::set(res_type.into()));
+    params
+}
 
 impl<'a> From<&'a Resource> for ResourceType {
     fn from(resource: &'a Resource) -> Self {
@@ -404,6 +480,23 @@ impl<'a> From<&'a Resource> for ResourceType {
             Resource::Copper => ResourceType::Copper,
             Resource::Silk => ResourceType::Silk,
         }
+    }
+}
+
+impl From<hero_resource::Data> for (Resource, i32) {
+    fn from(data: hero_resource::Data) -> Self {
+        (
+            match data.resource {
+                ResourceType::Aion => Resource::Aion,
+                ResourceType::Valor => Resource::Valor,
+                ResourceType::IronOre => Resource::IronOre,
+                ResourceType::NexusShard => Resource::NexusShard,
+                ResourceType::Oak => Resource::Oak,
+                ResourceType::Copper => Resource::Copper,
+                ResourceType::Silk => Resource::Silk,
+            },
+            data.amount,
+        )
     }
 }
 

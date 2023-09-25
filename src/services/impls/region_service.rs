@@ -5,7 +5,7 @@ use crate::services::impls::tasks::TaskManager;
 use crate::{
     models::{
         hero::Hero,
-        region::{HeroRegion, Leyline, Region, RegionName},
+        region::{HeroRegion, Region, RegionName},
     },
     prisma::PrismaClient,
     types::RepoFuture,

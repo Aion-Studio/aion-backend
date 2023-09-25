@@ -1,3 +1,4 @@
+use crate::events::game::TaskAction;
 use std::sync::Arc;
 
 use crate::infra::Infra;
@@ -22,11 +23,8 @@ impl ExploreHandler {
 
 impl EventHandler for ExploreHandler {
     fn handle(&self, event: GameEvent) {
-        match event {
-            GameEvent::HeroExplores(action) => {
-                Infra::tasks().schedule_action(GameEvent::HeroExplores(action));
-            }
-            _ => {}
+        if let GameEvent::HeroExplores(action) = event {
+            Infra::tasks().schedule_action(TaskAction::Explore(action));
         }
     }
 }
