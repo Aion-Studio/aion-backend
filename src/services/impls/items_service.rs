@@ -22,7 +22,6 @@ impl ItemService {
 
     pub async fn add_item(&self, item: Item) {
         let mut items = self.items.write().await;
-        println!("Adding item: {:?}", item);
         items.insert(item.id.clone(), item);
     }
 

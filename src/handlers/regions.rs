@@ -5,16 +5,16 @@ use actix_web::{
 };
 use serde::Serialize;
 
-use crate::configuration::{ChannelDurations, DurationType, ExploreDurations};
 use crate::models::region::RegionName;
 use crate::services::tasks::channel::ChannelingAction;
+use crate::{
+    configuration::{ChannelDurations, DurationType, ExploreDurations},
+    events::game::TaskAction,
+};
 use crate::{events::game::GameEvent, models::hero::Hero, services::tasks::explore::ExploreAction};
 use crate::{infra::Infra, webserver::AppState};
 
-// #[derive(Debug, Deserialize)]
-// pub struct RegionPayload {
-//     adjacent_regions: Vec<String>,
-// }
+
 
 #[derive(Debug, Serialize)]
 struct ExploreResponse {
@@ -26,6 +26,19 @@ struct ExploreResponse {
 pub async fn explore_region(path: Path<String>, app: Data<AppState>) -> impl Responder {
     let hero_id = path.into_inner();
     let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+
+    let active_tasks = Infra::tasks().get_current_task(hero_id.as_ref());
+    println!("check active tasks {:?}", active_tasks);
+
+    if let Some(task) = active_tasks {
+        println!("aaaaaaaaaaaaaaaaa {:?}", task);
+        if let TaskAction::Explore(..) = task {
+            return HttpResponse::Forbidden().json(ExploreResponse {
+                message: "Already exploring".to_string(),
+                status: "Error".to_string(),
+            });
+        }
+    }
 
     let current_region = Infra::repo()
         .get_current_hero_region(&hero_id)

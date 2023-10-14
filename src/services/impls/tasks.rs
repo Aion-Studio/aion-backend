@@ -1,6 +1,9 @@
 use uuid::Uuid;
 
 use crate::events::game::TaskAction;
+use crate::handlers::tasks::send_new_tasks_to_ws;
+use crate::services::traits::async_task::TaskStatus;
+use crate::webserver::AppState;
 use crate::{events::game::GameEvent, infra::Infra, services::traits::async_task::Task};
 use flume::{unbounded, Receiver, Sender};
 use std::{collections::HashMap, future::Future, sync::Arc};
@@ -40,21 +43,27 @@ impl TaskManager {
             TaskAction::Explore(action) => (
                 Box::new(action.clone()),
                 Uuid::parse_str(&action.hero_id()).unwrap(),
-            ),
-            // ... other cases
+            ), // ... other cases
         };
+
         match self.tasks.lock() {
             Ok(mut tasks) => {
                 tasks.insert(id, event.clone());
             }
             Err(_) => {}
         }
+
+        tokio::spawn(async move {
+            send_new_tasks_to_ws().await;
+        });
+
         let tx = self.task_complete_sender.clone();
         tokio::spawn(async move {
             /*  Doing the actual action here
              *
              *
              *  */
+            info!("Executing the action................");
             let _ = action.execute().await;
             /* Signal the completion of the action here
              *
@@ -84,6 +93,7 @@ impl TaskManager {
         Box::pin(async move {
             while let Ok(id) = rx.recv_async().await {
                 tasks.lock().unwrap().remove(&id);
+                send_new_tasks_to_ws().await;
             }
             info!("Stopped listening for completions.");
         })
@@ -104,7 +114,29 @@ impl TaskManager {
 
         tasks
             .values()
-            .find(|task| matches!(task, TaskAction::Explore(t) if t.hero_id() == hero_id))
+            .find(|&task| match task {
+                TaskAction::Explore(explore_action) => explore_action.hero_id() == hero_id,
+                TaskAction::Channel(channeling_action) => channeling_action.hero_id() == hero_id,
+            })
             .cloned()
+    }
+
+    pub fn get_all_active(&self) -> Vec<TaskAction> {
+        let tasks = match self.tasks.lock() {
+            Ok(tasks) => tasks,
+            Err(_) => return vec![],
+        };
+
+        let statuses = tasks
+            .iter()
+            .map(|(id, task)| match task {
+                TaskAction::Explore(..) => task.clone(),
+                TaskAction::Channel(..) => task.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        info!("number of tasks active returning {:?}", statuses.len());
+
+        statuses
     }
 }

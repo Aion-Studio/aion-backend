@@ -1,10 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use prisma_client_rust::chrono::{self, Duration};
+use prisma_client_rust::chrono::{self, DateTime, Duration, Local, Utc};
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use uuid::Uuid;
 
 use crate::configuration::ChannelDurations;
+use crate::events::game::ActionNames;
 use crate::{
     models::hero::Hero,
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
@@ -28,6 +29,9 @@ impl Serialize for ChannelingAction {
         state.serialize_field("id", &self.id)?;
         state.serialize_field("hero", &self.hero)?;
         state.serialize_field("leyline", &self.leyline)?;
+        let time_left = self.base.get_end_time().unwrap();
+        let local_datetime: DateTime<Local> = time_left.with_timezone(&Local);
+        state.serialize_field("endTime", &local_datetime)?;
         state.end()
     }
 }
@@ -47,6 +51,10 @@ impl ChannelingAction {
             start_time: Arc::new(Mutex::new(None)),
         })
     }
+
+    pub fn action_name(&self) -> ActionNames {
+        ActionNames::Channel
+    }
 }
 
 impl Task for ChannelingAction {
@@ -55,11 +63,19 @@ impl Task for ChannelingAction {
     }
 
     fn name(&self) -> String {
-        "channeling".to_string()
+        ActionNames::Channel.to_string()
     }
 
     fn check_status(&self) -> TaskStatus {
         self.base.check_status()
+    }
+
+    fn start_now(&self) {
+        self.base.start_now()
+    }
+
+    fn start_time(&self) -> Option<DateTime<Utc>> {
+        self.base.start_time()
     }
 
     fn hero_id(&self) -> String {

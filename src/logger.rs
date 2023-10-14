@@ -15,11 +15,14 @@ lazy_static! {
 }
 
 impl Logger {
-    pub fn init(address: &str) {
-        let parsed_addr: SocketAddr = address.parse().unwrap();
+    pub fn init(address: &str) -> Result<(), std::net::AddrParseError> {
+        println!("Logger initialized at {}", address);
+        let parsed_addr: SocketAddr = address.parse()?;
         let mut addr = VECTOR_ADDRESS.lock().unwrap();
         *addr = Some(parsed_addr);
+        Ok(())
     }
+
 
     // pub async fn log(event: Value) -> Result<(), Box<dyn std::error::Error>> {
     //     let addr = {

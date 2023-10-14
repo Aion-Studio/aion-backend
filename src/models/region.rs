@@ -69,6 +69,75 @@ lazy_static! {
         41.0,
         3.0
     );
+
+    pub static ref DUSAGLOW: Leyline = Leyline::new(
+        "Dusaglow".to_string(),
+        10,
+        RegionName::Dusane,
+        20,
+        42.0,
+        2.0
+    );
+
+    pub static ref DUSAFIRE: Leyline = Leyline::new(
+        "Dusafire".to_string(),
+        11,
+        RegionName::Dusane,
+        30,
+        43.0,
+        1.0
+    );
+    pub static ref DUSADREAM: Leyline = Leyline::new(
+        "Dusadream".to_string(),
+        12,
+        RegionName::Dusane,
+        40,
+        44.0,
+        0.5
+    );
+    pub static ref DUSACLOUD: Leyline = Leyline::new(
+        "Dusacloud".to_string(),
+        13,
+        RegionName::Dusane,
+        50,
+        45.0,
+        0.25
+    );
+    pub static ref DUSAWIND: Leyline = Leyline::new(
+        "Dusawind".to_string(),
+        14,
+        RegionName::Dusane,
+        60,
+        46.0,
+        0.125
+    );
+
+    pub static  ref DUSALIGHT: Leyline = Leyline::new(
+        "Dusalight".to_string(),
+        15,
+        RegionName::Dusane,
+        70,
+        47.0,
+        0.0625
+    );
+
+    pub static  ref  DUSAPARK: Leyline = Leyline::new(
+        "Dusapark".to_string(),
+        16,
+        RegionName::Dusane,
+        80,
+        48.0,
+        0.03125
+    );
+
+    pub static ref DUSAROCK: Leyline = Leyline::new(
+        "Dusarock".to_string(),
+        17,
+        RegionName::Dusane,
+        90,
+        49.0,
+        0.015625
+    );
     // ... and so on for each leyline ...
 }
 
@@ -76,6 +145,14 @@ lazy_static! {
     pub static ref LEYLINES: Vec<Leyline> = vec![
         DUSAWATER.clone(),
         DUSAEARTH.clone(),
+        DUSAGLOW.clone(),
+        DUSAFIRE.clone(),
+        DUSADREAM.clone(),
+        DUSACLOUD.clone(),
+        DUSAWIND.clone(),
+        DUSALIGHT.clone(),
+        DUSAPARK.clone(),
+        DUSAROCK.clone(),
         // ... Add other leylines ...
     ];
 }

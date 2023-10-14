@@ -1,16 +1,18 @@
 use crate::configuration::{get_durations, DurationType, Settings};
 use crate::events::initialize::initialize_handlers;
-use crate::handlers::heroes::{create_hero_endpoint, hero_state};
+use crate::handlers::heroes::{create_hero_endpoint, hero_state,  latest_action_handler};
 use crate::handlers::regions::{channel_leyline, explore_region};
+use crate::handlers::tasks::{active_actions, active_actions_ws, MyWebSocket};
 use crate::infra::Infra;
 use crate::logger::Logger;
 use crate::prisma::PrismaClient;
-use crate::services::impls::tasks::TaskManager;
+use actix_cors::Cors;
 use actix_web::dev::Server;
-use actix_web::{web, App, HttpServer};
+use actix_web::web::{Data, Path};
+use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use std::collections::HashMap;
 use std::net::TcpListener;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tracing::info;
 
 pub struct Application {
@@ -18,7 +20,7 @@ pub struct Application {
     server: Server,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AppState {
     pub prisma: Arc<PrismaClient>,
     pub durations: HashMap<String, DurationType>,
@@ -71,28 +73,42 @@ impl Application {
 async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Server, anyhow::Error> {
     let prisma = Arc::new(prisma_client);
 
-    Infra::initialize(prisma.clone());
-    initialize_handlers();
-    Logger::init("localhost:9000");
-    let scheduler = Arc::new(TaskManager::new());
-    let task_schedule_service = web::Data::new(scheduler.clone());
-    let app_state = web::Data::new(AppState {
-        prisma: prisma.clone(),
-        durations: get_durations(),
-    });
+    match Logger::init("http:://localhost:9000") {
+        Ok(_) => println!("Logger initialized"),
+        Err(e) => println!("Logger failed to initialize: {:?}", e),
+    };
 
     // Subscribe the task management service to the HeroExplored event
+    let app_state_s = AppState {
+        prisma: prisma.clone(),
+        durations: get_durations(),
+    };
+    let app_state = Data::new(app_state_s.clone());
 
+    Infra::initialize(prisma.clone());
+
+    initialize_handlers();
     let server = HttpServer::new(move || {
+        let cors = Cors::permissive() // This allows all origins. Adjust as needed.
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .max_age(3600);
+
         let app = App::new()
             // .route("/health_check", web::get().to(health_check))
             // .route("/hero/actions", web::get().to(hero_actions))routes
             // .app_data(prisma.clone())
             .app_data(app_state.clone())
-            .app_data(task_schedule_service.clone())
+            .wrap(cors)
             .service(create_hero_endpoint)
             .service(explore_region)
             .service(channel_leyline)
+            .service(get_heroes)
+            .service(visible_leylines)
+            .service(active_actions_ws)
+            .service(active_actions)
+            .service(latest_action_handler)
             .service(hero_state);
         // .service(add_leyline);
         app
@@ -100,4 +116,19 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
     .listen(listener)?
     .run();
     Ok(server)
+}
+
+#[get("/all-heroes")]
+async fn get_heroes() -> impl Responder {
+    let heroes = Infra::repo().get_all_heroes().await.unwrap();
+    HttpResponse::Ok().json(heroes)
+}
+
+#[get("/visible-leylines/{id}")]
+async fn visible_leylines(path: Path<String>) -> impl Responder {
+    let leylines = Infra::repo()
+        .leylines_by_discovery(&path.into_inner())
+        .await
+        .unwrap();
+    HttpResponse::Ok().json(leylines)
 }

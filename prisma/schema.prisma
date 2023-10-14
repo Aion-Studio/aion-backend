@@ -11,6 +11,7 @@ generator client {
 
 model Hero {
   id               String            @id @default(uuid())
+  name             String            @default("Default name")
   aionCapacity     Int
   aionCollected    Int
   baseStatsId      String            @unique @map("base_stats_id")
@@ -21,7 +22,6 @@ model Hero {
   inventoryId      String            @unique @map("inventory_id")
   retinueSlots     RetinueSlot[]
   heroRegion       HeroRegion[]
-  exploreAction    ExploreAction[] // Added ExploreAction relation
   actionsCompleted ActionCompleted[]
   resources        HeroResource[]
   stamina          Int               @default(100)
@@ -136,7 +136,6 @@ model Region {
   adjacent_regions String[]
   HeroRegion       HeroRegion[]
   Leylines         Leyline[]
-  ExploreAction    ExploreAction[]
 }
 
 model Leyline {
@@ -150,18 +149,6 @@ model Leyline {
   aion_rate          Float
 }
 
-model ExploreAction {
-  id              String    @id @default(uuid())
-  hero_id         String // Reference to Hero model
-  Hero            Hero      @relation(fields: [hero_id], references: [id]) // Added relation to Hero
-  duration        Int
-  region_name     String // This now refers to the Region model
-  Region          Region    @relation(fields: [region_name], references: [name]) // Added relation to Region
-  xp              Int
-  discovery_level Int
-  start_time      DateTime?
-  stamina_cost    Int
-}
 
 // model ResourceValue {
 //   id                   String             @id @default(uuid())

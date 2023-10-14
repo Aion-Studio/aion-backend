@@ -1,4 +1,4 @@
-use crate::events::game::TaskAction;
+use crate::{events::game::TaskAction, services::traits::async_task::Task};
 use std::sync::Arc;
 use tracing::info;
 
@@ -24,6 +24,8 @@ impl EventHandler for ChannelingHandler {
     fn handle(&self, event: GameEvent) {
         match event {
             GameEvent::Channeling(action) => {
+                action.start_now();
+                println!("0000000000-   action start time {:?}", action.start_time);
                 Infra::tasks().schedule_action(TaskAction::Channel(action.clone()));
                 info!("Scheduled channeling action for hero {:?}", action.hero.id);
             }

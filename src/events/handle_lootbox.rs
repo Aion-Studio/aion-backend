@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::events::game::ActionCompleted;
+use crate::events::game::{ActionCompleted, TaskAction};
 use crate::services::traits::async_task::Task;
 use crate::{
     infra::Infra,
@@ -43,21 +43,18 @@ impl EventHandler for LootBoxHandler {
                         hero.equip_loot(Channel(result));
                         if let Err(e) = Infra::repo()
                             .store_action_completed(ActionCompleted::new(
-                                action.name(),
+                                action.action_name(),
                                 action.hero.get_id(),
                             ))
                             .await
                         {
                             error!("Error storing action completed: {}", e);
-                            eprintln!("Error storing action completed: {}", e);
                         }
                         // update hero in db
                         println!("hero with stats about to be updated {:?}", hero);
                         if let Err(e) = Infra::repo().update_hero(hero).await {
-                            eprintln!("Error updating hero: {}", e);
                             error!("Error updating hero: {}", e);
                         }
-                        println!("db updated for hero");
                     }
                 }
                 GameEvent::ExploreCompleted(action) => {
@@ -68,18 +65,16 @@ impl EventHandler for LootBoxHandler {
                         .await
                     {
                         error!("Error updating hero region discovery level: {}", e);
-                        eprintln!("Error updating hero region discovery level: {}", e);
                     }
                     // Store action completed
                     if let Err(e) = Infra::repo()
                         .store_action_completed(ActionCompleted::new(
-                            action.name(),
+                            action.action_name(),
                             action.hero_id(),
                         ))
                         .await
                     {
                         error!("Error storing action completed: {}", e);
-                        eprintln!("Error storing action completed: {}", e);
                     }
                     let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
                     // update hero stats and inventory
@@ -88,12 +83,11 @@ impl EventHandler for LootBoxHandler {
                     match loot {
                         Ok(loot_box) => hero.equip_loot(loot_box),
                         Err(err) => {
-                            eprintln!("Error equipping loot box: {}", err);
+                            error!("Error equipping loot box: {}", err);
                         }
                     }
                     // update hero in db
                     if let Err(e) = Infra::repo().update_hero(hero).await {
-                        eprintln!("Error updating hero: {}", e);
                         error!("Error updating hero: {}", e);
                     }
                 }
@@ -114,8 +108,9 @@ pub trait LootBoxGenerator {
 // Implement the trait for ExploreAction
 impl GeneratesResources for ExploreAction {
     fn generate_resources(&self) -> HashMap<Resource, i32> {
-        HashMap::new()
-        // Logic to generate resources for ExploreAction
+        let mut loot = HashMap::new();
+        loot.insert(Resource::NexusShard, rand::thread_rng().gen_range(5..20));
+        loot
     }
 }
 

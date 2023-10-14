@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::{
     future::Future,
     pin::Pin,
@@ -5,7 +6,7 @@ use std::{
 };
 use thiserror::Error;
 
-use prisma_client_rust::chrono::{self, Duration};
+use prisma_client_rust::chrono::{self, Duration, Local};
 use tokio::time::sleep;
 use tracing::error;
 use uuid::Uuid;
@@ -19,8 +20,9 @@ pub trait Task: Send + Sync {
     fn check_status(&self) -> TaskStatus;
     fn hero_id(&self) -> String;
     fn task_id(&self) -> Uuid;
-
+    fn start_time(&self) -> Option<chrono::DateTime<chrono::Utc>>;
     fn name(&self) -> String;
+    fn start_now(&self);
 }
 
 pub trait GameAction<'a> {
@@ -45,6 +47,22 @@ impl BaseTask {
             start_time: Arc::new(Mutex::new(None)),
         }
     }
+
+    pub fn get_start_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        let start_time = self.start_time.lock().unwrap();
+        start_time.clone()
+    }
+
+    pub fn get_end_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        let now = chrono::Utc::now();
+        if let TaskStatus::Completed = self.check_status() {
+            return Some(now);
+        }
+        let start_time = self.start_time.lock().unwrap();
+        let start_time = start_time.clone();
+        let time_left = start_time.unwrap() + self.duration;
+        Some(time_left)
+    }
 }
 
 impl Task for BaseTask {
@@ -52,10 +70,6 @@ impl Task for BaseTask {
         let duration = self.duration;
         // Create a new Tokio task
         Box::pin(async move {
-            println!(
-                "Doing action for {} milliseconds...",
-                duration.num_milliseconds()
-            );
             sleep(duration.to_std().unwrap()).await;
             Ok(())
         })
@@ -68,6 +82,20 @@ impl Task for BaseTask {
         } else {
             TaskStatus::Completed
         }
+    }
+
+    fn start_now(&self) {
+        let mut start_time = self.start_time.lock().unwrap();
+        *start_time = Some(chrono::Utc::now());
+        println!(
+            "starting action now at {:?}",
+            start_time.unwrap().with_timezone(&Local)
+        );
+    }
+
+    fn start_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        let start_time = self.start_time.lock().unwrap();
+        start_time.clone()
     }
 
     fn hero_id(&self) -> String {
@@ -83,7 +111,7 @@ impl Task for BaseTask {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TaskStatus {
     InProgress,
     Completed,

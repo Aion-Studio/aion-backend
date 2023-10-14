@@ -91,18 +91,18 @@ impl TryFrom<String> for Environment {
 }
 
 // region name to duration
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExploreDurations(pub HashMap<RegionName, Duration>);
 impl ExploreDurations {
     pub fn get_durations() -> Self {
         let mut durations = HashMap::new();
-        durations.insert(RegionName::Dusane, Duration::seconds(3));
-        durations.insert(RegionName::Buzna, Duration::seconds(3));
+        durations.insert(RegionName::Dusane, Duration::seconds(0));
+        durations.insert(RegionName::Buzna, Duration::seconds(0));
         Self(durations)
     }
 }
 // leyline to duration
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChannelDurations(pub HashMap<String, Duration>);
 impl ChannelDurations {
     pub fn get_durations() -> Self {
@@ -110,13 +110,13 @@ impl ChannelDurations {
 
         let all_leylines = leyline_map();
         for (name, _) in all_leylines.iter() {
-            durations.insert(name.clone(), Duration::seconds(3));
+            durations.insert(name.clone(), Duration::minutes(3));
         }
         Self(durations)
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DurationType {
     Explore(ExploreDurations),
     Channel(ChannelDurations),

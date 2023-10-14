@@ -1,11 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use prisma_client_rust::chrono::{self, Duration};
+use prisma_client_rust::chrono::{self, Duration, DateTime, Local};
 use rand::Rng;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uuid::Uuid;
 
 use crate::configuration::ExploreDurations;
+use crate::events::game::ActionNames;
 use crate::{
     models::{hero::Hero, region::RegionName},
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
@@ -33,11 +34,15 @@ impl Serialize for ExploreAction {
     {
         let mut state = serializer.serialize_struct("ExploreAction", 2)?;
 
-        state.serialize_field("region_name", &self.region_name)?;
+        state.serialize_field("regionName", &self.region_name)?;
+        state.serialize_field("heroId", &self.hero.id)?;
+        state.serialize_field("heroName", &self.hero.name)?;
 
-        let start_time = self.start_time.lock().unwrap();
-        let datetime_str = start_time.map_or_else(|| "".to_string(), |dt| dt.to_rfc3339());
-        state.serialize_field("start_time", &datetime_str)?;
+        let time_left = self.base.get_end_time().unwrap();
+
+        let local_datetime: DateTime<Local> = time_left.with_timezone(&Local);
+        state.serialize_field("endTime", &local_datetime)?;
+
 
         state.end()
     }
@@ -71,6 +76,10 @@ impl ExploreAction {
         })
     }
 
+    pub fn action_name(&self) -> ActionNames {
+        ActionNames::Explore
+    }
+
     pub fn calculate_boost_factor(&self, exploration: i32) -> f64 {
         if exploration <= 10 {
             1.0
@@ -88,11 +97,6 @@ impl ExploreAction {
 
             boost
         }
-    }
-
-    pub fn set_start_time(&self, start_time: chrono::DateTime<chrono::Utc>) {
-        let mut lock = self.start_time.lock().unwrap();
-        *lock = Some(start_time);
     }
 }
 
@@ -117,14 +121,22 @@ impl Task for ExploreAction {
         self.base.check_status()
     }
 
+    fn start_now(&self) {
+        self.base.start_now()
+    }
+
     fn hero_id(&self) -> String {
         self.base.hero_id()
+    }
+
+    fn start_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.base.start_time()
     }
 
     fn task_id(&self) -> Uuid {
         self.base.task_id()
     }
     fn name(&self) -> String {
-        "explore".to_string()
+        ActionNames::Explore.to_string()
     }
 }

@@ -1,2 +1,1 @@
-
-- impl Into<Option<String>> for all str types
+- add a check for allowed action if hero is in progress of an action

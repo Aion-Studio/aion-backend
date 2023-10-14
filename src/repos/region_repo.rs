@@ -1,8 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use prisma_client_rust::{chrono, Direction, QueryError};
-use tracing::warn;
+use tracing::{info, warn};
 
+use crate::events::game::ActionNames;
 use crate::models::hero::{Attributes, BaseStats};
 use crate::{
     events::game::ActionCompleted,
@@ -79,7 +80,7 @@ impl Repo {
                 base_stats::id::equals(base_stats.clone().id),
                 attributes::id::equals(base_attributes.clone().id),
                 inventory::id::equals(base_inventory.clone().id),
-                vec![],
+                vec![hero::name::set(new_hero.name)],
             )
             .with(hero::base_stats::fetch())
             .with(hero::attributes::fetch())
@@ -99,14 +100,7 @@ impl Repo {
             .exec()
             .await?;
 
-        let mut resources = HashMap::new();
-        resources.insert(Resource::Aion, 0);
-        resources.insert(Resource::Valor, 0);
-        resources.insert(Resource::IronOre, 0);
-        resources.insert(Resource::NexusShard, 0);
-        resources.insert(Resource::Oak, 0);
-        resources.insert(Resource::Copper, 0);
-        resources.insert(Resource::Silk, 0);
+        let resources = new_hero.resources.clone();
 
         let _ = self
             .prisma
@@ -270,7 +264,11 @@ impl Repo {
     pub async fn store_action_completed(&self, result: ActionCompleted) -> Result<(), QueryError> {
         self.prisma
             .action_completed()
-            .create(result.action_name, hero::id::equals(result.hero_id), vec![])
+            .create(
+                result.action_name.to_string(),
+                hero::id::equals(result.hero_id),
+                vec![],
+            )
             .exec()
             .await
             .unwrap(); // Implement result storage logic...
@@ -322,6 +320,32 @@ impl Repo {
         })
     }
 
+    pub async fn latest_action_of_type(
+        &self,
+        hero_id: String,
+        action_type: ActionNames,
+    ) -> Result<Option<ActionCompleted>, QueryError> {
+        let result = self
+            .prisma
+            .action_completed()
+            .find_many(vec![
+                action_completed::hero_id::equals(hero_id.to_string()),
+                action_completed::action_name::equals(action_type.to_string()),
+            ])
+            .order_by(action_completed::created_at::order(Direction::Desc))
+            .take(1)
+            .exec()
+            .await;
+
+        match result {
+            Ok(result) => Ok(match result.into_iter().next() {
+                Some(r) => Some(r.into()),
+                None => None,
+            }),
+            Err(e) => Err(e),
+        }
+    }
+
     pub async fn create_hero_region(&self, hero: &Hero) -> Result<HeroRegion, QueryError> {
         //Select a random enum variant from RegionName
         let region_name = RegionName::random();
@@ -337,6 +361,7 @@ impl Repo {
             )
             .exec()
             .await?;
+        println!("inserted hero region");
 
         Ok(hero_region.into())
     }
@@ -434,6 +459,33 @@ impl Repo {
             .await?;
 
         Ok(region.into())
+    }
+
+    pub async fn get_all_heroes(&self) -> Result<Vec<(Hero, hero_region::Data)>, QueryError> {
+        let heroes = self
+            .prisma
+            .hero()
+            .find_many(vec![])
+            .with(hero::base_stats::fetch())
+            .with(hero::attributes::fetch())
+            .with(hero::inventory::fetch())
+            .with(hero::resources::fetch(vec![]))
+            .with(hero::hero_region::fetch(vec![]))
+            .exec()
+            .await?;
+        let result: Vec<(Hero, hero_region::Data)> = heroes
+            .into_iter()
+            .flat_map(|hero_data| {
+                let hero = Hero::from(hero_data.clone());
+                hero_data
+                    .hero_region
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(move |region| (hero.clone(), region))
+            })
+            .collect();
+
+        Ok(result)
     }
 }
 

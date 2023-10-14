@@ -79,7 +79,6 @@ async fn test_generate_result_for_exploration() {
     tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
 
     let hero = Infra::repo().get_hero(hero_id).await.unwrap();
-    println!("Hero stamina new: {:?}", hero.stamina);
     assert!(hero.stamina < 100, "Stamina should be less than 100");
 }
 

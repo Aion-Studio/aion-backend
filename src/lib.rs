@@ -63,6 +63,7 @@ mod services {
 pub mod handlers {
     pub mod heroes;
     pub mod regions;
+    pub mod tasks;
 }
 
 pub mod infra;
@@ -79,7 +80,7 @@ pub fn tracing_subscribe() -> bool {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
     if var("INDEXER_LOG").is_err() {
-        set_var("INDEXER_LOG", "debug");
+        set_var("INDEXER_LOG", "debug,tokio=warn,prisma=info,quaint=info");
     }
 
     println!("Tracing subscriber initialized");

@@ -1,18 +1,21 @@
 use actix_web::web::Path;
 use actix_web::{get, post, HttpResponse, Responder};
+use prisma_client_rust::chrono::{self, Local};
 use prisma_client_rust::serde_json::json;
 use rand::Rng;
 use serde::Serialize;
+use tracing::info;
 
-use crate::events::game::TaskAction;
+use crate::events::game::{ActionCompleted, ActionNames, TaskAction};
 use crate::infra::Infra;
 use crate::models::hero::{Attributes, BaseStats, Hero, Range};
 use crate::models::region::{HeroRegion, Leyline};
+use crate::services::tasks::channel::ChannelingAction;
+use crate::services::traits::async_task::Task;
 
 #[derive(Serialize)]
 struct HeroResponse {
     hero: Hero,
-    region_hero: HeroRegion,
 }
 
 #[post("/heroes")]
@@ -45,15 +48,11 @@ async fn create_hero_endpoint() -> impl Responder {
         0,
     );
 
-    let created_hero = Infra::repo().insert_hero(hero).await.unwrap();
-    let region_hero = Infra::repo().create_hero_region(&created_hero).await;
+    let created_hero = Infra::repo().insert_hero(hero).await;
 
-    match region_hero {
-        Ok(region_hero) => {
-            let hero_and_region = HeroResponse {
-                hero: created_hero,
-                region_hero,
-            };
+    match created_hero {
+        Ok(hero) => {
+            let hero_and_region = HeroResponse { hero };
             HttpResponse::Created().json(hero_and_region)
         }
         Err(e) => return HttpResponse::InternalServerError().json(e.to_string()),
@@ -61,22 +60,41 @@ async fn create_hero_endpoint() -> impl Responder {
 }
 
 #[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct HeroStateResponse {
     hero: Hero,
     region_hero: HeroRegion,
     pub active_task: Option<TaskAction>,
     pub available_leylines: Vec<Leyline>,
+    explore_available: (bool, chrono::DateTime<chrono::Local>),
+    channeling_available: (Vec<Leyline>, chrono::DateTime<chrono::Local>),
 }
 
 #[get("/heroes/{id}")]
 async fn hero_state(path: Path<String>) -> impl Responder {
     let hero_id = path.into_inner();
     let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+    info!("hero state requested....");
     match get_hero_status(hero).await {
         Ok(hero_state) => HttpResponse::Ok().json(hero_state),
         Err(e) => {
             let error_response = json!({
                 "error": "Error grabbing hero state",
+                "details": format!("{}", e)
+            });
+            HttpResponse::BadRequest().json(error_response)
+        }
+    }
+}
+
+#[get("/latest-action/{hero_id}")]
+async fn latest_action_handler(hero_id: Path<String>) -> impl Responder {
+    let hero_id = hero_id.into_inner();
+    match Infra::repo().latest_action_completed(hero_id).await {
+        Ok(action) => HttpResponse::Ok().json(action),
+        Err(e) => {
+            let error_response = json!({
+                "error": "Error grabbing latest action",
                 "details": format!("{}", e)
             });
             HttpResponse::BadRequest().json(error_response)
@@ -98,11 +116,108 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                 .await
                 .unwrap();
 
+            let mut explore_available: Option<(bool, chrono::DateTime<chrono::Local>)> = None;
+
+            let mut currently_channeling: Option<&ChannelingAction> = None;
+
+            let leylines = Infra::repo()
+                .leylines_by_discovery(&hero.get_id())
+                .await
+                .unwrap();
+
+            if let Some(task) = &active_task {
+                if let TaskAction::Explore(..) = task {
+                    explore_available = Some((false, chrono::Utc::now().into()));
+                }
+                if let TaskAction::Channel(action) = task {
+                    currently_channeling = Some(action);
+                }
+            }
+
+            if explore_available.is_none() {
+                explore_available = Some(
+                    match Infra::repo()
+                        .latest_action_of_type(hero.get_id(), ActionNames::Explore)
+                        .await
+                    {
+                        Ok(latest_action) => {
+                            if let Some(action) = latest_action {
+                                let timeout_duration =
+                                    hero.timeout_durations(&action.action_name).await;
+                                let time_until_avialable = ActionCompleted::time_before_available(
+                                    action.created_at.with_timezone(&Local),
+                                    timeout_duration,
+                                );
+                                if let Some(time_until) = time_until_avialable {
+                                    (false, chrono::Utc::now().with_timezone(&Local) + time_until)
+                                } else {
+                                    (true, chrono::Utc::now().with_timezone(&Local))
+                                }
+                            } else {
+                                (true, chrono::Utc::now().with_timezone(&Local))
+                            }
+                        }
+                        Err(e) => {
+                            println!("Error getting latest action: {}", e);
+                            (true, chrono::Utc::now().with_timezone(&Local))
+                        }
+                    },
+                );
+            }
+
+            let explore_available = explore_available.unwrap();
+
+            let latest_channeling = Infra::repo()
+                .latest_action_of_type(hero.get_id(), ActionNames::Channel)
+                .await;
+
+            let channeling_available = {
+                match currently_channeling {
+                    Some(action) => {
+                        let timeout_duration = hero.timeout_durations(&ActionNames::Channel).await;
+                        let start_time = match action.start_time() {
+                            Some(time) => Some(time),
+                            None => None,
+                        };
+                        let time_until_avialable = ActionCompleted::time_before_available(
+                            start_time.unwrap().with_timezone(&Local),
+                            timeout_duration,
+                        );
+                        let now = chrono::Utc::now().with_timezone(&Local);
+                        if let Some(time_until) = time_until_avialable {
+                            (leylines, now + time_until)
+                        } else {
+                            (leylines, chrono::Utc::now().with_timezone(&Local))
+                        }
+                    }
+
+                    None => {
+                        match Infra::repo()
+                            .latest_action_of_type(hero.get_id(), ActionNames::Channel)
+                            .await
+                        {
+                            Ok(latest_action) => match latest_action {
+                                Some(action) => {
+                                    ActionCompleted::channeling_available(&action, &hero).await
+                                }
+                                None => (leylines, chrono::Utc::now().into()),
+                            },
+                            Err(e) => {
+                                println!("Error getting latest action: {}", e);
+                                (vec![], chrono::Utc::now().with_timezone(&Local))
+                            }
+                        }
+                    }
+                }
+            };
+
             Ok(HeroStateResponse {
                 hero,
                 region_hero: current_region,
                 active_task,
                 available_leylines,
+                explore_available,
+                channeling_available,
             })
         }
         Err(err) => Err(err.into()),

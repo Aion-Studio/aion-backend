@@ -1,4 +1,6 @@
-use crate::events::game::TaskAction;
+use tracing::info;
+
+use crate::{events::game::TaskAction, services::traits::async_task::Task};
 use std::sync::Arc;
 
 use crate::infra::Infra;
@@ -24,6 +26,7 @@ impl ExploreHandler {
 impl EventHandler for ExploreHandler {
     fn handle(&self, event: GameEvent) {
         if let GameEvent::HeroExplores(action) = event {
+            action.start_now();
             Infra::tasks().schedule_action(TaskAction::Explore(action));
         }
     }

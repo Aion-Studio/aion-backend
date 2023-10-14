@@ -1,9 +1,14 @@
 use std::collections::HashMap;
 
-use prisma_client_rust::chrono;
+use prisma_client_rust::chrono::{self, Duration};
+use rand::seq::SliceRandom;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use tracing::log::error;
 
+use super::region::RegionName;
 use super::resources::Resource;
+use crate::events::game::{ActionDurations, ActionNames};
 use crate::infra::Infra;
 use crate::{
     events::game::{ActionCompleted, TaskLootBox},
@@ -20,6 +25,7 @@ use anyhow::Result;
 #[serde(rename_all = "camelCase")]
 pub struct Hero {
     pub id: Option<String>,
+    pub name: String,
     pub base_stats: BaseStats,
     pub attributes: Attributes,
     pub inventory: Option<Inventory>,
@@ -42,12 +48,13 @@ impl Hero {
     ) -> Self {
         Self {
             id: None,
+            name: Self::generate_hero_name(),
             base_stats,
             inventory: None,
             attributes,
             retinue_slots: vec![],
             aion_capacity,
-            resources: HashMap::new(),
+            resources: Resource::randomize_amounts(),
             aion_collected,
             stamina: 100,
             stamina_max: 100,
@@ -122,10 +129,30 @@ impl Hero {
                 return leylines.iter().any(|leyline| leyline.name == leyline_name);
             }
             Err(e) => {
-                println!("Error getting leylines: {}", e);
+                error!("Error getting leylines: {}", e);
                 return false;
             }
         }
+    }
+
+    pub async fn get_current_region(&self) -> Result<RegionName> {
+        let hero_regions = Infra::repo()
+            .get_hero_regions(self.get_id().as_ref())
+            .await?;
+        let current_region = hero_regions
+            .into_iter()
+            .find(|hr| hr.current_location == true)
+            .unwrap();
+        Ok(current_region.region_name)
+    }
+
+    pub async fn timeout_durations(&self, action_name: &ActionNames) -> Duration {
+        // let hero = Infra::repo()
+        //     .get_hero(action.hero_id.clone())
+        //     .await
+        //     .unwrap();
+        let timeout_duration = ActionDurations::timeouts(action_name);
+        timeout_duration
     }
     // Add other methods as per your game logic
 }
@@ -168,6 +195,50 @@ impl Hero {
 
     pub fn assign_follower(&mut self, slot: RetinueSlot) {
         self.retinue_slots.push(slot);
+    }
+
+    fn generate_hero_name() -> String {
+        let syllables = [
+            "Ar", "Al", "Bal", "Bel", "Bor", "Bra", "Ca", "Cru", "Da", "Dra", "El", "Fal", "Gor",
+            "Gul", "Hel", "Il", "Ka", "Kru", "Lo", "Ma", "Mor", "Na", "No", "Or", "Ra", "Ro", "Sa",
+            "Sha", "Ta", "Tha", "Ur", "Va", "Vor", "Za", "Zo",
+        ];
+
+        let titles = [
+            "the Brave",
+            "the Wise",
+            "the Mighty",
+            "the Dark",
+            "the Lightbringer",
+            "the Elder",
+            "the Young",
+            "the Swift",
+            "the Stout",
+            "the Fierce",
+            "the Patient",
+            "the Unyielding",
+            "the Wanderer",
+            "the Exiled",
+            "the Slayer",
+        ];
+
+        let mut rng = thread_rng();
+        let name_length = rng.gen_range(2..=3); // Decide if the name will have 2 or 3 syllables
+
+        let mut name = String::new();
+        for _ in 0..name_length {
+            let syllable = syllables.choose(&mut rng).unwrap();
+            name.push_str(syllable);
+        }
+
+        // Occasionally append a title
+        if rng.gen_bool(0.3) {
+            // 30% chance to append a title
+            let title = titles.choose(&mut rng).unwrap();
+            name = format!("{} {}", name, title);
+        }
+
+        name
     }
 }
 
@@ -271,6 +342,7 @@ impl From<hero::Data> for Hero {
 
         Self {
             id: Some(data.id),
+            name: data.name,
             base_stats,
             attributes,
             inventory: Some(inventory),
