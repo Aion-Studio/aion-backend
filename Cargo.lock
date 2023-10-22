@@ -373,6 +373,7 @@ dependencies = [
  "derive_more",
  "flume",
  "fruently",
+ "futures",
  "lazy_static",
  "once_cell",
  "prisma-client-rust",

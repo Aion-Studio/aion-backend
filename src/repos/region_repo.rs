@@ -1,10 +1,16 @@
+use std::any::Any;
 use std::{collections::HashMap, sync::Arc};
 
+use futures::future::join_all;
 use prisma_client_rust::{chrono, Direction, QueryError};
-use tracing::{info, warn};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tokio::try_join;
+use tracing::{error, info, warn};
 
-use crate::events::game::ActionNames;
+use crate::events::game::{ActionNames, TaskLootBox};
 use crate::models::hero::{Attributes, BaseStats};
+use crate::prisma::{resource_type, ResourceEnum};
 use crate::{
     events::game::ActionCompleted,
     models::{
@@ -17,7 +23,7 @@ use crate::{
         hero_region::{self, current_location, hero_id},
         hero_resource, inventory, leyline,
         region::{self, adjacent_regions},
-        PrismaClient, ResourceType,
+        PrismaClient,
     },
     types::RepoFuture,
 };
@@ -99,29 +105,6 @@ impl Repo {
             )
             .exec()
             .await?;
-
-        let resources = new_hero.resources.clone();
-
-        let _ = self
-            .prisma
-            .hero_resource()
-            .create_many(
-                resources
-                    .iter()
-                    .map(|(resource, amount)| {
-                        hero_resource::create_unchecked(
-                            hero.get_id(),
-                            resource.into(),
-                            *amount,
-                            vec![],
-                        )
-                    })
-                    .collect(),
-            )
-            .exec()
-            .await
-            .unwrap();
-
         let hero = self.hero_by_id(hero.get_id()).await.unwrap();
         Ok(hero)
     }
@@ -187,7 +170,7 @@ impl Repo {
     pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
         self.update_base_stats(&hero.base_stats).await?;
         self.update_attributes(&hero.attributes).await?;
-        self.update_hero_resources(&hero.resources, &hero.get_id())
+        self.update_hero_resources(&hero.resources, String::from(&hero.get_id()))
             .await?;
 
         let updated_hero = self
@@ -219,20 +202,33 @@ impl Repo {
     pub async fn update_hero_resources(
         &self,
         resources: &HashMap<Resource, i32>,
-        hero_id: &str,
+        hero_id: String,
     ) -> Result<(), QueryError> {
-        for (resource, amount) in resources {
-            self.prisma
-                .hero_resource()
-                .update_many(
-                    vec![
-                        hero_resource::hero_id::equals(hero_id.to_string()),
-                        hero_resource::resource::equals(resource.into()),
-                    ],
-                    resources_update_params((resource.clone(), *amount)),
-                )
-                .exec()
-                .await?;
+        let resource_creation_tasks: Vec<_> = resources
+            .iter()
+            .map(|(resource, amount)| {
+                let resource_enum = ResourceEnum::from(resource.clone());
+                self.prisma
+                    .hero_resource()
+                    .create(
+                        hero::id::equals(hero_id.clone()),
+                        resource_type::r#type::equals(resource_enum),
+                        *amount,
+                        vec![],
+                    )
+                    .exec()
+            })
+            .collect();
+        let res = join_all(resource_creation_tasks).await;
+        // iterate through and check if all have no errors
+        for result in res {
+            match result {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Error creating hero resource: {}", e);
+                    return Err(e);
+                }
+            }
         }
         Ok(())
     }
@@ -262,12 +258,38 @@ impl Repo {
     }
 
     pub async fn store_action_completed(&self, result: ActionCompleted) -> Result<(), QueryError> {
+        //TODO: check lootbox created time
+        let loot_box = match result.loot_box {
+            // actionName key to lb value
+            Some(lb) => match lb {
+                TaskLootBox::Region(result) => {
+                    json!({
+                        "actionName": "Explore",
+                        "result": result
+                    })
+                }
+                TaskLootBox::Channel(result) => {
+                    json!({
+                        "actionName": "Channel",
+                        "result": result
+                    })
+                }
+            },
+            None => json!({}),
+        };
+
+        info!("loot box should be set {:?}", loot_box);
+        let now = chrono::Utc::now().into();
+
         self.prisma
             .action_completed()
             .create(
                 result.action_name.to_string(),
                 hero::id::equals(result.hero_id),
-                vec![],
+                vec![
+                    action_completed::loot_box::set(loot_box),
+                    action_completed::created_at::set(now),
+                ],
             )
             .exec()
             .await
@@ -318,6 +340,73 @@ impl Repo {
             Some(r) => Some(r.into()),
             None => None,
         })
+    }
+
+    pub async fn completed_actions(
+        &self,
+        take: i64,
+        skip: i64,
+    ) -> Result<Vec<ActionCompleted>, QueryError> {
+        // let data: Result<Vec<action_completed::Data>, QueryError> = self
+        //     .prisma
+        //     ._query_raw(raw!(
+        //         r#"
+        //     SELECT
+        //         ac.id,
+        //         ac.action_name AS "actionName",
+        //         ac.hero_id as "heroId",
+        //         ac.updated_at AS "updatedAt",
+        //         ac.created_at AS "createdAt",
+        //         ac."lootBox" as "lootBox",
+        //         h.id as "hero.id",
+        //         h.name as "hero.name",
+        //         h.aionCapacity as "hero.aionCapacity",
+        //         h.aionCollected as "hero.aionCollected",
+        //         h.baseStatsId as "hero.baseStatsId",
+        //         h.attributesId as "hero.attributesId",
+        //         h.inventoryId as "hero.inventoryId",
+        //         h.stamina as "hero.stamina",
+        //         h.staminaMax as "hero.staminaMax",
+        //         h.staminaRegenRate as "hero.staminaRegenRate"
+        //     FROM
+        //         "ActionCompleted" ac
+        //     JOIN
+        //         "Hero" h ON ac.hero_id = h.id
+        //     WHERE
+        //         ac."lootBox"::text != $1
+        //     ORDER BY
+        //         ac.created_at DESC
+        //     LIMIT $2 OFFSET $3
+        //     "#,
+        //         PrismaValue::Json("{}".to_string()),
+        //         PrismaValue::Int(take),
+        //         PrismaValue::Int(skip)
+        //     ))
+        //     .exec()
+        //     .await;
+        let data: Result<Vec<action_completed::Data>, QueryError> = self
+            .prisma
+            .action_completed()
+            .find_many(vec![action_completed::loot_box::not(json!({}))])
+            .order_by(action_completed::created_at::order(Direction::Desc))
+            .take(take)
+            .skip(skip)
+            .with(
+                action_completed::hero::fetch()
+                    .with(hero::base_stats::fetch())
+                    .with(hero::attributes::fetch())
+                    .with(hero::inventory::fetch())
+                    .with(hero::resources::fetch(vec![])),
+            )
+            .exec()
+            .await;
+        match data {
+            Ok(data) => Ok(data.into_iter().map(ActionCompleted::from).collect()),
+            Err(e) => {
+                error!("Error getting completed actions: {}", e);
+                Err(e)
+            }
+        }
     }
 
     pub async fn latest_action_of_type(
@@ -513,42 +602,10 @@ fn base_stats_update_params(base_stats: &BaseStats) -> Vec<base_stats::SetParam>
     ]
 }
 
-fn resources_update_params(resources: (Resource, i32)) -> Vec<hero_resource::SetParam> {
-    let mut params = vec![];
-    let res_type = &resources.0;
-    params.push(hero_resource::amount::set(resources.1));
-    params.push(hero_resource::resource::set(res_type.into()));
-    params
-}
-
-impl<'a> From<&'a Resource> for ResourceType {
-    fn from(resource: &'a Resource) -> Self {
-        match resource {
-            Resource::Aion => ResourceType::Aion,
-            Resource::Valor => ResourceType::Valor,
-            Resource::IronOre => ResourceType::IronOre,
-            Resource::NexusShard => ResourceType::NexusShard,
-            Resource::Oak => ResourceType::Oak,
-            Resource::Copper => ResourceType::Copper,
-            Resource::Silk => ResourceType::Silk,
-        }
-    }
-}
-
 impl From<hero_resource::Data> for (Resource, i32) {
     fn from(data: hero_resource::Data) -> Self {
-        (
-            match data.resource {
-                ResourceType::Aion => Resource::Aion,
-                ResourceType::Valor => Resource::Valor,
-                ResourceType::IronOre => Resource::IronOre,
-                ResourceType::NexusShard => Resource::NexusShard,
-                ResourceType::Oak => Resource::Oak,
-                ResourceType::Copper => Resource::Copper,
-                ResourceType::Silk => Resource::Silk,
-            },
-            data.amount,
-        )
+        let amount = data.amount;
+        (Resource::from(data), amount)
     }
 }
 
@@ -617,4 +674,14 @@ impl From<leyline::Data> for Leyline {
             aion_rate: data.aion_rate,
         }
     }
+}
+
+#[derive(Deserialize, Serialize)]
+struct ReturnTypeActionCompleted {
+    id: String,
+    action_name: String,
+    hero_id: String,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    loot_box: serde_json::Value,
 }

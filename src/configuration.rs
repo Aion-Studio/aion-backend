@@ -110,7 +110,7 @@ impl ChannelDurations {
 
         let all_leylines = leyline_map();
         for (name, _) in all_leylines.iter() {
-            durations.insert(name.clone(), Duration::minutes(3));
+            durations.insert(name.clone(), Duration::seconds(10));
         }
         Self(durations)
     }

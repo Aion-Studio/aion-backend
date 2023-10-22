@@ -30,20 +30,23 @@ model Hero {
 }
 
 model HeroResource {
-  id       String       @id @default(uuid())
-  heroId   String       @map("hero_id")
-  hero     Hero         @relation(fields: [heroId], references: [id])
-  resource ResourceType
-  amount   Int
+  id             String       @id @default(uuid())
+  heroId         String       @map("hero_id")
+  hero           Hero         @relation(fields: [heroId], references: [id])
+  resource       ResourceType @relation(fields: [resourceTypeId], references: [id])
+  amount         Int
+  resourceTypeId String  @map("resource_type_id")
 }
 
 model ActionCompleted {
-  id         String   @id @default(uuid())
-  actionName String   @map("action_name")
-  heroId     String   @map("hero_id")
-  hero       Hero     @relation(fields: [heroId], references: [id])
-  updatedAt  DateTime @default(now()) @map("updated_at")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  actionName  String   @map("action_name")
+  heroId      String   @map("hero_id")
+  hero        Hero     @relation(fields: [heroId], references: [id])
+  updatedAt   DateTime @default(now()) @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  completedAt DateTime @default(now()) @map("completed_at")
+  lootBox     Json     @default("{}") // This is the new JSON field
 }
 
 model HeroRegion {
@@ -97,6 +100,7 @@ model Inventory {
   backpack Item[] @relation("backpack")
   hero     Hero?
 }
+
 model RetinueSlot {
   id         String    @id @default(uuid())
   slotType   String
@@ -115,24 +119,84 @@ model Follower {
   RetinueSlot  RetinueSlot[]
 }
 
-enum ResourceType {
+model ResourceType {
+  id             String         @id @default(uuid())
+  type           ResourceEnum
+  materialType   MaterialType?  @relation(fields: [materialTypeId], references: [id])
+  materialTypeId String?        @unique
+  HeroResource   HeroResource[]
+  @@unique([type])
+}
+
+enum ResourceEnum {
   Aion
   Valor
   NexusShard
-  Oak
+  Material
+}
+
+model MaterialType {
+  id           String        @id @default(uuid())
+  type         MaterialEnum
+  common       Common?       @relation(fields: [commonId], references: [id])
+  commonId     String?       @unique
+  rare         Rare?         @relation(fields: [rareId], references: [id])
+  rareId       String?       @unique
+  epic         Epic?         @relation(fields: [epicId], references: [id])
+  epicId       String?       @unique
+  resourceType ResourceType?
+}
+
+model Common {
+  id           String        @id @default(uuid())
+  type         CommonEnum @unique
+  materialType MaterialType?
+}
+
+model Rare {
+  id           String        @id @default(uuid())
+  type         RareEnum
+  materialType MaterialType?
+}
+
+model Epic {
+  id           String        @id @default(uuid())
+  type         EpicEnum
+  materialType MaterialType?
+}
+
+enum MaterialEnum {
+  Common
+  Rare
+  Epic
+}
+
+enum CommonEnum {
   IronOre
-  Copper
-  Silk
+  RoughLeather
+  Quartz
+}
+
+enum RareEnum {
+  SilverOre
+  FineLeather
+  Sapphire
+}
+
+enum EpicEnum {
+  MythrilOre
+  Dragonhide
+  Ruby
 }
 
 model ResourceCost {
   id       String       @id @default(uuid())
-  resource ResourceType
+  resource ResourceEnum
   amount   Int
 }
 
 model Region {
-  name             String          @id
+  name             String       @id
   adjacent_regions String[]
   HeroRegion       HeroRegion[]
   Leylines         Leyline[]
@@ -148,7 +212,6 @@ model Leyline {
   stamina_rate       Float
   aion_rate          Float
 }
-
 
 // model ResourceValue {
 //   id                   String             @id @default(uuid())

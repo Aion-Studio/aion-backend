@@ -28,10 +28,8 @@ pub async fn explore_region(path: Path<String>, app: Data<AppState>) -> impl Res
     let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
 
     let active_tasks = Infra::tasks().get_current_task(hero_id.as_ref());
-    println!("check active tasks {:?}", active_tasks);
 
     if let Some(task) = active_tasks {
-        println!("aaaaaaaaaaaaaaaaa {:?}", task);
         if let TaskAction::Explore(..) = task {
             return HttpResponse::Forbidden().json(ExploreResponse {
                 message: "Already exploring".to_string(),

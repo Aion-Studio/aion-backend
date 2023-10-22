@@ -1,6 +1,6 @@
 use crate::configuration::{get_durations, DurationType, Settings};
 use crate::events::initialize::initialize_handlers;
-use crate::handlers::heroes::{create_hero_endpoint, hero_state,  latest_action_handler};
+use crate::handlers::heroes::{create_hero_endpoint, hero_state,  latest_action_handler, completed_actions};
 use crate::handlers::regions::{channel_leyline, explore_region};
 use crate::handlers::tasks::{active_actions, active_actions_ws, MyWebSocket};
 use crate::infra::Infra;
@@ -109,7 +109,8 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             .service(active_actions_ws)
             .service(active_actions)
             .service(latest_action_handler)
-            .service(hero_state);
+            .service(hero_state)
+            .service(completed_actions);
         // .service(add_leyline);
         app
     })

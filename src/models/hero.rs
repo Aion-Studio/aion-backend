@@ -7,17 +7,18 @@ use serde::{Deserialize, Serialize};
 use tracing::log::error;
 
 use super::region::RegionName;
-use super::resources::Resource;
+use super::resources::{MaterialType, Resource};
 use crate::events::game::{ActionDurations, ActionNames};
 use crate::infra::Infra;
+use crate::prisma::{resource_type, MaterialEnum, ResourceEnum};
 use crate::{
     events::game::{ActionCompleted, TaskLootBox},
     prisma::{
         attributes, base_stats, follower, hero, hero_resource, inventory, item, retinue_slot,
-        ResourceType,
     },
 };
 use anyhow::Result;
+use prisma_client_rust::RelationNotFetchedError;
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -147,14 +148,75 @@ impl Hero {
     }
 
     pub async fn timeout_durations(&self, action_name: &ActionNames) -> Duration {
-        // let hero = Infra::repo()
-        //     .get_hero(action.hero_id.clone())
-        //     .await
-        //     .unwrap();
         let timeout_duration = ActionDurations::timeouts(action_name);
         timeout_duration
     }
-    // Add other methods as per your game logic
+
+    pub fn level_calculator(xp: i32) -> i32 {
+        let levels_1_10: [i32; 10] = [0, 200, 700, 1600, 3000, 5000, 7700, 10500, 13800, 17600];
+
+        let levels_10_20_increase = 1500;
+        let mut cumulative_xp = levels_1_10[9];
+        let mut levels_10_20: [i32; 10] = [0; 10];
+        for i in 0..10 {
+            cumulative_xp += levels_10_20_increase;
+            levels_10_20[i] = cumulative_xp;
+        }
+
+        let levels_20_30_increase = 2500;
+        let mut levels_20_30: [i32; 10] = [0; 10];
+        for i in 0..10 {
+            cumulative_xp += levels_20_30_increase;
+            levels_20_30[i] = cumulative_xp;
+        }
+
+        let levels_30_40_increase = 5000;
+        let mut levels_30_40: [i32; 10] = [0; 10];
+        for i in 0..10 {
+            cumulative_xp += levels_30_40_increase;
+            levels_30_40[i] = cumulative_xp;
+        }
+
+        let levels_40_50_increase = 10000;
+        let mut levels_40_50: [i32; 10] = [0; 10];
+        for i in 0..10 {
+            cumulative_xp += levels_40_50_increase;
+            levels_40_50[i] = cumulative_xp;
+        }
+
+        let levels_50_60: [i32; 10] = [
+            cumulative_xp + 250000,
+            cumulative_xp + 600000,
+            cumulative_xp + 1050000,
+            cumulative_xp + 1600000,
+            cumulative_xp + 2250000,
+            cumulative_xp + 3000000,
+            cumulative_xp + 3850000,
+            cumulative_xp + 4800000,
+            cumulative_xp + 5850000,
+            cumulative_xp + 7050000,
+        ];
+
+        let level_thresholds: [i32; 60] = [
+            levels_1_10,
+            levels_10_20,
+            levels_20_30,
+            levels_30_40,
+            levels_40_50,
+            levels_50_60,
+        ]
+        .concat()
+        .try_into()
+        .unwrap();
+
+        for (level, &threshold) in level_thresholds.iter().enumerate() {
+            if xp < threshold {
+                return level as i32;
+            }
+        }
+
+        60 // If XP is beyond the last threshold, return 60}
+    }
 }
 
 impl Hero {
@@ -361,7 +423,7 @@ impl From<base_stats::Data> for BaseStats {
     fn from(data: base_stats::Data) -> Self {
         Self {
             id: Some(data.id),
-            level: data.level,
+            level: Hero::level_calculator(data.xp),
             xp: data.xp,
             damage: Range {
                 min: data.damage_min,
@@ -458,14 +520,64 @@ impl From<retinue_slot::Data> for RetinueSlot {
 
 impl From<hero_resource::Data> for Resource {
     fn from(data: hero_resource::Data) -> Self {
-        match data.resource {
-            ResourceType::Aion => Resource::Aion,
-            ResourceType::Valor => Resource::Valor,
-            ResourceType::NexusShard => Resource::NexusShard,
-            ResourceType::Oak => Resource::Oak,
-            ResourceType::IronOre => Resource::IronOre,
-            ResourceType::Copper => Resource::Copper,
-            ResourceType::Silk => Resource::Silk,
+        if let Some(resource_data) = data.resource {
+            match resource_data.r#type {
+                ResourceEnum::Aion => Resource::Aion,
+                ResourceEnum::Valor => Resource::Valor,
+                ResourceEnum::NexusShard => Resource::NexusShard,
+                ResourceEnum::Material => {
+                    if let Some(Some(material_data)) = resource_data.material_type {
+                        match material_data.r#type {
+                            MaterialEnum::Common => material_data
+                                .common()
+                                .and_then(|c| {
+                                    c.map(|common| common.r#type).ok_or_else(|| {
+                                        RelationNotFetchedError::new("Common type not found")
+                                    })
+                                })
+                                .map(|common_enum| {
+                                    Resource::Material(MaterialType::Common(common_enum.into()))
+                                })
+                                .unwrap_or_else(|e| {
+                                    error!("Error getting common material type: {}", e);
+                                    panic!("Error getting common material type");
+                                }),
+                            MaterialEnum::Rare => material_data
+                                .rare()
+                                .and_then(|r| {
+                                    r.map(|rare| rare.r#type).ok_or_else(|| {
+                                        RelationNotFetchedError::new("Rare type not found")
+                                    })
+                                })
+                                .map(|rare_enum| {
+                                    Resource::Material(MaterialType::Rare(rare_enum.into()))
+                                })
+                                .unwrap_or_else(|e| {
+                                    error!("Error getting rare material type: {}", e);
+                                    panic!("Error getting rare material type");
+                                }),
+                            MaterialEnum::Epic => material_data
+                                .epic()
+                                .and_then(|e| {
+                                    e.map(|epic| epic.r#type).ok_or_else(|| {
+                                        RelationNotFetchedError::new("Epic type not found")
+                                    })
+                                })
+                                .map(|epic_enum| {
+                                    Resource::Material(MaterialType::Epic(epic_enum.into()))
+                                })
+                                .unwrap_or_else(|e| {
+                                    error!("Error getting epic material type: {}", e);
+                                    panic!("Error getting epic material type");
+                                }),
+                        }
+                    } else {
+                        panic!("Invalid material type!")
+                    }
+                }
+            }
+        } else {
+            panic!("Invalid resource type!")
         }
     }
 }

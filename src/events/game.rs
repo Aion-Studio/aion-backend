@@ -1,4 +1,4 @@
-use prisma_client_rust::chrono::{self, Duration, Local};
+use prisma_client_rust::chrono::{self, Duration, Local, Utc};
 use std::collections::HashMap;
 use tracing::info;
 use tracing::log::warn;
@@ -87,7 +87,7 @@ impl TaskAction {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaskLootBox {
     Region(ExploreResult),
     Channel(ChannelResult),
@@ -112,16 +112,36 @@ impl TaskLootBox {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+pub fn from_json_to_loot_box(value: serde_json::Value) -> Option<TaskLootBox> {
+    let mut map = value.as_object()?.clone();
+
+    info!("converting data to loot box {:?}", map);
+    let action_name = map.get("actionName")?.as_str()?;
+    match action_name {
+        "Explore" => {
+            let result = map.remove("result")?;
+            let result: ExploreResult = serde_json::from_value(result).ok()?;
+            Some(TaskLootBox::Region(result))
+        }
+        "Channel" => {
+            let result = map.remove("result")?;
+            let result: ChannelResult = serde_json::from_value(result).ok()?;
+            Some(TaskLootBox::Channel(result))
+        }
+        _ => None,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct ChannelResult {
     pub hero_id: String,
     pub resources: HashMap<Resource, i32>,
     pub xp: i32,
-    pub created_time: Option<DateTime<FixedOffset>>,
+    pub created_time: Option<DateTime<Utc>>,
     pub stamina_gained: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ExploreResult {
     pub hero_id: String,
     pub resources: HashMap<Resource, i32>,
@@ -130,7 +150,7 @@ pub struct ExploreResult {
     pub created_time: Option<DateTime<FixedOffset>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActionCompleted {
     pub id: String,
     #[serde(rename = "actionName")]
@@ -143,10 +163,14 @@ pub struct ActionCompleted {
     pub updated_at: DateTime<FixedOffset>,
     #[serde(rename = "createdAt")]
     pub created_at: DateTime<FixedOffset>,
+    #[serde(rename = "completedAt")]
+    pub completed_at: DateTime<FixedOffset>,
+    #[serde(rename = "lootBox")]
+    pub loot_box: Option<TaskLootBox>, // This is the new field
 }
 
 impl ActionCompleted {
-    pub fn new(action_name: ActionNames, hero_id: String) -> Self {
+    pub fn new(action_name: ActionNames, hero_id: String, loot_box: TaskLootBox) -> Self {
         let date = chrono::offset::Utc::now().into();
         ActionCompleted {
             id: uuid::Uuid::new_v4().to_string(),
@@ -155,6 +179,8 @@ impl ActionCompleted {
             hero: None,
             updated_at: date,
             created_at: date,
+            completed_at: date,
+            loot_box: Some(loot_box),
         }
     }
 
@@ -212,16 +238,6 @@ impl ActionCompleted {
         } else {
             (leylines, chrono::Utc::now().with_timezone(&Local).into())
         }
-        // get a diff of time in ms of updated_at + timeout - now, convert all dates to ms first
-        // then do diff
-        //
-        // let diff = self.created_at + timeout - now;
-        //
-        // if diff > 0 {
-        //     (leylines, (chrono::Utc::now().into()))
-        // } else {
-        //     (vec![], (self.updated_at + timeout).into())
-        // }
     }
 }
 
@@ -231,9 +247,13 @@ impl From<action_completed::Data> for ActionCompleted {
             id: action_completed.id,
             action_name: ActionNames::from_string(&action_completed.action_name),
             hero_id: action_completed.hero_id,
-            hero: None,
+            hero: action_completed
+                .hero
+                .map(|hero_data_box| Hero::from(*hero_data_box)), // Convert the hero data
             updated_at: action_completed.updated_at,
             created_at: action_completed.created_at,
+            completed_at: action_completed.completed_at,
+            loot_box: from_json_to_loot_box(action_completed.loot_box),
         }
     }
 }

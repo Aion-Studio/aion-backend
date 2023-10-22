@@ -1,9 +1,10 @@
-use actix_web::web::Path;
+use actix_web::web::{Path, Query};
 use actix_web::{get, post, HttpResponse, Responder};
 use prisma_client_rust::chrono::{self, Local};
 use prisma_client_rust::serde_json::json;
 use rand::Rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use tokio::join;
 use tracing::info;
 
 use crate::events::game::{ActionCompleted, ActionNames, TaskAction};
@@ -80,6 +81,30 @@ async fn hero_state(path: Path<String>) -> impl Responder {
         Err(e) => {
             let error_response = json!({
                 "error": "Error grabbing hero state",
+                "details": format!("{}", e)
+            });
+            HttpResponse::BadRequest().json(error_response)
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct PaginationQuery {
+    take: Option<usize>,
+    skip: Option<usize>,
+}
+
+#[get("/completed-actions")]
+async fn completed_actions(pagination: Query<PaginationQuery>) -> impl Responder {
+    let take = pagination.take.unwrap_or(10) as i64; // Default to 10 if not provided
+    let skip = pagination.skip.unwrap_or(0) as i64;
+    let actions = Infra::repo().completed_actions(take, skip).await;
+
+    match actions {
+        Ok(actions) => HttpResponse::Ok().json(actions),
+        Err(e) => {
+            let error_response = json!({
+                "error": "Error grabbing completed actions",
                 "details": format!("{}", e)
             });
             HttpResponse::BadRequest().json(error_response)
@@ -166,10 +191,6 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
             }
 
             let explore_available = explore_available.unwrap();
-
-            let latest_channeling = Infra::repo()
-                .latest_action_of_type(hero.get_id(), ActionNames::Channel)
-                .await;
 
             let channeling_available = {
                 match currently_channeling {
