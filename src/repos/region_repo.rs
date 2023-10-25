@@ -1,15 +1,16 @@
-use std::any::Any;
 use std::{collections::HashMap, sync::Arc};
 
 use futures::future::join_all;
+use prisma_client_rust::dml::IndexAlgorithm::Hash;
 use prisma_client_rust::{chrono, Direction, QueryError};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use tokio::try_join;
+use serde_json::{json, to_value};
 use tracing::{error, info, warn};
 
 use crate::events::game::{ActionNames, TaskLootBox};
 use crate::models::hero::{Attributes, BaseStats};
+use crate::models::resources::Common::Quartz;
+use crate::models::resources::MaterialType;
 use crate::prisma::{resource_type, ResourceEnum};
 use crate::{
     events::game::ActionCompleted,
@@ -275,10 +276,14 @@ impl Repo {
                     })
                 }
             },
-            None => json!({}),
+            None => {
+                info!("NONEEEEEEEE");
+                json!({})
+            }
         };
+        println!("wwwwwwwwwwwwwwwwwwwwwwwwww");
 
-        info!("loot box should be set {:?}", loot_box);
+        info!("\n loot box should be set {:?} \n", loot_box);
         let now = chrono::Utc::now().into();
 
         self.prisma
@@ -387,7 +392,7 @@ impl Repo {
         let data: Result<Vec<action_completed::Data>, QueryError> = self
             .prisma
             .action_completed()
-            .find_many(vec![action_completed::loot_box::not(json!({}))])
+            .find_many(vec![])
             .order_by(action_completed::created_at::order(Direction::Desc))
             .take(take)
             .skip(skip)

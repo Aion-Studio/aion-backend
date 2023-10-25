@@ -63,6 +63,10 @@ impl Hero {
         }
     }
 
+    pub fn level(&self) -> i32 {
+        self.base_stats.level
+    }
+
     pub fn regenerate_stamina(&mut self, res: &ActionCompleted) {
         // set the self.stamina to number of seconds since last regionactionresult.created time and now
         // multiplied by self.stamina_regen_rate

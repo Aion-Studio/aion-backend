@@ -190,6 +190,17 @@ pub enum RegionName {
 }
 
 impl RegionName {
+    pub fn max_discovery(&self) -> f64 {
+        match self {
+            RegionName::Dusane => 150.0,
+            RegionName::Yezer => 178.0,
+            RegionName::Emerlad => 110.0,
+            RegionName::Forest => 243.0,
+            RegionName::Buzna => 341.0,
+            RegionName::Veladria => 287.0,
+            RegionName::Lindon => 412.0,
+        }
+    }
     // random() returns a random variant of RegionName
     pub(crate) fn random() -> Self {
         use rand::Rng;

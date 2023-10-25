@@ -1,12 +1,14 @@
+use std::hint::unreachable_unchecked;
 use std::sync::{Arc, Mutex};
 
-use prisma_client_rust::chrono::{self, Duration, DateTime, Local};
+use prisma_client_rust::chrono::{self, DateTime, Duration, Local};
 use rand::Rng;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uuid::Uuid;
 
 use crate::configuration::ExploreDurations;
 use crate::events::game::ActionNames;
+use crate::models::resources::MaterialType;
 use crate::{
     models::{hero::Hero, region::RegionName},
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
@@ -43,7 +45,6 @@ impl Serialize for ExploreAction {
         let local_datetime: DateTime<Local> = time_left.with_timezone(&Local);
         state.serialize_field("endTime", &local_datetime)?;
 
-
         state.end()
     }
 }
@@ -74,6 +75,14 @@ impl ExploreAction {
             xp: rand::thread_rng().gen_range(15..30),
             stamina_cost,
         })
+    }
+    pub fn get_material_reward(&self, discovery_lvl: f64) -> MaterialType {
+        match self.hero.base_stats.level {
+            1..=10 => MaterialType::get_common_rng(),
+            11..=30 => MaterialType::get_maybe_rare(&self.hero, &self, discovery_lvl),
+            31..=60 => MaterialType::get_maybe_epic(&self.hero, &self, discovery_lvl),
+            _ => unreachable!(),
+        }
     }
 
     pub fn action_name(&self) -> ActionNames {

@@ -9,7 +9,8 @@ use crate::models::region::Leyline;
 use crate::models::resources::Resource;
 use crate::prisma::action_completed;
 use prisma_client_rust::chrono::{DateTime, FixedOffset};
-use serde::{Deserialize, Serialize};
+use serde::ser::{SerializeMap, SerializeSeq};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::services::tasks::channel::ChannelingAction;
 use crate::services::tasks::explore::ExploreAction;
@@ -116,11 +117,21 @@ pub fn from_json_to_loot_box(value: serde_json::Value) -> Option<TaskLootBox> {
     let mut map = value.as_object()?.clone();
 
     info!("converting data to loot box {:?}", map);
+
     let action_name = map.get("actionName")?.as_str()?;
     match action_name {
         "Explore" => {
             let result = map.remove("result")?;
-            let result: ExploreResult = serde_json::from_value(result).ok()?;
+            println!("---result {:?}", result);
+            let result: ExploreResult = match serde_json::from_value(result.clone()) {
+                Ok(explore_result) => explore_result,
+                Err(e) => {
+                    println!("error deserializing explore result: {} \n {:?}", e, result);
+                    return None;
+                }
+            };
+
+            println!("--- after result {:?}", result);
             Some(TaskLootBox::Region(result))
         }
         "Channel" => {
@@ -144,6 +155,10 @@ pub struct ChannelResult {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ExploreResult {
     pub hero_id: String,
+    #[serde(
+        serialize_with = "serialize_resource_map",
+        deserialize_with = "deserialize_resource_map"
+    )]
     pub resources: HashMap<Resource, i32>,
     pub xp: i32,
     pub discovery_level_increase: f64,
@@ -167,6 +182,41 @@ pub struct ActionCompleted {
     pub completed_at: DateTime<FixedOffset>,
     #[serde(rename = "lootBox")]
     pub loot_box: Option<TaskLootBox>, // This is the new field
+}
+
+fn serialize_resource_map<S>(map: &HashMap<Resource, i32>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut seq = serializer.serialize_seq(Some(map.len()))?;
+    for (key, value) in map {
+        let entry = ResourceMapEntry {
+            resource: key.clone(),
+            amount: *value,
+        };
+        seq.serialize_element(&entry)?;
+    }
+    seq.end()
+}
+
+fn deserialize_resource_map<'de, D>(deserializer: D) -> Result<HashMap<Resource, i32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let vec = Vec::<ResourceMapEntry>::deserialize(deserializer)?;
+
+    let mut map = HashMap::new();
+    for entry in vec {
+        map.insert(entry.resource.clone(), entry.amount.clone());
+    }
+
+    Ok(map)
+}
+
+#[derive(Serialize, Deserialize)]
+struct ResourceMapEntry {
+    resource: Resource,
+    amount: i32,
 }
 
 impl ActionCompleted {
