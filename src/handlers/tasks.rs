@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
@@ -47,7 +47,7 @@ impl Actor for MyWebSocket {
         self.send_new_tasks(ctx);
     }
 
-    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+    fn stopping(&mut self, _: &mut Self::Context) -> Running {
         // Clear the address from AppState.
         *WS_ADDR.lock().unwrap() = None;
         Running::Stop
@@ -72,7 +72,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWebSocket {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match msg {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
-            Ok(ws::Message::Text(text)) => {
+            Ok(ws::Message::Text(_)) => {
                 // Handle incoming text messages if needed
             }
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),

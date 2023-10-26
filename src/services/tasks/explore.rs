@@ -1,4 +1,3 @@
-use std::hint::unreachable_unchecked;
 use std::sync::{Arc, Mutex};
 
 use prisma_client_rust::chrono::{self, DateTime, Duration, Local};

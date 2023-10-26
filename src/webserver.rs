@@ -4,19 +4,18 @@ use crate::handlers::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
 use crate::handlers::regions::{channel_leyline, explore_region};
-use crate::handlers::tasks::{active_actions, active_actions_ws, MyWebSocket};
+use crate::handlers::tasks::{active_actions, active_actions_ws};
 use crate::infra::Infra;
 use crate::logger::Logger;
 use crate::prisma::PrismaClient;
 use actix_cors::Cors;
 use actix_web::dev::Server;
 use actix_web::web::{Data, Path};
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use std::collections::HashMap;
-use std::env;
 use std::net::TcpListener;
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tracing::info;
 
 pub struct Application {
@@ -29,6 +28,7 @@ pub struct AppState {
     pub prisma: Arc<PrismaClient>,
     pub durations: HashMap<String, DurationType>,
 }
+#[allow(dead_code)]
 fn run_prisma_migrations(config: &Settings) -> Result<(), std::io::Error> {
     let db_url = format!(
         "{}{}{}",
@@ -139,7 +139,6 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             .service(latest_action_handler)
             .service(hero_state)
             .service(completed_actions);
-        // .service(add_leyline);
         app
     })
     .listen(listener)?

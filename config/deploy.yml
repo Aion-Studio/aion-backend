@@ -18,16 +18,14 @@ registry:
 
 # Inject ENV variables into containers (secrets come from .env).
 # Remember to run `kamal env push` after making changes!
- env:
-   clear:
-     DATABASE_URL: postgres://marko.bilal:7geiCYdWT2Nu@ep-winter-sunset-507869.us-west-2.aws.neon.tech/
-   secret:
-     - APPLICATION__HOST
-     - APPLICATION__PORT
-     - DATABASE__URL
-     - DATABASE__NAME
-     - DATABASE__PARAMS
-     - REDIS_URI
+env:
+ secret:
+   - APPLICATION__HOST
+   - APPLICATION__PORT
+   - DATABASE__URL
+   - DATABASE__NAME
+   - DATABASE__PARAMS
+   - REDIS_URI
 
 # Use a different ssh user than root
 # ssh:

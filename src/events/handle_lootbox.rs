@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::events::game::{ActionCompleted, TaskAction};
+use crate::events::game::ActionCompleted;
 use crate::services::traits::async_task::Task;
 use crate::{
     infra::Infra,

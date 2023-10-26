@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::models::hero::Hero;
-use crate::models::resources::Common::Quartz;
 use crate::prisma::{CommonEnum, EpicEnum, MaterialEnum, RareEnum, ResourceEnum};
 use crate::services::tasks::explore::ExploreAction;
 use rand::Rng;
 use serde::de::{MapAccess, Visitor};
-use serde::ser::{SerializeMap, SerializeSeq, SerializeStruct};
+use serde::ser::SerializeMap;
 use serde::{de, Deserialize, Serialize};
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]

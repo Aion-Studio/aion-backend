@@ -1,16 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::future::join_all;
-use prisma_client_rust::dml::IndexAlgorithm::Hash;
 use prisma_client_rust::{chrono, Direction, QueryError};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, to_value};
+use serde_json::json;
 use tracing::{error, info, warn};
 
 use crate::events::game::{ActionNames, TaskLootBox};
 use crate::models::hero::{Attributes, BaseStats};
-use crate::models::resources::Common::Quartz;
-use crate::models::resources::MaterialType;
 use crate::prisma::{resource_type, ResourceEnum};
 use crate::{
     events::game::ActionCompleted,

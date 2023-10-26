@@ -48,10 +48,10 @@ impl BaseTask {
         }
     }
 
-    pub fn get_start_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        let start_time = self.start_time.lock().unwrap();
-        start_time.clone()
-    }
+    // pub fn get_start_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+    //     let start_time = self.start_time.lock().unwrap();
+    //     start_time.clone()
+    // }
 
     pub fn get_end_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
         let now = chrono::Utc::now();

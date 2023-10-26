@@ -8,7 +8,6 @@ use crate::{
     prisma::PrismaClient,
     repos::region_repo::Repo,
     services::impls::tasks::TaskManager,
-    webserver::AppState,
 };
 use lazy_static::lazy_static;
 

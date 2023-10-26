@@ -2,8 +2,6 @@ use uuid::Uuid;
 
 use crate::events::game::TaskAction;
 use crate::handlers::tasks::send_new_tasks_to_ws;
-use crate::services::traits::async_task::TaskStatus;
-use crate::webserver::AppState;
 use crate::{events::game::GameEvent, infra::Infra, services::traits::async_task::Task};
 use flume::{unbounded, Receiver, Sender};
 use std::{collections::HashMap, future::Future, sync::Arc};
@@ -129,7 +127,7 @@ impl TaskManager {
 
         let statuses = tasks
             .iter()
-            .map(|(id, task)| match task {
+            .map(|(_, task)| match task {
                 TaskAction::Explore(..) => task.clone(),
                 TaskAction::Channel(..) => task.clone(),
             })

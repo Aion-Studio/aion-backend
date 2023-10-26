@@ -9,7 +9,7 @@ use crate::models::region::Leyline;
 use crate::models::resources::Resource;
 use crate::prisma::action_completed;
 use prisma_client_rust::chrono::{DateTime, FixedOffset};
-use serde::ser::{SerializeMap, SerializeSeq};
+use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::services::tasks::channel::ChannelingAction;

@@ -10,7 +10,7 @@ use super::region::RegionName;
 use super::resources::{MaterialType, Resource};
 use crate::events::game::{ActionDurations, ActionNames};
 use crate::infra::Infra;
-use crate::prisma::{resource_type, MaterialEnum, ResourceEnum};
+use crate::prisma::{MaterialEnum, ResourceEnum};
 use crate::{
     events::game::{ActionCompleted, TaskLootBox},
     prisma::{

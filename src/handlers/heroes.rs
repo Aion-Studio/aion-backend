@@ -4,7 +4,6 @@ use prisma_client_rust::chrono::{self, Local};
 use prisma_client_rust::serde_json::json;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use tokio::join;
 use tracing::info;
 
 use crate::events::game::{ActionCompleted, ActionNames, TaskAction};
