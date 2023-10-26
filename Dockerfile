@@ -11,8 +11,8 @@ COPY . /idle_rpg
 # Install dependencies using cargo
 RUN cargo install --path .
 
-# Make port 8080 available to the world outside this container
-EXPOSE 8080
+# Make port 8000 available to the world outside this container
+EXPOSE 8000
 
 # Define environment variable
 ENV RUST_LOG info

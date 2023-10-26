@@ -166,7 +166,13 @@ impl Repo {
             ]))
             .exec()
             .await?;
-        Ok(hero.unwrap().into())
+        match hero {
+            Some(hero) => Ok(hero.into()),
+            None => Err(QueryError::Serialize(format!(
+                "No hero found with id: {}",
+                hero_id
+            ))),
+        }
     }
     pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
         self.update_base_stats(&hero.base_stats).await?;

@@ -74,10 +74,20 @@ pub struct HeroStateResponse {
 #[get("/heroes/{id}")]
 async fn hero_state(path: Path<String>) -> impl Responder {
     let hero_id = path.into_inner();
-    let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+    let hero = Infra::repo().get_hero(hero_id.clone()).await;
+
     info!("hero state requested....");
-    match get_hero_status(hero).await {
-        Ok(hero_state) => HttpResponse::Ok().json(hero_state),
+    match hero {
+        Ok(hero) => match get_hero_status(hero).await {
+            Ok(hero_state) => HttpResponse::Ok().json(hero_state),
+            Err(e) => {
+                let error_response = json!({
+                    "error": "Error grabbing hero state",
+                    "details": format!("{}", e)
+                });
+                HttpResponse::BadRequest().json(error_response)
+            }
+        },
         Err(e) => {
             let error_response = json!({
                 "error": "Error grabbing hero state",

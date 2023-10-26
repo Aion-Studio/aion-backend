@@ -13,18 +13,21 @@ registry:
   # Specify the registry server, if you're not using Docker Hub
   # server: registry.digitalocean.com / ghcr.io / ...
   username: marko911
-
-  # Always use an access token rather than real password when possible.
   password:
-    - KAMAL_REGISTRY_PASSWORD
+    - DOCKER_HUB_TOKEN
 
 # Inject ENV variables into containers (secrets come from .env).
 # Remember to run `kamal env push` after making changes!
  env:
    clear:
-     DB_HOST: 192.168.0.2
+     DATABASE_URL: postgres://marko.bilal:7geiCYdWT2Nu@ep-winter-sunset-507869.us-west-2.aws.neon.tech/
    secret:
-     - RAILS_MASTER_KEY
+     - APPLICATION__HOST
+     - APPLICATION__PORT
+     - DATABASE__URL
+     - DATABASE__NAME
+     - DATABASE__PARAMS
+     - REDIS_URI
 
 # Use a different ssh user than root
 # ssh:
@@ -41,16 +44,16 @@ registry:
 #     host: ssh://app@192.168.0.1
 
 # Use accessory services (secrets come from .env).
- accessories:
-   db:
-     image: postgres:14
-     host: 192.168.0.2
-     port: 5432
-     env:
-       clear:
-         POSTGRES_ROOT_HOST: '%'
-       secret:
-         - POSTGRES_ROOT_PASS
+# accessories:
+#   db:
+#     image: postgres:14
+#     host: 192.168.0.2
+#     port: 5432
+#     env:
+#       clear:
+#         POSTGRES_ROOT_HOST: '%'
+#       secret:
+#         - POSTGRES_ROOT_PASS
 #     files:
 #       - config/mysql/production.cnf:/etc/mysql/my.cnf
 #       - db/production.sql:/docker-entrypoint-initdb.d/setup.sql

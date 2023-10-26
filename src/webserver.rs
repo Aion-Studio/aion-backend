@@ -1,6 +1,8 @@
 use crate::configuration::{get_durations, DurationType, Settings};
 use crate::events::initialize::initialize_handlers;
-use crate::handlers::heroes::{create_hero_endpoint, hero_state,  latest_action_handler, completed_actions};
+use crate::handlers::heroes::{
+    completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
+};
 use crate::handlers::regions::{channel_leyline, explore_region};
 use crate::handlers::tasks::{active_actions, active_actions_ws, MyWebSocket};
 use crate::infra::Infra;
@@ -11,7 +13,9 @@ use actix_web::dev::Server;
 use actix_web::web::{Data, Path};
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use std::collections::HashMap;
+use std::env;
 use std::net::TcpListener;
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use tracing::info;
 
@@ -25,14 +29,38 @@ pub struct AppState {
     pub prisma: Arc<PrismaClient>,
     pub durations: HashMap<String, DurationType>,
 }
+fn run_prisma_migrations(config: &Settings) -> Result<(), std::io::Error> {
+    let db_url = format!(
+        "{}{}{}",
+        config.database.url, config.database.name, config.database.params
+    );
+    println!("db url {:?}", db_url);
+    let status = Command::new("cargo")
+        .arg("prisma")
+        .arg("migrate")
+        .arg("dev")
+        .env("DATABASE_URL", db_url)
+        .status()?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Prisma migration failed",
+        ))
+    }
+}
 
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
+        println!("configuration {:?}", configuration);
+        // run_prisma_migrations(&configuration)?;
         //
         //concat database.url and database.name into one string joined by a "/"
         let url = format!(
-            "{}{}",
-            configuration.database.url, configuration.database.name
+            "{}{}{}",
+            configuration.database.url, configuration.database.name, configuration.database.params
         );
 
         println!("prisma url {:?}", url);
