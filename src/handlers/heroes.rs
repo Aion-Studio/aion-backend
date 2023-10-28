@@ -105,6 +105,7 @@ struct PaginationQuery {
 
 #[get("/completed-actions")]
 async fn completed_actions(pagination: Query<PaginationQuery>) -> impl Responder {
+    info!("completed actions requested....");
     let take = pagination.take.unwrap_or(10) as i64; // Default to 10 if not provided
     let skip = pagination.skip.unwrap_or(0) as i64;
     let actions = Infra::repo().completed_actions(take, skip).await;

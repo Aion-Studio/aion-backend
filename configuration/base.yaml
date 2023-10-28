@@ -4,5 +4,6 @@ application:
 database:
   url: "postgresql://root:root@0.0.0.0:5432/"
   name: "defaultdb"
+  params: ""
   require_ssl: false
 redis_uri: "redis://redis:6379"

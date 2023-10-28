@@ -1,10 +1,12 @@
 use config::{Config, ConfigError};
 use dotenv::dotenv;
 use std::collections::HashMap;
+use std::env;
 
 use prisma_client_rust::chrono::Duration;
 use secrecy::Secret;
 use serde::Deserialize;
+use tracing::info;
 
 use crate::models::region::{leyline_map, RegionName};
 
@@ -33,30 +35,51 @@ pub struct RedisSettings {
     pub url: Secret<String>,
 }
 
-pub fn get_configuration() -> Result<Settings, config::ConfigError> {
-    dotenv().ok();
-    // let base_path = std::env::current_dir().expect("Failed to determine the current directory");
-    // let configuration_directory = base_path.join("configuration");
-    //
-    // Detect the running environment.
-    // Default to `local` if unspecified.
-    // let environment: Environment = std::env::var("APP_ENVIRONMENT")
-    //     .unwrap_or_else(|_| "local".into())
-    //     .try_into()
-    //     .expect("Failed to parse APP_ENVIRONMENT.");
+pub fn get_configuration() -> Result<Settings, ConfigError> {
+    if env::var("APP_ENVIRONMENT").eq(&Ok("local".to_string())) {
+        let base_path = std::env::current_dir().expect("Failed to determine the current directory");
+        let configuration_directory = base_path.join("configuration");
 
-    // let environment_filename = format!("{}.yaml", environment.as_str());
-    let config = Config::builder()
-        .add_source(
-            config::Environment::default()
-                .try_parsing(true)
-                .separator("__"),
-        )
-        .build()
-        .unwrap();
+        // Detect the running environment.
+        // Default to `local` if unspecified.
+        // let environment: Environment = std::env::var("APP_ENVIRONMENT")
+        //     .unwrap_or_else(|_| "local".into())
+        //     .try_into()
+        //     .expect("Failed to parse APP_ENVIRONMENT.");
+        // let environment_filename = format!("{}.yaml", environment.as_str());
+        let settings = config::Config::builder()
+            .add_source(config::File::from(
+                configuration_directory.join("base.yaml"),
+            ))
+            // .add_source(config::File::from(
+            //     configuration_directory.join(environment_filename),
+            // ))
+            // Add in settings from environment variables (with a prefix of APP and '__' as separator)
+            // E.g. `APP_APPLICATION__PORT=5001 would set `Settings.application.port`
+            .add_source(
+                config::Environment::with_prefix("APP")
+                    .prefix_separator("_")
+                    .separator("__"),
+            )
+            .build()?;
 
-    let res: Result<Settings, ConfigError> = config.try_deserialize();
-    res
+        settings.try_deserialize::<Settings>()
+    } else {
+        info!("Connecting to cloud db.....");
+        dotenv().ok();
+
+        let config = Config::builder()
+            .add_source(
+                config::Environment::default()
+                    .try_parsing(true)
+                    .separator("__"),
+            )
+            .build()
+            .unwrap();
+
+        let res: Result<Settings, ConfigError> = config.try_deserialize();
+        res
+    }
 }
 
 /// The possible runtime environment for our application.

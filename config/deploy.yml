@@ -2,7 +2,7 @@
 service: aion-rising
 
 # Name of the container image.
-image: mb/aionserver
+image: marko911/aionserverr
 
 # Deploy to these servers.
 servers:
@@ -27,6 +27,10 @@ env:
    - DATABASE__PARAMS
    - REDIS_URI
 
+builder:
+  multiarch: false
+  cache:
+    type: registry
 # Use a different ssh user than root
 # ssh:
 #   user: app
@@ -65,7 +69,9 @@ env:
 #       - data:/data
 
 # Configure custom arguments for Traefik
-# traefik:
+traefik:
+  host_port: 8080
+
 #   args:
 #     accesslog: true
 #     accesslog.format: json

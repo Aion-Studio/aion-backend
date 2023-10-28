@@ -1,26 +1,5 @@
-## Use an official Rust runtime as a parent image
-#FROM rust:1.67
-#
-## Set the working directory in the container to /idle_rpg
-#WORKDIR /idle_rpg
-#
-## Copy the current directory contents into the container at /idle_rpg
-#COPY . /idle_rpg
-#
-## Install dependencies using cargo
-#RUN cargo install --path .
-#
-## Make port 8000 available to the world outside this container
-#EXPOSE 8000
-#
-## Define environment variable
-#ENV RUST_LOG info
-## Run the binary program produced by `cargo install`
-#CMD ["idle_rpg"]
-
 # Use the latest Rust image as the builder
-FROM rust:latest AS builder
-
+FROM rust:1.73-bullseye AS builder
 # Update certificates
 RUN update-ca-certificates
 
@@ -39,15 +18,35 @@ RUN adduser \
 
 WORKDIR /aionserver
 
+# Copy over the Cargo.toml, Cargo.lock, and prisma-cli
+COPY Cargo.toml Cargo.lock ./
+COPY prisma-cli ./prisma-cli
+
+# Dummy build to cache dependencies.
+RUN mkdir -p src/ && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src/
+
+# Copy over the rest of the project
 COPY ./ .
 
-# Build the application
+# Real build
 RUN cargo build --release
+RUN ldd target/release/aion_server
+
 
 ####################################################################################################
 ## Final image
 ####################################################################################################
-FROM gcr.io/distroless/cc
+FROM debian:bullseye-slim
+
+# Install necessary runtime dependencies
+RUN apt-get update && apt-get install -y libssl-dev curl && rm -rf /var/lib/apt/lists/*
+
+# Copy the specific shared libraries from builder
+COPY --from=builder /usr/lib/aarch64-linux-gnu/libssl.so.1.1 /usr/lib/aarch64-linux-gnu/
+COPY --from=builder /usr/lib/aarch64-linux-gnu/libcrypto.so.1.1 /usr/lib/aarch64-linux-gnu/
 
 # Import user/group data from builder
 COPY --from=builder /etc/passwd /etc/passwd
@@ -62,5 +61,6 @@ COPY --from=builder /aionserver/target/release/aion_server ./
 # Use the unprivileged user for running the application
 USER aionserver:aionserver
 
+EXPOSE 3000
 # Set the command to run your application
 CMD ["/app/aion_server"]

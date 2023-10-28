@@ -14,6 +14,7 @@ static WS_ADDR: Lazy<Mutex<Option<Addr<MyWebSocket>>>> = Lazy::new(|| Mutex::new
 
 #[get("/active-actions")]
 pub async fn active_actions() -> Result<HttpResponse, Error> {
+    info!("Requesting current active actions");
     let tasks = Infra::tasks().get_all_active();
     let tasks_json = serde_json::to_string(&tasks).unwrap();
     Ok(HttpResponse::Ok().body(tasks_json))

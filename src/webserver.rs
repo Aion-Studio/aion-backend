@@ -129,6 +129,7 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             // .app_data(prisma.clone())
             .app_data(app_state.clone())
             .wrap(cors)
+            .service(health_check)
             .service(create_hero_endpoint)
             .service(explore_region)
             .service(channel_leyline)
@@ -144,6 +145,11 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
     .listen(listener)?
     .run();
     Ok(server)
+}
+
+#[get("/up")]
+async fn health_check() -> impl Responder {
+    HttpResponse::Ok().body("OK")
 }
 
 #[get("/all-heroes")]
