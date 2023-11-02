@@ -54,6 +54,8 @@ impl GameEvent {
 pub enum ActionNames {
     Explore,
     Channel,
+    Quest,
+    Raid
 }
 
 impl ActionNames {
@@ -61,6 +63,8 @@ impl ActionNames {
         match self {
             ActionNames::Explore => "Explore".to_string(),
             ActionNames::Channel => "Channel".to_string(),
+            ActionNames::Quest => "Quest".to_string(),
+            ActionNames::Raid => "Raid".to_string(),
         }
     }
 
@@ -68,7 +72,9 @@ impl ActionNames {
         match action_name {
             "Explore" => ActionNames::Explore,
             "Channel" => ActionNames::Channel,
-            _ => ActionNames::Explore,
+            "Quest" => ActionNames::Quest,
+            "Raid" => ActionNames::Raid,
+            _ => unreachable!(),
         }
     }
 }
@@ -122,7 +128,6 @@ pub fn from_json_to_loot_box(value: serde_json::Value) -> Option<TaskLootBox> {
     match action_name {
         "Explore" => {
             let result = map.remove("result")?;
-            println!("---result {:?}", result);
             let result: ExploreResult = match serde_json::from_value(result.clone()) {
                 Ok(explore_result) => explore_result,
                 Err(e) => {
@@ -131,7 +136,6 @@ pub fn from_json_to_loot_box(value: serde_json::Value) -> Option<TaskLootBox> {
                 }
             };
 
-            println!("--- after result {:?}", result);
             Some(TaskLootBox::Region(result))
         }
         "Channel" => {
@@ -315,6 +319,8 @@ impl ActionDurations {
         match action_name {
             ActionNames::Explore => Duration::minutes(3),
             ActionNames::Channel => Duration::minutes(3),
+            ActionNames::Quest => Duration::minutes(3),
+            ActionNames::Raid => Duration::minutes(3),
         }
     }
 }

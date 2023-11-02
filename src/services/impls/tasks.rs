@@ -43,7 +43,7 @@ impl TaskManager {
                 Uuid::parse_str(&action.hero_id()).unwrap(),
             ), // ... other cases
         };
-
+        
         match self.tasks.lock() {
             Ok(mut tasks) => {
                 tasks.insert(id, event.clone());

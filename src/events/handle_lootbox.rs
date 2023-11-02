@@ -67,7 +67,6 @@ impl EventHandler for LootBoxHandler {
                         .await
                         .unwrap();
                     // update hero region discovery level
-
                     let loot =
                         match action.generate_loot_box(Some(hero_region.discovery_level as f64)) {
                             Ok(loot_box) => loot_box,
@@ -78,17 +77,14 @@ impl EventHandler for LootBoxHandler {
                         };
 
                     hero.equip_loot(loot.clone());
+
                     if let Err(e) = Infra::repo()
                         .update_hero_region_discovery_level(&hero_id, action.discovery_level)
                         .await
                     {
                         error!("Error updating hero region discovery level: {}", e);
                     }
-                    info!(
-                        "Storing action completed {:?} for {:?}",
-                        hero.name,
-                        action.action_name()
-                    );
+
                     // Store action completed
                     if let Err(e) = Infra::repo()
                         .store_action_completed(ActionCompleted::new(
@@ -100,13 +96,12 @@ impl EventHandler for LootBoxHandler {
                     {
                         error!("Error storing action completed: {}", e);
                     }
-                    // update hero stats and inventory
-                    hero.deduct_stamina(action.stamina_cost);
 
-                    // update hero in db
-                    if let Err(e) = Infra::repo().update_hero(hero).await {
-                        error!("Error updating hero: {}", e);
-                    }
+                    info!(
+                        "Stored action completed {:?} for {:?}",
+                        hero.name,
+                        action.action_name()
+                    );
                 }
                 _ => {}
             }

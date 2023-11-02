@@ -54,16 +54,11 @@ fn run_prisma_migrations(config: &Settings) -> Result<(), std::io::Error> {
 
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
-        println!("configuration {:?}", configuration);
-        // run_prisma_migrations(&configuration)?;
-        //
-        //concat database.url and database.name into one string joined by a "/"
         let url = format!(
             "{}{}{}",
             configuration.database.url, configuration.database.name, configuration.database.params
         );
 
-        println!("prisma url {:?}", url);
         let prisma_result = PrismaClient::_builder().with_url(url).build().await;
 
         let prisma_client = match prisma_result {
@@ -154,6 +149,7 @@ async fn health_check() -> impl Responder {
 
 #[get("/all-heroes")]
 async fn get_heroes() -> impl Responder {
+    info!("Fetch all heroes....");
     let heroes = Infra::repo().get_all_heroes().await.unwrap();
     HttpResponse::Ok().json(heroes)
 }

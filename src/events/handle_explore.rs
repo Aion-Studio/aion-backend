@@ -1,3 +1,5 @@
+use tracing::{error, info};
+
 use crate::{events::game::TaskAction, services::traits::async_task::Task};
 use std::sync::Arc;
 
@@ -23,9 +25,25 @@ impl ExploreHandler {
 
 impl EventHandler for ExploreHandler {
     fn handle(&self, event: GameEvent) {
-        if let GameEvent::HeroExplores(action) = event {
-            action.start_now();
-            Infra::tasks().schedule_action(TaskAction::Explore(action));
+        match event {
+            GameEvent::HeroExplores(action) => {
+                action.start_now();
+                Infra::tasks().schedule_action(TaskAction::Explore(action));
+            }
+            GameEvent::ExploreCompleted(action) => {
+                let mut hero = action.hero;
+                hero.deduct_stamina(action.stamina_cost);
+                tokio::spawn(async move {
+                    info!(
+                        "Deducting stamina for explore completed for hero {}",
+                        hero.get_id()
+                    );
+                    if let Err(e) = Infra::repo().update_hero(hero).await {
+                        error!("Error updating hero: {}", e);
+                    }
+                });
+            }
+            _ => {}
         }
     }
 }
