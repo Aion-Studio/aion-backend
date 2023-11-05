@@ -15,7 +15,7 @@ use crate::models::hero::Hero;
 use crate::models::region::RegionName;
 use crate::models::resources::Resource;
 use crate::prisma::PrismaClient;
-use crate::repos::region_repo::Repo;
+use crate::repos::repo::Repo;
 use crate::test_helpers::{random_hero, setup_test_database};
 
 async fn delay(time: Duration) {

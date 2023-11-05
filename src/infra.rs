@@ -6,7 +6,7 @@ use crate::{
         game::GameEvent,
     },
     prisma::PrismaClient,
-    repos::region_repo::Repo,
+    repos::repo::Repo,
     services::impls::tasks::TaskManager,
 };
 use lazy_static::lazy_static;

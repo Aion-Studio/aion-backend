@@ -7,6 +7,7 @@ image: marko911/aionserverr
 # Deploy to these servers.
 servers:
   - 65.108.52.102
+  
 
 # Credentials for your image host.
 registry:
@@ -26,6 +27,7 @@ env:
    - DATABASE__NAME
    - DATABASE__PARAMS
    - REDIS_URI
+   - PRISMA__DATABASE__URL
 
 builder:
   multiarch: false
@@ -71,13 +73,22 @@ builder:
 # Configure custom arguments for Traefik
 traefik:
   host_port: 8080
+  # labels:
+  #   traefik.http.routers.aion-rising-web.rule: Host(`api.aionrising.com`)
+  #   traefik.http.routers.aion-rising-web.entrypoints: web
+  #   traefik.http.middlewares.aion-rising-web-https-redirect.redirectscheme.scheme: https
+  #   traefik.http.routers.aion-rising-web.middlewares: aion-rising-web-https-redirect
+
+
+
 
 #   args:
 #     accesslog: true
 #     accesslog.format: json
 
 # Configure a custom healthcheck (default is /up on port 3000)
-# healthcheck:
+healthcheck:
+  max_attempts: 10
 #   path: /healthz
 #   port: 4000
 

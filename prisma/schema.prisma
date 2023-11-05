@@ -1,6 +1,6 @@
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE__URL")
+  url      = env("PRISMA__DATABASE__URL")
 }
 
 generator client {
@@ -27,6 +27,8 @@ model Hero {
   stamina          Int               @default(100)
   staminaMax       Int               @default(100)
   staminaRegenRate Int               @default(1)
+  heroActions      HeroActions[]
+  heroQuests       HeroQuests[]
 }
 
 model HeroResource {
@@ -35,7 +37,52 @@ model HeroResource {
   hero           Hero         @relation(fields: [heroId], references: [id])
   resource       ResourceType @relation(fields: [resourceTypeId], references: [id])
   amount         Int
-  resourceTypeId String  @map("resource_type_id")
+  resourceTypeId String       @map("resource_type_id")
+}
+
+model Action {
+  id          String @id @default(uuid())
+  name        String
+  description String?
+  region_name String @map("region_name")
+  Region      Region @relation(fields: [region_name], references: [name])
+
+  // Optional fields for Leyline and Quest
+  leyline    Leyline?      @relation(fields: [leylineId], references: [id])
+  leylineId  String?       @map("leyline_id")
+  quest      Quest?        @relation(fields: [questId], references: [id])
+  questId    String?       @map("quest_id")
+  heroAction HeroActions[]
+  @@unique([name, region_name])
+}
+
+model HeroActions {
+  id       String @id @default(uuid())
+  heroId   String @map("hero_id")
+  hero     Hero   @relation(fields: [heroId], references: [id])
+  actionId String @map("action_id")
+  action   Action @relation(fields: [actionId], references: [id])
+}
+
+model Quest {
+  id             String       @id @default(uuid())
+  title          String
+  region_name         String       @map("region_name")
+  Region         Region       @relation(fields: [region_name], references: [name])
+  requiredQuests Quest[]      @relation("QuestRequirements")
+  requiredBy     Quest[]      @relation("QuestRequirements")
+  questNumber    Int
+  actions        Action[]
+  heroQuests     HeroQuests[]
+}
+
+model HeroQuests {
+  id        String  @id @default(uuid())
+  heroId    String  @map("hero_id")
+  hero      Hero    @relation(fields: [heroId], references: [id])
+  questId   String  @map("quest_id")
+  quest     Quest   @relation(fields: [questId], references: [id])
+  completed Boolean @default(false)
 }
 
 model ActionCompleted {
@@ -46,16 +93,16 @@ model ActionCompleted {
   updatedAt   DateTime @default(now()) @map("updated_at")
   createdAt   DateTime @default(now()) @map("created_at")
   completedAt DateTime @default(now()) @map("completed_at")
-  lootBox     Json     @default("{}") // This is the new JSON field
+  lootBox     Json     @default("{}") //
 }
 
 model HeroRegion {
   id               String  @id @default(uuid())
   HeroId           String  @map("hero_id")
-  region_name      String  @map("region_name")
   discovery_level  Int     @map("discovery_level")
   Hero             Hero    @relation(fields: [HeroId], references: [id])
   Region           Region  @relation(fields: [region_name], references: [name])
+  region_name      String  @map("region_name")
   current_location Boolean @default(false) @map("current_location")
 }
 
@@ -125,6 +172,7 @@ model ResourceType {
   materialType   MaterialType?  @relation(fields: [materialTypeId], references: [id])
   materialTypeId String?        @unique
   HeroResource   HeroResource[]
+
   @@unique([type])
 }
 
@@ -149,7 +197,7 @@ model MaterialType {
 
 model Common {
   id           String        @id @default(uuid())
-  type         CommonEnum @unique
+  type         CommonEnum    @unique
   materialType MaterialType?
 }
 
@@ -200,6 +248,8 @@ model Region {
   adjacent_regions String[]
   HeroRegion       HeroRegion[]
   Leylines         Leyline[]
+  Actions          Action[]
+  Quests           Quest[]
 }
 
 model Leyline {
@@ -211,6 +261,8 @@ model Leyline {
   discovery_required Int
   stamina_rate       Float
   aion_rate          Float
+
+  actions Action[] // This will relate Leyline to many Actions
 }
 
 // model ResourceValue {

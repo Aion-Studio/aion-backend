@@ -20,12 +20,13 @@ mod models {
     pub mod hero;
     pub mod region;
     pub mod resources;
+    pub mod quest;
 }
 
 mod repos {
     // pub mod game_engine_repo;
     // pub mod hero_repo;
-    pub mod region_repo;
+    pub mod repo;
     // pub mod action_repo;
     // pub mod resources_repo;
 }
@@ -64,6 +65,8 @@ pub mod handlers {
     pub mod heroes;
     pub mod regions;
     pub mod tasks;
+
+    pub mod quest;
 }
 
 pub mod infra;

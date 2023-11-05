@@ -134,6 +134,7 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             .service(active_actions)
             .service(latest_action_handler)
             .service(hero_state)
+            .service(add_quest)
             .service(completed_actions);
         app
     })

@@ -8,7 +8,8 @@ use tracing::{error, info, warn};
 
 use crate::events::game::{ActionNames, TaskLootBox};
 use crate::models::hero::{Attributes, BaseStats};
-use crate::prisma::{resource_type, ResourceEnum};
+use crate::models::quest::Quest;
+use crate::prisma::{quest, resource_type, ResourceEnum};
 use crate::{
     events::game::ActionCompleted,
     models::{
@@ -261,6 +262,24 @@ impl Repo {
         Ok(())
     }
 
+    pub async fn add_quest(&self, quest: Quest) -> Result<(), QueryError> {
+        let quest = self
+            .prisma
+            .quest()
+            .create(
+                quest.title,
+                region::name::equals(quest.region_name),
+                quest.quest_number,
+                vec![
+                    quest::required_quests::set(quest.required_quests),
+                    quest::required_by::set(quest.required_by),
+                ],
+            )
+            .exec()
+            .await?;
+        Ok(())
+    }
+
     pub async fn store_action_completed(&self, result: ActionCompleted) -> Result<(), QueryError> {
         //TODO: check lootbox created time
         let loot_box = match result.loot_box {
@@ -284,7 +303,6 @@ impl Repo {
                 json!({})
             }
         };
-        println!("wwwwwwwwwwwwwwwwwwwwwwwwww");
 
         info!("\n loot box should be set {:?} \n", loot_box);
         let now = chrono::Utc::now().into();
@@ -355,43 +373,6 @@ impl Repo {
         take: i64,
         skip: i64,
     ) -> Result<Vec<ActionCompleted>, QueryError> {
-        // let data: Result<Vec<action_completed::Data>, QueryError> = self
-        //     .prisma
-        //     ._query_raw(raw!(
-        //         r#"
-        //     SELECT
-        //         ac.id,
-        //         ac.action_name AS "actionName",
-        //         ac.hero_id as "heroId",
-        //         ac.updated_at AS "updatedAt",
-        //         ac.created_at AS "createdAt",
-        //         ac."lootBox" as "lootBox",
-        //         h.id as "hero.id",
-        //         h.name as "hero.name",
-        //         h.aionCapacity as "hero.aionCapacity",
-        //         h.aionCollected as "hero.aionCollected",
-        //         h.baseStatsId as "hero.baseStatsId",
-        //         h.attributesId as "hero.attributesId",
-        //         h.inventoryId as "hero.inventoryId",
-        //         h.stamina as "hero.stamina",
-        //         h.staminaMax as "hero.staminaMax",
-        //         h.staminaRegenRate as "hero.staminaRegenRate"
-        //     FROM
-        //         "ActionCompleted" ac
-        //     JOIN
-        //         "Hero" h ON ac.hero_id = h.id
-        //     WHERE
-        //         ac."lootBox"::text != $1
-        //     ORDER BY
-        //         ac.created_at DESC
-        //     LIMIT $2 OFFSET $3
-        //     "#,
-        //         PrismaValue::Json("{}".to_string()),
-        //         PrismaValue::Int(take),
-        //         PrismaValue::Int(skip)
-        //     ))
-        //     .exec()
-        //     .await;
         let data: Result<Vec<action_completed::Data>, QueryError> = self
             .prisma
             .action_completed()
