@@ -143,6 +143,7 @@ pub enum DurationType {
     Explore(ExploreDurations),
     Channel(ChannelDurations),
 }
+
 pub fn get_durations() -> HashMap<String, DurationType> {
     let mut durations = HashMap::new();
     durations.insert(
@@ -154,4 +155,12 @@ pub fn get_durations() -> HashMap<String, DurationType> {
         DurationType::Channel(ChannelDurations::get_durations()),
     );
     durations
+}
+
+pub fn get_explore_durations() -> ExploreDurations {
+    let durations = get_durations();
+    match durations.get("Explore") {
+        Some(DurationType::Explore(durations)) => durations.clone(),
+        _ => panic!("No explore durations found"),
+    }
 }

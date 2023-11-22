@@ -22,6 +22,9 @@ pub enum GameEvent {
     LootBoxCreated(TaskLootBox),
     Channeling(ChannelingAction),
     ChannelingCompleted(ChannelingAction),
+    QuestAction(String, String),
+    QuestActionDone(String),
+    EnableNextQuest(String),
 }
 
 impl GameEvent {
@@ -32,11 +35,23 @@ impl GameEvent {
         "ExploreCompleted"
     }
 
+    pub fn quest_action() -> &'static str {
+        "QuestAction"
+    }
+
     pub fn channeling() -> &'static str {
         "Channeling"
     }
     pub fn channeling_completed() -> &'static str {
         "ChannelingCompleted"
+    }
+
+    pub fn quest_action_done() -> &'static str {
+        "QuestActionDone"
+    }
+
+    pub fn enable_next_quest() -> &'static str {
+        "EnableNextQuest"
     }
 
     pub fn name(&self) -> String {
@@ -46,6 +61,9 @@ impl GameEvent {
             GameEvent::LootBoxCreated { .. } => "LootBoxCreated".to_string(),
             GameEvent::Channeling { .. } => "Channeling".to_string(),
             GameEvent::ChannelingCompleted { .. } => "ChannelingCompleted".to_string(),
+            GameEvent::QuestAction { .. } => "QuestAction".to_string(),
+            GameEvent::QuestActionDone { .. } => "QuestActionDone".to_string(),
+            GameEvent::EnableNextQuest { .. } => "EnableNextQuest".to_string(),
         }
     }
 }
@@ -55,7 +73,7 @@ pub enum ActionNames {
     Explore,
     Channel,
     Quest,
-    Raid
+    Raid,
 }
 
 impl ActionNames {
@@ -65,6 +83,17 @@ impl ActionNames {
             ActionNames::Channel => "Channel".to_string(),
             ActionNames::Quest => "Quest".to_string(),
             ActionNames::Raid => "Raid".to_string(),
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "Explore" => Some(ActionNames::Explore),
+            "Channel" => Some(ActionNames::Channel),
+            "Quest" => Some(ActionNames::Quest),
+            "Raid" => Some(ActionNames::Raid),
+            // Add other cases as needed
+            _ => None,
         }
     }
 

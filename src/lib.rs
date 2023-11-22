@@ -18,9 +18,9 @@ mod models {
     pub mod date_times;
     pub mod game_engine;
     pub mod hero;
+    pub mod quest;
     pub mod region;
     pub mod resources;
-    pub mod quest;
 }
 
 mod repos {
@@ -37,6 +37,7 @@ mod events {
     pub mod handle_channeling;
     pub mod handle_explore;
     pub mod handle_lootbox;
+    pub mod handle_quest;
     pub mod initialize;
 }
 
@@ -65,6 +66,7 @@ pub mod handlers {
     pub mod heroes;
     pub mod regions;
     pub mod tasks;
+    pub mod response;
 
     pub mod quest;
 }

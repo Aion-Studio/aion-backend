@@ -5321,8 +5321,12 @@ pub mod action {
             }
         }
     }
-    pub fn name_region_name<T: From<UniqueWhereParam>>(name: String, region_name: String) -> T {
-        UniqueWhereParam::NameRegionNameEquals(name, region_name).into()
+    pub fn name_description_quest_id<T: From<UniqueWhereParam>>(
+        name: String,
+        description: String,
+        quest_id: String,
+    ) -> T {
+        UniqueWhereParam::NameDescriptionQuestIdEquals(name, description, quest_id).into()
     }
     pub fn create(
         name: String,
@@ -5749,7 +5753,7 @@ pub mod action {
         Not(Vec<WhereParam>),
         Or(Vec<WhereParam>),
         And(Vec<WhereParam>),
-        NameRegionNameEquals(String, String),
+        NameDescriptionQuestIdEquals(String, String, String),
         Id(_prisma::read_filters::StringFilter),
         Name(_prisma::read_filters::StringFilter),
         Description(_prisma::read_filters::StringNullableFilter),
@@ -5807,16 +5811,20 @@ pub mod action {
                         ),
                     ),
                 ),
-                Self::NameRegionNameEquals(name, region_name) => (
-                    "name_region_name",
+                Self::NameDescriptionQuestIdEquals(name, description, quest_id) => (
+                    "name_description_questId",
                     ::prisma_client_rust::SerializedWhereValue::Object(vec![
                         (
                             name::NAME.to_string(),
                             ::prisma_client_rust::PrismaValue::String(name),
                         ),
                         (
-                            region_name::NAME.to_string(),
-                            ::prisma_client_rust::PrismaValue::String(region_name),
+                            description::NAME.to_string(),
+                            ::prisma_client_rust::PrismaValue::String(description),
+                        ),
+                        (
+                            quest_id::NAME.to_string(),
+                            ::prisma_client_rust::PrismaValue::String(quest_id),
                         ),
                     ]),
                 ),
@@ -5961,14 +5969,14 @@ pub mod action {
     }
     #[derive(Clone)]
     pub enum UniqueWhereParam {
-        NameRegionNameEquals(String, String),
+        NameDescriptionQuestIdEquals(String, String, String),
         IdEquals(String),
     }
     impl From<UniqueWhereParam> for WhereParam {
         fn from(value: UniqueWhereParam) -> Self {
             match value {
-                UniqueWhereParam::NameRegionNameEquals(name, region_name) => {
-                    Self::NameRegionNameEquals(name, region_name)
+                UniqueWhereParam::NameDescriptionQuestIdEquals(name, description, quest_id) => {
+                    Self::NameDescriptionQuestIdEquals(name, description, quest_id)
                 }
                 UniqueWhereParam::IdEquals(value) => {
                     Self::Id(_prisma::read_filters::StringFilter::Equals(value))

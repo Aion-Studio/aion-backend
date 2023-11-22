@@ -5,7 +5,7 @@ use rand::Rng;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uuid::Uuid;
 
-use crate::configuration::ExploreDurations;
+use crate::configuration::{get_explore_durations, ExploreDurations};
 use crate::events::game::ActionNames;
 use crate::models::resources::MaterialType;
 use crate::{
@@ -49,21 +49,28 @@ impl Serialize for ExploreAction {
 }
 
 impl ExploreAction {
-    pub fn new(hero: Hero, region_name: RegionName, durations: &ExploreDurations) -> Option<Self> {
+    pub fn new(hero: Hero, region_name: RegionName) -> Option<Self> {
         // Implement task creation logic...
-        let duration = *durations
-            .0
-            .get(&region_name)
-            .clone()
-            .to_owned()
-            .unwrap_or(&Duration::minutes(1));
+        let action = Self::without_cost(hero.clone(), region_name.clone());
         let stamina_cost = get_stamina_cost(&region_name);
 
         if (hero.stamina - stamina_cost) < 0 {
             return None;
         }
 
-        Some(Self {
+        Some(action)
+    }
+
+    pub fn without_cost(hero: Hero, region_name: RegionName) -> Self {
+        let durations = get_explore_durations();
+        let duration = *durations
+            .0
+            .get(&region_name)
+            .clone()
+            .to_owned()
+            .unwrap_or(&Duration::minutes(1));
+
+        Self {
             base: BaseTask::new(duration, hero.clone()),
             duration,
             hero,
@@ -72,9 +79,10 @@ impl ExploreAction {
             discovery_level: rand::thread_rng().gen_range(1..5),
             // random number between 15 and 30
             xp: rand::thread_rng().gen_range(15..30),
-            stamina_cost,
-        })
+            stamina_cost: 0,
+        }
     }
+
     pub fn get_material_reward(&self, discovery_lvl: f64) -> MaterialType {
         match self.hero.base_stats.level {
             1..=10 => MaterialType::get_common_rng(),

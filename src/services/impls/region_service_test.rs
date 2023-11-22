@@ -43,7 +43,7 @@ async fn random_hero_and_explore() -> (
         Box::new(move || {
             Box::pin(async move {
                 let region_name = RegionName::Dusane;
-                do_explore(&hero_clone, &region_name, &ExploreDurations(durations)).unwrap();
+                do_explore(&hero_clone, &region_name).unwrap();
                 tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
             })
         });
@@ -54,8 +54,7 @@ async fn random_hero_and_explore() -> (
 async fn explore(hero: Hero, region_name: RegionName) -> Result<(), Error> {
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
-    let wrap = ExploreDurations(durations);
-    do_explore(&hero, &region_name, &wrap).unwrap();
+    do_explore(&hero, &region_name).unwrap();
     tokio::time::sleep(Duration::milliseconds(650).to_std().unwrap()).await;
     Ok(())
 }
@@ -75,7 +74,7 @@ async fn test_generate_result_for_exploration() {
 
     let region_name = RegionName::Dusane;
     // Execute the start_exploration function and get the result
-    do_explore(&hero, &region_name, &ExploreDurations(durations)).unwrap();
+    do_explore(&hero, &region_name).unwrap();
     tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
 
     let hero = Infra::repo().get_hero(hero_id).await.unwrap();

@@ -53,7 +53,7 @@ model Action {
   quest      Quest?        @relation(fields: [questId], references: [id])
   questId    String?       @map("quest_id")
   heroAction HeroActions[]
-  @@unique([name, region_name])
+  @@unique([name, description, questId])
 }
 
 model HeroActions {

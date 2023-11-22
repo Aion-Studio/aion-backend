@@ -5,7 +5,7 @@ use actix_web::{
 };
 use serde::Serialize;
 
-use crate::models::region::RegionName;
+use crate::{models::region::RegionName, handlers::response::ApiResponse};
 use crate::services::tasks::channel::ChannelingAction;
 use crate::{
     configuration::{ChannelDurations, DurationType, ExploreDurations},
@@ -14,16 +14,8 @@ use crate::{
 use crate::{events::game::GameEvent, models::hero::Hero, services::tasks::explore::ExploreAction};
 use crate::{infra::Infra, webserver::AppState};
 
-
-
-#[derive(Debug, Serialize)]
-struct ExploreResponse {
-    message: String,
-    status: String,
-}
-
 #[get("/region/explore/{hero_id}")]
-pub async fn explore_region(path: Path<String>, app: Data<AppState>) -> impl Responder {
+pub async fn explore_region(path: Path<String>) -> impl Responder {
     let hero_id = path.into_inner();
     let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
 
@@ -31,7 +23,7 @@ pub async fn explore_region(path: Path<String>, app: Data<AppState>) -> impl Res
 
     if let Some(task) = active_tasks {
         if let TaskAction::Explore(..) = task {
-            return HttpResponse::Forbidden().json(ExploreResponse {
+            return HttpResponse::Forbidden().json(ApiResponse {
                 message: "Already exploring".to_string(),
                 status: "Error".to_string(),
             });
@@ -43,18 +35,12 @@ pub async fn explore_region(path: Path<String>, app: Data<AppState>) -> impl Res
         .await
         .unwrap();
 
-    let explore_durations = match app.durations.get("Explore") {
-        Some(DurationType::Explore(durations)) => Ok(durations.clone()),
-        _ => Err(anyhow::Error::msg("No explore durations found")),
-    }
-    .unwrap();
-
-    match do_explore(&hero, &current_region.region_name, &explore_durations) {
-        Ok(_) => HttpResponse::Ok().json(ExploreResponse {
+    match do_explore(&hero, &current_region.region_name) {
+        Ok(_) => HttpResponse::Ok().json(ApiResponse {
             message: "Exploration started".to_string(),
             status: "Ok".to_string(),
         }),
-        Err(e) => HttpResponse::InternalServerError().json(ExploreResponse {
+        Err(e) => HttpResponse::InternalServerError().json(ApiResponse {
             message: e.to_string(),
             status: "Error".to_string(),
         }),
@@ -67,7 +53,7 @@ pub async fn channel_leyline(path: Path<(String, String)>, app: Data<AppState>) 
     let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
 
     if !hero.can_channel(&leyline_name).await {
-        return HttpResponse::Forbidden().json(ExploreResponse {
+        return HttpResponse::Forbidden().json(ApiResponse {
             message: "Can't channel on this leyline".to_string(),
             status: "Error".to_string(),
         });
@@ -80,11 +66,11 @@ pub async fn channel_leyline(path: Path<(String, String)>, app: Data<AppState>) 
     .unwrap();
 
     match do_channel(&hero, &leyline_name, &durations) {
-        Ok(_) => HttpResponse::Ok().json(ExploreResponse {
+        Ok(_) => HttpResponse::Ok().json(ApiResponse {
             message: "Channeling started".to_string(),
             status: "Ok".to_string(),
         }),
-        Err(e) => HttpResponse::InternalServerError().json(ExploreResponse {
+        Err(e) => HttpResponse::InternalServerError().json(ApiResponse {
             message: e.to_string(),
             status: "Error".to_string(),
         }),
@@ -106,12 +92,8 @@ pub fn do_channel(
     }
 }
 
-pub fn do_explore(
-    hero: &Hero,
-    region_name: &RegionName,
-    durations: &ExploreDurations,
-) -> Result<(), anyhow::Error> {
-    let task = ExploreAction::new(hero.to_owned(), region_name.to_owned(), &durations);
+pub fn do_explore(hero: &Hero, region_name: &RegionName) -> Result<(), anyhow::Error> {
+    let task = ExploreAction::new(hero.to_owned(), region_name.to_owned());
     match task {
         Some(task) => {
             Infra::dispatch(GameEvent::HeroExplores(task.clone()));

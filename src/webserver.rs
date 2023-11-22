@@ -3,6 +3,7 @@ use crate::events::initialize::initialize_handlers;
 use crate::handlers::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
+use crate::handlers::quest::{add_quest, get_hero_quests, do_quest_action};
 use crate::handlers::regions::{channel_leyline, explore_region};
 use crate::handlers::tasks::{active_actions, active_actions_ws};
 use crate::infra::Infra;
@@ -119,9 +120,6 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             .max_age(3600);
 
         let app = App::new()
-            // .route("/health_check", web::get().to(health_check))
-            // .route("/hero/actions", web::get().to(hero_actions))routes
-            // .app_data(prisma.clone())
             .app_data(app_state.clone())
             .wrap(cors)
             .service(health_check)
@@ -135,6 +133,8 @@ async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Serve
             .service(latest_action_handler)
             .service(hero_state)
             .service(add_quest)
+            .service(get_hero_quests)
+            .service(do_quest_action)
             .service(completed_actions);
         app
     })

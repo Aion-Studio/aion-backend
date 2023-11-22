@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use futures::future::join_all;
+use futures::future::{join_all, try_join_all};
 use prisma_client_rust::{chrono, Direction, QueryError};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -8,8 +8,8 @@ use tracing::{error, info, warn};
 
 use crate::events::game::{ActionNames, TaskLootBox};
 use crate::models::hero::{Attributes, BaseStats};
-use crate::models::quest::Quest;
-use crate::prisma::{quest, resource_type, ResourceEnum};
+use crate::models::quest::{Action, Quest};
+use crate::prisma::{action, hero_actions, hero_quests, quest, resource_type, ResourceEnum};
 use crate::{
     events::game::ActionCompleted,
     models::{
@@ -148,6 +148,7 @@ impl Repo {
             }
         })
     }
+
     async fn hero_by_id(&self, hero_id: String) -> Result<Hero, QueryError> {
         let hero = self
             .prisma
@@ -172,6 +173,7 @@ impl Repo {
             ))),
         }
     }
+
     pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
         self.update_base_stats(&hero.base_stats).await?;
         self.update_attributes(&hero.attributes).await?;
@@ -263,21 +265,259 @@ impl Repo {
     }
 
     pub async fn add_quest(&self, quest: Quest) -> Result<(), QueryError> {
-        let quest = self
+        let actions = quest.actions.clone();
+        let action_futures = actions.into_iter().map(|action| async move {
+            let existing = self
+                .prisma
+                .action()
+                .find_first(vec![
+                    action::name::equals(action.name.clone()),
+                    action::region_name::equals(action.region_name.to_str()),
+                ])
+                .exec()
+                .await;
+
+            match existing {
+                Ok(Some(action)) => Ok(action.id), // Assuming the ID is a String
+                Ok(None) => {
+                    // Create the action if it doesn't exist
+                    let new_action = self
+                        .prisma
+                        .action()
+                        .create(
+                            action.name,
+                            region::name::equals(action.region_name.to_str()),
+                            vec![action::description::set(action.description)],
+                        ) // You need to adjust the parameters accordingly
+                        .exec()
+                        .await?;
+                    Ok(new_action.id)
+                }
+                Err(e) => Err(e.into()), // You might need to convert the error type here
+            }
+        });
+        let action_ids_fetch: Result<Vec<String>, QueryError> = try_join_all(action_futures).await;
+
+        let ids = match action_ids_fetch {
+            Ok(ids) => ids,
+            Err(e) => {
+                error!("Error getting action ids: {}", e);
+                return Err(e);
+            }
+        };
+
+        let set_params = Quest::set(&quest, ids);
+
+        let _ = self
             .prisma
             .quest()
             .create(
                 quest.title,
                 region::name::equals(quest.region_name),
                 quest.quest_number,
-                vec![
-                    quest::required_quests::set(quest.required_quests),
-                    quest::required_by::set(quest.required_by),
-                ],
+                set_params,
             )
             .exec()
             .await?;
         Ok(())
+    }
+
+    pub async fn get_quest_by_hero_id(&self, hero_id: String) -> Result<Quest, QueryError> {
+        let hero_quest = self
+            .prisma
+            .hero_quests()
+            .find_first(vec![
+                hero_quests::hero_id::equals(hero_id),
+                hero_quests::completed::equals(false),
+            ])
+            .exec()
+            .await?;
+        let quest_id = hero_quest.unwrap().quest_id;
+        let quest = self
+            .prisma
+            .quest()
+            .find_unique(quest::id::equals(quest_id))
+            .exec()
+            .await;
+
+        Ok(quest.unwrap().unwrap().into())
+    }
+
+    pub async fn mark_quest_complete(
+        &self,
+        hero_id: String,
+        quest_id: String,
+    ) -> Result<(), QueryError> {
+        let hq = self
+            .prisma
+            .hero_quests()
+            .find_first(vec![
+                hero_quests::hero_id::equals(hero_id.clone()),
+                hero_quests::quest_id::equals(quest_id.clone()),
+            ])
+            .exec()
+            .await?
+            .unwrap();
+
+        self.prisma
+            .hero_quests()
+            .update(
+                hero_quests::id::equals(hq.id),
+                vec![hero_quests::completed::set(true)],
+            )
+            .exec()
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_hero_actions_by_hero_id(
+        &self,
+        hero_id: String,
+    ) -> Result<Vec<String>, QueryError> {
+        let hero_actions = self
+            .prisma
+            .hero_actions()
+            .find_many(vec![hero_actions::hero_id::equals(hero_id)])
+            .select(hero_actions::select!({ action_id }))
+            .exec()
+            .await?;
+        Ok(hero_actions
+            .into_iter()
+            .map(|action| action.action_id)
+            .collect())
+    }
+
+    pub async fn get_question_action_ids(
+        &self,
+        quest: Option<Quest>,
+    ) -> Result<Vec<String>, QueryError> {
+        let quest_id = quest.unwrap().id.unwrap();
+        let actions = self
+            .prisma
+            .action()
+            .find_many(vec![action::quest_id::equals(Some(quest_id))])
+            .select(action::select!({ id }))
+            .exec()
+            .await?;
+        Ok(actions.into_iter().map(|action| action.id).collect())
+    }
+
+    pub async fn get_available_quest(&self, hero_id: String) -> Result<Quest, QueryError> {
+        let hero_quest_data = self
+            .prisma
+            .hero_quests()
+            .find_first(vec![
+                hero_quests::hero_id::equals(hero_id.clone()),
+                hero_quests::completed::equals(false),
+            ])
+            .with(
+                hero_quests::quest::fetch()
+                    .with(quest::actions::fetch(vec![]).with(action::quest::fetch())),
+            )
+            .exec()
+            .await?;
+
+        let quest: Option<Quest> = hero_quest_data.and_then(|hero_quest| {
+            hero_quest.quest.map(|boxed_quest_data| {
+                // Dereference the boxed_quest_data and convert it to Quest
+                (*boxed_quest_data).into()
+            })
+        });
+
+        if let Some(quest) = quest {
+            info!(
+                "------------------Returning existing quest for hero: {}",
+                hero_id
+            );
+            return Ok(quest);
+        }
+
+        let current_region = self.get_current_hero_region(&hero_id).await?;
+        let first_quest_in_region = self
+            .prisma
+            .quest()
+            .find_first(vec![
+                quest::region_name::equals(current_region.region_name.to_str()),
+                quest::quest_number::equals(1),
+            ])
+            .exec()
+            .await?
+            .unwrap();
+
+        let hero_quest =
+            self.prisma
+                .hero_quests()
+                .create(
+                    hero::id::equals(hero_id.clone()),
+                    quest::id::equals(first_quest_in_region.id),
+                    vec![],
+                )
+                .with(
+                    hero_quests::quest::fetch() //TODO: check if this works when more than one action
+                        //is on a quest and 1 gets completed
+                        .with(
+                            quest::actions::fetch(vec![]).with(action::hero_action::fetch(vec![])),
+                        ),
+                )
+                .exec()
+                .await?;
+        Ok((*hero_quest.quest.unwrap()).into())
+    }
+
+    pub async fn get_action_by_id(&self, action_id: &str) -> Result<Action, QueryError> {
+        let action = self
+            .prisma
+            .action()
+            .find_unique(action::UniqueWhereParam::IdEquals(String::from(action_id)))
+            .exec()
+            .await?;
+
+        Ok(action.unwrap().into())
+    }
+
+    pub async fn add_hero_action(
+        &self,
+        hero_id: String,
+        action_id: String,
+    ) -> Result<(), QueryError> {
+        self.prisma
+            .hero_actions()
+            .create(
+                hero::id::equals(hero_id),
+                action::id::equals(action_id),
+                vec![],
+            )
+            .exec()
+            .await?;
+        Ok(())
+    }
+
+    pub async fn is_action_completed(
+        &self,
+        hero_id: String,
+        action_id: String,
+    ) -> Result<bool, QueryError> {
+        let hero_action = self
+            .prisma
+            .hero_actions()
+            .find_first(vec![
+                hero_actions::hero_id::equals(hero_id),
+                hero_actions::action_id::equals(action_id.clone()),
+            ])
+            .exec()
+            .await?;
+
+        match hero_action {
+            Some(_) => {
+                info!("Hero action already completed");
+                return Ok(true);
+            }
+            None => {
+                info!("Hero action not completed");
+                return Ok(false);
+            }
+        }
     }
 
     pub async fn store_action_completed(&self, result: ActionCompleted) -> Result<(), QueryError> {

@@ -47,6 +47,8 @@ members = [
 ]
 resolver = "2"
 
+[toolchain]
+channel = "nightly"
 
 [profile.dev]
 opt-level = 0
