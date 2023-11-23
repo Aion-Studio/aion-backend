@@ -9,6 +9,7 @@ use tracing::{error, info, warn};
 use crate::events::game::{ActionNames, TaskLootBox};
 use crate::models::hero::{Attributes, BaseStats};
 use crate::models::quest::{Action, Quest};
+use crate::prisma::action::hero_action;
 use crate::prisma::{action, hero_actions, hero_quests, quest, resource_type, ResourceEnum};
 use crate::{
     events::game::ActionCompleted,
@@ -388,7 +389,7 @@ impl Repo {
             .collect())
     }
 
-    pub async fn get_question_action_ids(
+    pub async fn get_quest_action_ids(
         &self,
         quest: Option<Quest>,
     ) -> Result<Vec<String>, QueryError> {
@@ -412,14 +413,20 @@ impl Repo {
                 hero_quests::completed::equals(false),
             ])
             .with(
-                hero_quests::quest::fetch()
-                    .with(quest::actions::fetch(vec![]).with(action::quest::fetch())),
+                hero_quests::quest::fetch().with(
+                    quest::actions::fetch(vec![])
+                        .with(action::quest::fetch())
+                        .with(action::hero_action::fetch(vec![
+                            hero_actions::hero_id::equals(hero_id.clone()),
+                        ])),
+                ),
             )
             .exec()
             .await?;
 
         let quest: Option<Quest> = hero_quest_data.and_then(|hero_quest| {
             hero_quest.quest.map(|boxed_quest_data| {
+                println!("boxed_quest_data: {:?}", boxed_quest_data);
                 // Dereference the boxed_quest_data and convert it to Quest
                 (*boxed_quest_data).into()
             })
@@ -567,7 +574,7 @@ impl Repo {
         let hero = self
             .prisma
             .hero()
-            .find_unique(hero::id::equals(hero_id.clone().to_string()))
+            .find_unique(hero::id::equals(hero_id.to_string()))
             .exec()
             .await;
 

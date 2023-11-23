@@ -3,6 +3,7 @@ use actix_web::{
     web::{Json, Path},
     HttpResponse, Responder,
 };
+use serde_json::json;
 use tokio::join;
 
 use crate::{
@@ -41,12 +42,12 @@ async fn do_quest_action(path: Path<(String, String)>) -> impl Responder {
     let (action, already_done) = result;
 
     if action.is_err() {
-        return HttpResponse::InternalServerError().body("Bad action id");
+        return HttpResponse::InternalServerError().json(json!({"message":"Bad action id"}));
     }
 
     match already_done {
         Ok(true) => {
-            return HttpResponse::Forbidden().body("Action already done");
+            return HttpResponse::Forbidden().json(json!({"message":"Action already done"}));
         }
 
         Ok(false) => {}

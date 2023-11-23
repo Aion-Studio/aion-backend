@@ -3,7 +3,7 @@ use crate::events::initialize::initialize_handlers;
 use crate::handlers::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
-use crate::handlers::quest::{add_quest, get_hero_quests, do_quest_action};
+use crate::handlers::quest::{add_quest, do_quest_action, get_hero_quests};
 use crate::handlers::regions::{channel_leyline, explore_region};
 use crate::handlers::tasks::{active_actions, active_actions_ws};
 use crate::infra::Infra;
@@ -150,8 +150,9 @@ async fn health_check() -> impl Responder {
 
 #[get("/all-heroes")]
 async fn get_heroes() -> impl Responder {
-    info!("Fetch all heroes....");
+    info!("Fetching all heroes....");
     let heroes = Infra::repo().get_all_heroes().await.unwrap();
+    info!("Successfully fetched all heroes....");
     HttpResponse::Ok().json(heroes)
 }
 

@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::prisma::{
     action,
     quest::{self, actions, SetParam},
 };
 
-use super::region::{Leyline, Region, RegionName};
+use super::region::{Leyline, RegionName};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +16,15 @@ pub struct Action {
     pub region_name: RegionName,
     pub leyline: Option<Leyline>,
     pub quest: Option<Quest>,
+    pub hero_action: Option<HeroAction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeroAction {
+    id: Option<String>,
+    hero_id: String,
+    action_id: String,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -80,11 +88,17 @@ impl From<quest::Data> for Quest {
 
 impl From<action::Data> for Action {
     fn from(data: action::Data) -> Self {
+        let region_name = data.region_name.clone();
+        let hero_action = data.hero_action().cloned();
+        let hero_action_option = match hero_action {
+            Ok(vec) => vec.into_iter().next(),
+            Err(_) => None, // Handle error by returning None
+        };
         Action {
-            id: Some(data.id),
-            name: data.name,
-            description: data.description,
-            region_name: match data.region_name.as_str() {
+            id: Some(data.id),             // Moved
+            name: data.name,               // Moved
+            description: data.description, // Moved
+            region_name: match region_name.as_str() {
                 "Dusane" => RegionName::Dusane,
                 "Yezer" => RegionName::Yezer,
                 "Emerlad" => RegionName::Emerlad,
@@ -94,7 +108,11 @@ impl From<action::Data> for Action {
                 "Lindon" => RegionName::Lindon,
                 _ => RegionName::Dusane,
             },
-
+            hero_action: hero_action_option.map(|ha| HeroAction {
+                id: Some(ha.id),
+                hero_id: ha.hero_id,
+                action_id: ha.action_id,
+            }),
             // Handle the double Option and Box for leyline
             leyline: data.leyline.flatten().map(|l| *l).map(Leyline::from),
             // Handle the double Option and Box for quest

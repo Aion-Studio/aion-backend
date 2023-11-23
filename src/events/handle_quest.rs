@@ -1,14 +1,10 @@
 use std::sync::Arc;
 
 use futures::TryFutureExt;
+use tokio::spawn;
 use tracing::{info, log::error};
 
-use crate::{
-    configuration::{get_durations, DurationType},
-    infra::Infra,
-    models::quest::Quest,
-    services::tasks::explore::ExploreAction,
-};
+use crate::{infra::Infra, models::quest::Quest, services::tasks::explore::ExploreAction};
 
 use super::{
     dispatcher::EventHandler,
@@ -27,10 +23,10 @@ impl QuestHandler {
 
     fn subscribe(&self) {
         Infra::subscribe(GameEvent::quest_action(), Arc::new(self.clone()));
+        Infra::subscribe(GameEvent::quest_action_done(), Arc::new(self.clone()));
     }
 
     async fn _handle(&self, event: GameEvent) {
-        println!("handling quest event: {:?}", event);
         match event {
             GameEvent::QuestAction(hero_id, action_id) => {
                 // unwrap safe here because validation done before action dispatched
@@ -72,7 +68,7 @@ impl QuestHandler {
                     .get_quest_by_hero_id(hero_id.clone())
                     .and_then(|quest| {
                         found_quest = quest.clone();
-                        repo.get_question_action_ids(Some(quest))
+                        repo.get_quest_action_ids(Some(quest))
                     })
                     .and_then(|action_ids| async move {
                         let hero_completed_actions_ids = repo_clone
@@ -113,9 +109,11 @@ impl QuestHandler {
 
 impl EventHandler for QuestHandler {
     fn handle(&self, event: GameEvent) {
-        let _ = Box::pin(async move {
+        println!("before box");
+        let this = self.clone();
+        spawn(async move {
             info!("handling quest event: {:?}", event);
-            self._handle(event).await;
+            this._handle(event).await;
         });
     }
 }

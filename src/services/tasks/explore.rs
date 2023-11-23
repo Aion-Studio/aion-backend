@@ -5,7 +5,7 @@ use rand::Rng;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uuid::Uuid;
 
-use crate::configuration::{get_explore_durations, ExploreDurations};
+use crate::configuration::{get_explore_durations};
 use crate::events::game::ActionNames;
 use crate::models::resources::MaterialType;
 use crate::{
