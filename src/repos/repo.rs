@@ -9,7 +9,6 @@ use tracing::{error, info, warn};
 use crate::events::game::{ActionNames, TaskLootBox};
 use crate::models::hero::{Attributes, BaseStats};
 use crate::models::quest::{Action, Quest};
-use crate::prisma::action::hero_action;
 use crate::prisma::{action, hero_actions, hero_quests, quest, resource_type, ResourceEnum};
 use crate::{
     events::game::ActionCompleted,
@@ -289,7 +288,7 @@ impl Repo {
                             action.name,
                             region::name::equals(action.region_name.to_str()),
                             vec![action::description::set(action.description)],
-                        ) // You need to adjust the parameters accordingly
+                        )
                         .exec()
                         .await?;
                     Ok(new_action.id)
@@ -347,14 +346,14 @@ impl Repo {
     pub async fn mark_quest_complete(
         &self,
         hero_id: String,
-        quest_id: String,
+        quest_id: &str,
     ) -> Result<(), QueryError> {
         let hq = self
             .prisma
             .hero_quests()
             .find_first(vec![
                 hero_quests::hero_id::equals(hero_id.clone()),
-                hero_quests::quest_id::equals(quest_id.clone()),
+                hero_quests::quest_id::equals(quest_id.to_string()),
             ])
             .exec()
             .await?
@@ -389,11 +388,8 @@ impl Repo {
             .collect())
     }
 
-    pub async fn get_quest_action_ids(
-        &self,
-        quest: Option<Quest>,
-    ) -> Result<Vec<String>, QueryError> {
-        let quest_id = quest.unwrap().id.unwrap();
+    pub async fn get_quest_action_ids(&self, quest: Quest) -> Result<Vec<String>, QueryError> {
+        let quest_id = quest.id.unwrap();
         let actions = self
             .prisma
             .action()
@@ -541,6 +537,12 @@ impl Repo {
                 TaskLootBox::Channel(result) => {
                     json!({
                         "actionName": "Channel",
+                        "result": result
+                    })
+                }
+                TaskLootBox::Quest(result) => {
+                    json!({
+                        "actionName": "Quest",
                         "result": result
                     })
                 }

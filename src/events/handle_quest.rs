@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use futures::TryFutureExt;
+
+use futures::future::{self, FutureExt};
 use tokio::spawn;
 use tracing::{info, log::error};
 
+use crate::services::tasks::action_names::ActionNames;
 use crate::{infra::Infra, models::quest::Quest, services::tasks::explore::ExploreAction};
 
-use super::{
-    dispatcher::EventHandler,
-    game::{ActionNames, GameEvent},
-};
+use super::{dispatcher::EventHandler, game::GameEvent};
 
 #[derive(Clone, Debug)]
 pub struct QuestHandler {}
@@ -34,6 +34,7 @@ impl QuestHandler {
 
                 let region = action.region_name;
 
+                // marks action as done
                 match Infra::repo()
                     .add_hero_action(hero_id.clone(), action_id.clone())
                     .await
@@ -47,11 +48,12 @@ impl QuestHandler {
                 match ActionNames::from_str(&action.name) {
                     Some(ActionNames::Explore) => {
                         let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
-                        let action = ExploreAction::without_cost(hero, region);
-                        Infra::dispatch(GameEvent::HeroExplores(action));
+                        let action = ExploreAction::new(hero, region);
+                        Infra::dispatch(GameEvent::HeroExplores(action.unwrap()));
                     }
                     Some(ActionNames::Channel) => {}
                     Some(ActionNames::Raid) => {}
+                    Some(ActionNames::Unique(off_beat)) => {}
                     _ => {
                         error!("Action name not found");
                         return;
@@ -68,7 +70,7 @@ impl QuestHandler {
                     .get_quest_by_hero_id(hero_id.clone())
                     .and_then(|quest| {
                         found_quest = quest.clone();
-                        repo.get_quest_action_ids(Some(quest))
+                        repo.get_quest_action_ids(quest)
                     })
                     .and_then(|action_ids| async move {
                         let hero_completed_actions_ids = repo_clone
@@ -88,9 +90,13 @@ impl QuestHandler {
                     Ok(done) => {
                         if done {
                             let _ = Infra::repo()
-                                .mark_quest_complete(hero_id.clone(), found_quest.id.unwrap())
+                                .mark_quest_complete(
+                                    hero_id.clone(),
+                                    found_quest.id.as_ref().unwrap(),
+                                )
                                 .await;
-                            Infra::dispatch(GameEvent::EnableNextQuest(hero_id));
+                            info!("Quest marked as complete. Dispatching complete event...");
+                            Infra::dispatch(GameEvent::QuestComplete(hero_id, found_quest));
                         }
                     }
                     Err(e) => {
@@ -98,8 +104,8 @@ impl QuestHandler {
                     }
                 }
             }
-            GameEvent::EnableNextQuest(hero_id) => {
-                info!("enabling next quest for hero {}", hero_id);
+            GameEvent::QuestComplete(hero_id, quest_id) => {
+                info!("should enable next quest ? for hero {} ", hero_id);
             }
 
             _ => {}

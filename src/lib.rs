@@ -59,6 +59,8 @@ mod services {
     pub mod tasks {
         pub mod channel;
         pub mod explore;
+        pub mod action_names;
+        pub mod off_beat_actions;
     }
 }
 
@@ -72,6 +74,7 @@ pub mod handlers {
 }
 
 pub mod infra;
+pub mod messenger;
 
 mod logger;
 #[cfg(test)]

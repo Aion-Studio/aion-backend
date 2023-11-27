@@ -29,6 +29,7 @@ pub struct AppState {
     pub prisma: Arc<PrismaClient>,
     pub durations: HashMap<String, DurationType>,
 }
+
 #[allow(dead_code)]
 fn run_prisma_migrations(config: &Settings) -> Result<(), std::io::Error> {
     let db_url = format!(

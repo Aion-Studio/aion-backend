@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+use super::region::{Leyline, RegionName};
 use crate::prisma::{
     action,
     quest::{self, actions, SetParam},
 };
-
-use super::region::{Leyline, RegionName};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

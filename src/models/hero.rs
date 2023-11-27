@@ -102,6 +102,9 @@ impl Hero {
                 self.gain_stamina(result.stamina_gained);
                 self.add_resources(result.resources);
             }
+            TaskLootBox::Quest(result) => {
+                self.add_resources(result.resources);
+            }
         }
     }
 
@@ -123,6 +126,7 @@ impl Hero {
                 let hero_id = result.hero_id.clone();
                 let xp = result.xp;
             }
+            _ => {}
         }
         Ok(())
     }

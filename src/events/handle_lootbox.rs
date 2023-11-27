@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::events::game::ActionCompleted;
+use crate::events::game::{ActionCompleted, ActionNames};
+use crate::models::quest::Quest;
 use crate::services::traits::async_task::Task;
 use crate::{
     infra::Infra,
@@ -13,6 +14,7 @@ use rand::Rng;
 use tracing::{error, info};
 use TaskLootBox::Channel;
 
+use super::game::QuestResult;
 use super::{
     dispatcher::EventHandler,
     game::{ChannelResult, ExploreResult, GameEvent, TaskLootBox},
@@ -31,6 +33,26 @@ impl LootBoxHandler {
     fn subscribe(&self) {
         Infra::subscribe(GameEvent::explore_completed(), Arc::new(self.clone()));
         Infra::subscribe(GameEvent::channeling_completed(), Arc::new(self.clone()));
+        Infra::subscribe(GameEvent::quest_complete(), Arc::new(self.clone()));
+    }
+}
+
+impl Default for TaskLootBox {
+    fn default() -> Self {
+        TaskLootBox::new()
+    }
+}
+
+impl TaskLootBox {
+    pub fn new() -> Self {
+        //return a RegionActionResult
+        TaskLootBox::Region(ExploreResult {
+            hero_id: "hero_id".to_string(),
+            resources: HashMap::new(),
+            xp: 0,
+            discovery_level_increase: 0.0,
+            created_time: None,
+        })
     }
 }
 
@@ -53,7 +75,6 @@ impl EventHandler for LootBoxHandler {
                             error!("Error storing action completed: {}", e);
                         }
                         // update hero in db
-                        println!("hero with stats about to be updated {:?}", hero);
                         if let Err(e) = Infra::repo().update_hero(hero).await {
                             error!("Error updating hero: {}", e);
                         }
@@ -103,6 +124,32 @@ impl EventHandler for LootBoxHandler {
                         action.action_name()
                     );
                 }
+                GameEvent::QuestComplete(hero_id, quest) => {
+                    info!(
+                        "Generating lootbox for quest completed for hero {}",
+                        hero_id,
+                    );
+                    if let Ok(TaskLootBox::Quest(result)) =
+                        quest.generate_loot_box(Some(hero_id.clone()))
+                    {
+                        let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+                        hero.equip_loot(TaskLootBox::Quest(result.clone()));
+                        if let Err(e) = Infra::repo()
+                            .store_action_completed(ActionCompleted::new(
+                                ActionNames::Quest,
+                                hero_id.clone(),
+                                TaskLootBox::Quest(result.clone()),
+                            ))
+                            .await
+                        {
+                            error!("Error storing action completed: {}", e);
+                        }
+
+                        if let Err(e) = Infra::repo().update_hero(hero).await {
+                            error!("Error updating hero: {}", e);
+                        }
+                    }
+                }
                 _ => {}
             }
         });
@@ -115,6 +162,26 @@ pub trait GeneratesResources<T> {
 
 pub trait LootBoxGenerator<T> {
     fn generate_loot_box(&self, arg: Option<T>) -> Result<TaskLootBox>;
+}
+
+impl LootBoxGenerator<String> for Quest {
+    fn generate_loot_box(&self, hero_id: Option<String>) -> Result<TaskLootBox> {
+        let loot_box = QuestResult {
+            hero_id: hero_id.unwrap(),
+            quest_id: self.id.as_ref().unwrap().clone(),
+            created_time: None,
+            resources: self.generate_resources(None),
+        };
+        Ok(TaskLootBox::Quest(loot_box))
+    }
+}
+
+impl GeneratesResources<()> for Quest {
+    fn generate_resources(&self, _: Option<()>) -> HashMap<Resource, i32> {
+        let mut res = HashMap::new();
+        res.insert(Resource::NexusShard, rand::thread_rng().gen_range(5..20));
+        res
+    }
 }
 
 // Implement the trait for ExploreAction
@@ -164,5 +231,36 @@ impl LootBoxGenerator<()> for ChannelingAction {
             stamina_gained: rand::thread_rng().gen_range(5..20),
             created_time: Some(chrono::offset::Utc::now()),
         }))
+    }
+}
+
+pub fn from_json_to_loot_box(value: serde_json::Value) -> Option<TaskLootBox> {
+    let mut map = value.as_object()?.clone();
+
+    let action_name = map.get("actionName")?.as_str()?;
+    match action_name {
+        "Explore" => {
+            let result = map.remove("result")?;
+            let result: ExploreResult = match serde_json::from_value(result.clone()) {
+                Ok(explore_result) => explore_result,
+                Err(e) => {
+                    println!("error deserializing explore result: {} \n {:?}", e, result);
+                    return None;
+                }
+            };
+
+            Some(TaskLootBox::Region(result))
+        }
+        "Channel" => {
+            let result = map.remove("result")?;
+            let result: ChannelResult = serde_json::from_value(result).ok()?;
+            Some(TaskLootBox::Channel(result))
+        }
+        "Quest" => {
+            let result = map.remove("result")?;
+            let result: QuestResult = serde_json::from_value(result).ok()?;
+            Some(TaskLootBox::Quest(result))
+        }
+        _ => None,
     }
 }

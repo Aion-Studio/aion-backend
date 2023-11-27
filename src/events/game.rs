@@ -5,15 +5,19 @@ use tracing::log::warn;
 
 use crate::infra::Infra;
 use crate::models::hero::Hero;
+use crate::models::quest::Quest;
 use crate::models::region::Leyline;
 use crate::models::resources::Resource;
 use crate::prisma::action_completed;
+use crate::services::tasks::action_names::{TaskLootBox, ActionNames};
 use prisma_client_rust::chrono::{DateTime, FixedOffset};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::services::tasks::channel::ChannelingAction;
 use crate::services::tasks::explore::ExploreAction;
+
+use super::handle_lootbox::from_json_to_loot_box;
 
 #[derive(Debug, Clone, Serialize)]
 pub enum GameEvent {
@@ -24,7 +28,7 @@ pub enum GameEvent {
     ChannelingCompleted(ChannelingAction),
     QuestAction(String, String),
     QuestActionDone(String),
-    EnableNextQuest(String),
+    QuestComplete(String, Quest),
 }
 
 impl GameEvent {
@@ -50,8 +54,8 @@ impl GameEvent {
         "QuestActionDone"
     }
 
-    pub fn enable_next_quest() -> &'static str {
-        "EnableNextQuest"
+    pub fn quest_complete() -> &'static str {
+        "QuestComplete"
     }
 
     pub fn name(&self) -> String {
@@ -63,116 +67,8 @@ impl GameEvent {
             GameEvent::ChannelingCompleted { .. } => "ChannelingCompleted".to_string(),
             GameEvent::QuestAction { .. } => "QuestAction".to_string(),
             GameEvent::QuestActionDone { .. } => "QuestActionDone".to_string(),
-            GameEvent::EnableNextQuest { .. } => "EnableNextQuest".to_string(),
+            GameEvent::QuestComplete { .. } => "QuestComplete".to_string(),
         }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ActionNames {
-    Explore,
-    Channel,
-    Quest,
-    Raid,
-}
-
-impl ActionNames {
-    pub fn to_string(&self) -> String {
-        match self {
-            ActionNames::Explore => "Explore".to_string(),
-            ActionNames::Channel => "Channel".to_string(),
-            ActionNames::Quest => "Quest".to_string(),
-            ActionNames::Raid => "Raid".to_string(),
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "Explore" => Some(ActionNames::Explore),
-            "Channel" => Some(ActionNames::Channel),
-            "Quest" => Some(ActionNames::Quest),
-            "Raid" => Some(ActionNames::Raid),
-            // Add other cases as needed
-            _ => None,
-        }
-    }
-
-    pub fn from_string(action_name: &str) -> Self {
-        match action_name {
-            "Explore" => ActionNames::Explore,
-            "Channel" => ActionNames::Channel,
-            "Quest" => ActionNames::Quest,
-            "Raid" => ActionNames::Raid,
-            _ => unreachable!(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub enum TaskAction {
-    Explore(ExploreAction),
-    Channel(ChannelingAction),
-}
-
-impl TaskAction {
-    pub fn name(&self) -> String {
-        match self {
-            TaskAction::Explore { .. } => "Explore".to_string(),
-            TaskAction::Channel { .. } => "Channel".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TaskLootBox {
-    Region(ExploreResult),
-    Channel(ChannelResult),
-}
-
-impl Default for TaskLootBox {
-    fn default() -> Self {
-        TaskLootBox::new()
-    }
-}
-
-impl TaskLootBox {
-    pub fn new() -> Self {
-        //return a RegionActionResult
-        TaskLootBox::Region(ExploreResult {
-            hero_id: "hero_id".to_string(),
-            resources: HashMap::new(),
-            xp: 0,
-            discovery_level_increase: 0.0,
-            created_time: None,
-        })
-    }
-}
-
-pub fn from_json_to_loot_box(value: serde_json::Value) -> Option<TaskLootBox> {
-    let mut map = value.as_object()?.clone();
-
-    info!("converting data to loot box {:?}", map);
-
-    let action_name = map.get("actionName")?.as_str()?;
-    match action_name {
-        "Explore" => {
-            let result = map.remove("result")?;
-            let result: ExploreResult = match serde_json::from_value(result.clone()) {
-                Ok(explore_result) => explore_result,
-                Err(e) => {
-                    println!("error deserializing explore result: {} \n {:?}", e, result);
-                    return None;
-                }
-            };
-
-            Some(TaskLootBox::Region(result))
-        }
-        "Channel" => {
-            let result = map.remove("result")?;
-            let result: ChannelResult = serde_json::from_value(result).ok()?;
-            Some(TaskLootBox::Channel(result))
-        }
-        _ => None,
     }
 }
 
@@ -196,6 +92,14 @@ pub struct ExploreResult {
     pub xp: i32,
     pub discovery_level_increase: f64,
     pub created_time: Option<DateTime<FixedOffset>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct QuestResult {
+    pub hero_id: String,
+    pub resources: HashMap<Resource, i32>,
+    pub created_time: Option<DateTime<FixedOffset>>,
+    pub quest_id: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -279,11 +183,6 @@ impl ActionCompleted {
     ) -> Option<Duration> {
         let now = Local::now().with_timezone(&Local);
         let time_until = action_created_at + timeout_duration;
-        println!(
-            "compare times createdAt: {:?}  timeout: {:?}  now: {:?}  time_until: {:?}",
-            action_created_at, timeout_duration, now, time_until
-        );
-
         let difference = time_until - now;
 
         if difference > Duration::seconds(0) {
@@ -350,6 +249,7 @@ impl ActionDurations {
             ActionNames::Channel => Duration::minutes(3),
             ActionNames::Quest => Duration::minutes(3),
             ActionNames::Raid => Duration::minutes(3),
+            _ => Duration::minutes(0),
         }
     }
 }

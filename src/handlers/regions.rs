@@ -4,14 +4,10 @@ use actix_web::{
     HttpResponse, Responder,
 };
 
-
-use crate::{models::region::RegionName, handlers::response::ApiResponse};
+use crate::{configuration::{ChannelDurations, DurationType}, services::tasks::action_names::TaskAction};
 use crate::services::tasks::channel::ChannelingAction;
-use crate::{
-    configuration::{ChannelDurations, DurationType},
-    events::game::TaskAction,
-};
 use crate::{events::game::GameEvent, models::hero::Hero, services::tasks::explore::ExploreAction};
+use crate::{handlers::response::ApiResponse, models::region::RegionName};
 use crate::{infra::Infra, webserver::AppState};
 
 #[get("/region/explore/{hero_id}")]
