@@ -1,37 +1,46 @@
-use crate::{events::game::TaskAction, services::traits::async_task::Task};
-use std::sync::Arc;
 use tracing::info;
 
-use crate::infra::Infra;
+use crate::{
+    configuration::ChannelDurations,
+    services::{
+        tasks::{
+            action_names::{Responder, TaskAction},
+            channel::ChannelingAction,
+        },
+        traits::async_task::Task,
+    },
+};
 
-use super::{dispatcher::EventHandler, game::GameEvent};
+use crate::infra::Infra;
 
 #[derive(Debug, Clone)]
 pub struct ChannelingHandler {}
 
 impl ChannelingHandler {
-    pub fn new() -> Self {
-        let handler = Self {};
-        handler.subscribe();
-        handler
-    }
-    fn subscribe(&self) {
-        Infra::subscribe(GameEvent::channeling(), Arc::new(self.clone()));
-    }
-}
+    pub fn hero_channels(
+        hero_id: String,
+        leyline_name: String,
+        durations: ChannelDurations,
+        resp: Responder<()>,
+    ) {
+        tokio::spawn(async move {
+            let action = Infra::repo()
+                .get_hero(hero_id)
+                .await
+                .map(|hero| ChannelingAction::new(hero, &leyline_name, &durations))
+                .unwrap_or_else(|_| None);
 
-impl EventHandler for ChannelingHandler {
-    fn handle(&self, event: GameEvent) {
-        match event {
-            GameEvent::Channeling(action) => {
-                action.start_now();
-                Infra::tasks().schedule_action(TaskAction::Channel(action.clone()));
-                info!("Scheduled channeling action for hero {:?}", action.hero.id);
+            match action {
+                Some(action) => {
+                    info!("Starting channeling ...");
+                    action.start_now();
+                    Infra::tasks().schedule_action(TaskAction::Channel(action));
+                    let _ = resp.send(Ok(()));
+                }
+                None => {
+                    let _ = resp.send(Err(anyhow::Error::msg("Couldn't start channeling")));
+                }
             }
-            GameEvent::ChannelingCompleted(_) => {
-                info!("Channeling completed received inn channel handler");
-            }
-            _ => {}
-        }
+        });
     }
 }

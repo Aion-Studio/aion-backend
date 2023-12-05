@@ -6,10 +6,11 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::events::game::{ActionCompleted, ActionNames, TaskAction};
+use crate::events::game::ActionCompleted;
 use crate::infra::Infra;
 use crate::models::hero::{Attributes, BaseStats, Hero, Range};
 use crate::models::region::{HeroRegion, Leyline};
+use crate::services::tasks::action_names::{ActionNames, TaskAction};
 use crate::services::tasks::channel::ChannelingAction;
 use crate::services::traits::async_task::Task;
 
@@ -66,8 +67,8 @@ pub struct HeroStateResponse {
     region_hero: HeroRegion,
     pub active_task: Option<TaskAction>,
     pub available_leylines: Vec<Leyline>,
-    explore_available: (bool, chrono::DateTime<chrono::Local>),
-    channeling_available: (Vec<Leyline>, chrono::DateTime<chrono::Local>),
+    explore_available: (bool, chrono::DateTime<Local>),
+    channeling_available: (Vec<Leyline>, chrono::DateTime<Local>),
 }
 
 #[get("/heroes/{id}")]
@@ -165,7 +166,7 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                     explore_available = Some((false, chrono::Utc::now().into()));
                 }
                 if let TaskAction::Channel(action) = task {
-                    currently_channeling = Some(action);
+                    currently_channeling = Some(&action);
                 }
             }
 

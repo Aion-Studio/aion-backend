@@ -18,8 +18,8 @@ pub struct RegionService {
 }
 
 impl RegionService {
-    pub fn new(scheduler: Arc<TaskManager>, prisma: Arc<PrismaClient>) -> Arc<Self> {
-        let repo = Repo::new(prisma);
+    pub fn new(scheduler: Arc<TaskManager>) -> Arc<Self> {
+        let repo = Infra::repo();
 
         let service = Arc::new(Self { scheduler, repo });
 

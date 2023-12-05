@@ -28,7 +28,7 @@ async fn random_hero_and_explore() -> (
     Arc<PrismaClient>,
 ) {
     let prisma_client = setup_test_database().await.unwrap();
-    Infra::initialize(prisma_client.clone().into_inner());
+    Infra::initialize();
     initialize_handlers();
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
@@ -43,7 +43,7 @@ async fn random_hero_and_explore() -> (
         Box::new(move || {
             Box::pin(async move {
                 let region_name = RegionName::Dusane;
-                do_explore(&hero_clone, &region_name).unwrap();
+                do_explore(hero_clone, region_name).await.unwrap();
                 tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
             })
         });
@@ -54,7 +54,7 @@ async fn random_hero_and_explore() -> (
 async fn explore(hero: Hero, region_name: RegionName) -> Result<(), Error> {
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
-    do_explore(&hero, &region_name).unwrap();
+    do_explore(hero, region_name).await.unwrap();
     tokio::time::sleep(Duration::milliseconds(650).to_std().unwrap()).await;
     Ok(())
 }
@@ -62,7 +62,7 @@ async fn explore(hero: Hero, region_name: RegionName) -> Result<(), Error> {
 #[tokio::test]
 async fn test_generate_result_for_exploration() {
     let prisma_client = setup_test_database().await.unwrap();
-    Infra::initialize(prisma_client.clone().into_inner());
+    Infra::initialize();
     initialize_handlers();
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
@@ -74,7 +74,7 @@ async fn test_generate_result_for_exploration() {
 
     let region_name = RegionName::Dusane;
     // Execute the start_exploration function and get the result
-    do_explore(&hero, &region_name).unwrap();
+    do_explore(hero, region_name).await.unwrap();
     tokio::time::sleep(Duration::milliseconds(800).to_std().unwrap()).await;
 
     let hero = Infra::repo().get_hero(hero_id).await.unwrap();
@@ -86,7 +86,7 @@ async fn test_hero_status_after_explore() {
     let (hero, run_the_task, prisma_client) = random_hero_and_explore().await;
 
     // RegionHero Before
-    let region_repo = Repo::new(prisma_client.clone());
+    let region_repo = Repo::new();
     let current_region_hero = region_repo
         .get_current_hero_region(hero.get_id().as_ref())
         .await

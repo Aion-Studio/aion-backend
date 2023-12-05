@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::events::game::{ActionCompleted, ActionNames};
+use crate::events::game::ActionCompleted;
 use crate::models::quest::Quest;
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::services::traits::async_task::Task;
 use crate::{
     infra::Infra,
@@ -12,28 +13,111 @@ use anyhow::Result;
 use prisma_client_rust::chrono;
 use rand::Rng;
 use tracing::{error, info};
-use TaskLootBox::Channel;
 
 use super::game::QuestResult;
-use super::{
-    dispatcher::EventHandler,
-    game::{ChannelResult, ExploreResult, GameEvent, TaskLootBox},
-};
+use super::game::{ChannelResult, ExploreResult, GameEvent};
+
+use TaskLootBox::*;
 
 #[derive(Clone, Debug)]
 pub struct LootBoxHandler {}
 
 impl LootBoxHandler {
-    pub fn new() -> Self {
-        let handler = Self {};
-        handler.subscribe();
-        handler
+    pub fn create_lootbox_explore(action: ExploreAction) {
+        tokio::spawn(async move {
+            let hero_id = action.clone().hero.id.unwrap();
+            let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+            let hero_region = Infra::repo()
+                .get_current_hero_region(&hero.get_id())
+                .await
+                .unwrap();
+            // update hero region discovery level
+            let loot = match action.generate_loot_box(Some(hero_region.discovery_level as f64)) {
+                Ok(loot_box) => loot_box,
+                Err(err) => {
+                    error!("Error generating lootbox: {}", err);
+                    return;
+                }
+            };
+
+            hero.equip_loot(loot.clone());
+
+            if let Err(e) = Infra::repo()
+                .update_hero_region_discovery_level(&hero_id, action.discovery_level)
+                .await
+            {
+                error!("Error updating hero region discovery level: {}", e);
+            }
+
+            // Store action completed
+            if let Err(e) = Infra::repo()
+                .store_action_completed(ActionCompleted::new(
+                    action.action_name(),
+                    action.hero_id(),
+                    loot,
+                ))
+                .await
+            {
+                error!("Error storing action completed: {}", e);
+            }
+
+            info!(
+                "Stored action completed {:?} for {:?}",
+                hero.name,
+                action.action_name()
+            );
+        });
     }
 
-    fn subscribe(&self) {
-        Infra::subscribe(GameEvent::explore_completed(), Arc::new(self.clone()));
-        Infra::subscribe(GameEvent::channeling_completed(), Arc::new(self.clone()));
-        Infra::subscribe(GameEvent::quest_complete(), Arc::new(self.clone()));
+    pub fn create_lootbox_channel(action: ChannelingAction) {
+        tokio::spawn(async move {
+            if let Ok(Channel(result)) = action.generate_loot_box(None) {
+                info!("Channeling completed, generating lootbox...");
+                let mut hero = Infra::repo().get_hero(action.hero.get_id()).await.unwrap();
+                hero.equip_loot(Channel(result.clone()));
+                if let Err(e) = Infra::repo()
+                    .store_action_completed(ActionCompleted::new(
+                        action.action_name(),
+                        action.hero.get_id(),
+                        Channel(result),
+                    ))
+                    .await
+                {
+                    error!("Error storing action completed: {}", e);
+                }
+                // update hero in db
+                if let Err(e) = Infra::repo().update_hero(hero).await {
+                    error!("Error updating hero: {}", e);
+                }
+            }
+        });
+    }
+
+    pub fn create_lootbox_quest_complete(hero_id: String, quest: Quest) {
+        tokio::spawn(async move {
+            info!(
+                "Generating lootbox for quest completed for hero {}",
+                hero_id,
+            );
+            if let Ok(TaskLootBox::Quest(result)) = quest.generate_loot_box(Some(hero_id.clone())) {
+                let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+                hero.equip_loot(TaskLootBox::Quest(result.clone()));
+                if let Err(e) = Infra::repo()
+                    .store_action_completed(ActionCompleted::new(
+                        ActionNames::Quest,
+                        hero_id.clone(),
+                        TaskLootBox::Quest(result.clone()),
+                    ))
+                    .await
+                {
+                    error!("Error storing action completed: {}", e);
+                }
+
+                if let Err(e) = Infra::repo().update_hero(hero).await {
+                    error!("Error updating hero: {}", e);
+                }
+            }
+        });
     }
 }
 
@@ -53,106 +137,6 @@ impl TaskLootBox {
             discovery_level_increase: 0.0,
             created_time: None,
         })
-    }
-}
-
-impl EventHandler for LootBoxHandler {
-    fn handle(&self, event: GameEvent) {
-        tokio::spawn(async move {
-            match event {
-                GameEvent::ChannelingCompleted(action) => {
-                    if let Ok(Channel(result)) = action.generate_loot_box(None) {
-                        let mut hero = Infra::repo().get_hero(action.hero.get_id()).await.unwrap();
-                        hero.equip_loot(Channel(result.clone()));
-                        if let Err(e) = Infra::repo()
-                            .store_action_completed(ActionCompleted::new(
-                                action.action_name(),
-                                action.hero.get_id(),
-                                Channel(result),
-                            ))
-                            .await
-                        {
-                            error!("Error storing action completed: {}", e);
-                        }
-                        // update hero in db
-                        if let Err(e) = Infra::repo().update_hero(hero).await {
-                            error!("Error updating hero: {}", e);
-                        }
-                    }
-                }
-                GameEvent::ExploreCompleted(action) => {
-                    let hero_id = action.clone().hero.id.unwrap();
-                    let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
-                    let hero_region = Infra::repo()
-                        .get_current_hero_region(&hero.get_id())
-                        .await
-                        .unwrap();
-                    // update hero region discovery level
-                    let loot =
-                        match action.generate_loot_box(Some(hero_region.discovery_level as f64)) {
-                            Ok(loot_box) => loot_box,
-                            Err(err) => {
-                                error!("Error generating lootbox: {}", err);
-                                return;
-                            }
-                        };
-
-                    hero.equip_loot(loot.clone());
-
-                    if let Err(e) = Infra::repo()
-                        .update_hero_region_discovery_level(&hero_id, action.discovery_level)
-                        .await
-                    {
-                        error!("Error updating hero region discovery level: {}", e);
-                    }
-
-                    // Store action completed
-                    if let Err(e) = Infra::repo()
-                        .store_action_completed(ActionCompleted::new(
-                            action.action_name(),
-                            action.hero_id(),
-                            loot,
-                        ))
-                        .await
-                    {
-                        error!("Error storing action completed: {}", e);
-                    }
-
-                    info!(
-                        "Stored action completed {:?} for {:?}",
-                        hero.name,
-                        action.action_name()
-                    );
-                }
-                GameEvent::QuestComplete(hero_id, quest) => {
-                    info!(
-                        "Generating lootbox for quest completed for hero {}",
-                        hero_id,
-                    );
-                    if let Ok(TaskLootBox::Quest(result)) =
-                        quest.generate_loot_box(Some(hero_id.clone()))
-                    {
-                        let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
-                        hero.equip_loot(TaskLootBox::Quest(result.clone()));
-                        if let Err(e) = Infra::repo()
-                            .store_action_completed(ActionCompleted::new(
-                                ActionNames::Quest,
-                                hero_id.clone(),
-                                TaskLootBox::Quest(result.clone()),
-                            ))
-                            .await
-                        {
-                            error!("Error storing action completed: {}", e);
-                        }
-
-                        if let Err(e) = Infra::repo().update_hero(hero).await {
-                            error!("Error updating hero: {}", e);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        });
     }
 }
 

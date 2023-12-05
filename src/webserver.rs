@@ -1,5 +1,4 @@
 use crate::configuration::{get_durations, DurationType, Settings};
-use crate::events::initialize::initialize_handlers;
 use crate::handlers::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
@@ -8,11 +7,13 @@ use crate::handlers::regions::{channel_leyline, explore_region};
 use crate::handlers::tasks::{active_actions, active_actions_ws};
 use crate::infra::Infra;
 use crate::logger::Logger;
+use crate::messenger::MESSENGER;
 use crate::prisma::PrismaClient;
 use actix_cors::Cors;
 use actix_web::dev::Server;
 use actix_web::web::{Data, Path};
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
+use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::process::Command;
@@ -26,7 +27,6 @@ pub struct Application {
 
 #[derive(Clone, Debug)]
 pub struct AppState {
-    pub prisma: Arc<PrismaClient>,
     pub durations: HashMap<String, DurationType>,
 }
 
@@ -54,6 +54,15 @@ fn run_prisma_migrations(config: &Settings) -> Result<(), std::io::Error> {
     }
 }
 
+pub static PRISMA_CLIENT: OnceCell<Arc<PrismaClient>> = OnceCell::new();
+
+pub fn get_prisma_client() -> Arc<PrismaClient> {
+    PRISMA_CLIENT
+        .get()
+        .expect("Prisma client has not been initialized")
+        .clone()
+}
+
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
         let url = format!(
@@ -61,15 +70,16 @@ impl Application {
             configuration.database.url, configuration.database.name, configuration.database.params
         );
 
-        let prisma_result = PrismaClient::_builder().with_url(url).build().await;
+        let prisma_client = PrismaClient::_builder()
+            .with_url(url)
+            .build()
+            .await
+            .expect("Failed to connect to database");
 
-        let prisma_client = match prisma_result {
-            Ok(prisma_client) => prisma_client,
-            Err(e) => {
-                println!("Failed to connect to database: {:?}", e);
-                return Err(anyhow::Error::new(e));
-            }
-        };
+        PRISMA_CLIENT
+            .set(Arc::new(prisma_client))
+            .expect("Failed to set the global Prisma client");
+
         let address = format!(
             "{}:{}",
             configuration.application.host, configuration.application.port
@@ -77,7 +87,7 @@ impl Application {
         let listener = TcpListener::bind(address.clone())?;
         let port = listener.local_addr().unwrap().port();
 
-        let server = run(listener, prisma_client).await?;
+        let server = run(listener).await?;
         info!(
             "... ....................Server started at {} and port {}........................",
             address, port
@@ -95,24 +105,22 @@ impl Application {
     }
 }
 
-async fn run(listener: TcpListener, prisma_client: PrismaClient) -> Result<Server, anyhow::Error> {
-    let prisma = Arc::new(prisma_client);
-
+async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
     match Logger::init("http:://localhost:9000") {
         Ok(_) => println!("Logger initialized"),
         Err(e) => println!("Logger failed to initialize: {:?}", e),
     };
+    // initialize the messenger
+    let _ = MESSENGER;
 
     // Subscribe the task management service to the HeroExplored event
     let app_state_s = AppState {
-        prisma: prisma.clone(),
         durations: get_durations(),
     };
     let app_state = Data::new(app_state_s.clone());
 
-    Infra::initialize(prisma.clone());
+    Infra::initialize();
 
-    initialize_handlers();
     let server = HttpServer::new(move || {
         let cors = Cors::permissive() // This allows all origins. Adjust as needed.
             .allow_any_origin()

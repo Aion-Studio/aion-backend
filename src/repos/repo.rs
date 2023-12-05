@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, warn};
 
-use crate::events::game::{ActionNames, TaskLootBox};
 use crate::models::hero::{Attributes, BaseStats};
 use crate::models::quest::{Action, Quest};
 use crate::prisma::{action, hero_actions, hero_quests, quest, resource_type, ResourceEnum};
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
+use crate::webserver::get_prisma_client;
 use crate::{
     events::game::ActionCompleted,
     models::{
@@ -33,7 +34,8 @@ pub struct Repo {
 }
 
 impl Repo {
-    pub fn new(prisma: Arc<PrismaClient>) -> Self {
+    pub fn new() -> Self {
+        let prisma = get_prisma_client();
         Self { prisma }
     }
 
@@ -422,7 +424,6 @@ impl Repo {
 
         let quest: Option<Quest> = hero_quest_data.and_then(|hero_quest| {
             hero_quest.quest.map(|boxed_quest_data| {
-                println!("boxed_quest_data: {:?}", boxed_quest_data);
                 // Dereference the boxed_quest_data and convert it to Quest
                 (*boxed_quest_data).into()
             })

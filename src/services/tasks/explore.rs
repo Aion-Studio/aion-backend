@@ -5,13 +5,14 @@ use rand::Rng;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uuid::Uuid;
 
-use crate::configuration::{get_explore_durations};
-use crate::events::game::ActionNames;
+use crate::configuration::get_explore_durations;
 use crate::models::resources::MaterialType;
 use crate::{
     models::{hero::Hero, region::RegionName},
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
 };
+
+use super::action_names::ActionNames;
 
 #[derive(Clone, Debug)]
 pub struct ExploreAction {

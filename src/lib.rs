@@ -7,6 +7,7 @@ pub mod types;
 pub mod utils;
 pub mod webserver;
 
+pub mod fp_macros;
 pub mod telemetry;
 
 #[allow(warnings, unused)]
@@ -38,7 +39,6 @@ mod events {
     pub mod handle_explore;
     pub mod handle_lootbox;
     pub mod handle_quest;
-    pub mod initialize;
 }
 
 mod services {
@@ -57,9 +57,9 @@ mod services {
         pub mod scheduler;
     }
     pub mod tasks {
+        pub mod action_names;
         pub mod channel;
         pub mod explore;
-        pub mod action_names;
         pub mod off_beat_actions;
     }
 }
@@ -67,8 +67,8 @@ mod services {
 pub mod handlers {
     pub mod heroes;
     pub mod regions;
-    pub mod tasks;
     pub mod response;
+    pub mod tasks;
 
     pub mod quest;
 }

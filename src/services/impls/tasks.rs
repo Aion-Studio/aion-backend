@@ -1,7 +1,8 @@
 use uuid::Uuid;
 
-use crate::events::game::TaskAction;
 use crate::handlers::tasks::send_new_tasks_to_ws;
+use crate::messenger::MESSENGER;
+use crate::services::tasks::action_names::{Command, TaskAction};
 use crate::{events::game::GameEvent, infra::Infra, services::traits::async_task::Task};
 use flume::{unbounded, Receiver, Sender};
 use std::{collections::HashMap, future::Future, sync::Arc};
@@ -43,7 +44,7 @@ impl TaskManager {
                 Uuid::parse_str(&action.hero_id()).unwrap(),
             ), // ... other cases
         };
-        
+
         match self.tasks.lock() {
             Ok(mut tasks) => {
                 tasks.insert(id, event.clone());
@@ -69,10 +70,10 @@ impl TaskManager {
              * */
             match &event_clone {
                 TaskAction::Channel(channeling_action) => {
-                    Infra::dispatch(GameEvent::ChannelingCompleted(channeling_action.clone()));
+                    MESSENGER.send(Command::ChannelCompleted(channeling_action.clone()));
                 }
                 TaskAction::Explore(explore_action) => {
-                    Infra::dispatch(GameEvent::ExploreCompleted(explore_action.clone()));
+                    MESSENGER.send(Command::ExploreCompleted(explore_action.clone()));
                 }
             }
 

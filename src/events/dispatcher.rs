@@ -1,5 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::services::tasks::action_names::Command;
+
 use super::game::GameEvent;
 
 pub trait EventHandler: Send + Sync
@@ -7,6 +9,13 @@ where
     Self: std::fmt::Debug,
 {
     fn handle(&self, event: GameEvent);
+}
+
+pub trait ActionHandler: Send + Sync
+where
+    Self: std::fmt::Debug,
+{
+    fn handle(&self, event: Command);
 }
 
 #[derive(Clone, Debug)]
@@ -37,3 +46,4 @@ impl EventDispatcher {
         }
     }
 }
+

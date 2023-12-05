@@ -5,7 +5,6 @@ use crate::{
         dispatcher::{EventDispatcher, EventHandler},
         game::GameEvent,
     },
-    prisma::PrismaClient,
     repos::repo::Repo,
     services::impls::tasks::TaskManager,
 };
@@ -18,8 +17,8 @@ pub struct Infrastructure {
 }
 
 impl Infrastructure {
-    fn new(prisma_client: Arc<PrismaClient>) -> Self {
-        let repo = Arc::new(Repo::new(prisma_client));
+    fn new() -> Self {
+        let repo = Arc::new(Repo::new());
 
         let dispatcher = EventDispatcher::new();
         let tasks = Arc::new(TaskManager::new());
@@ -57,10 +56,10 @@ lazy_static! {
 pub struct Infra;
 
 impl Infra {
-    pub fn initialize(prisma_client: Arc<PrismaClient>) {
+    pub fn initialize() {
         let mut infra_opt = INFRASTRUCTURE.lock().unwrap();
         if infra_opt.is_none() {
-            *infra_opt = Some(Infrastructure::new(prisma_client));
+            *infra_opt = Some(Infrastructure::new());
         }
     }
 

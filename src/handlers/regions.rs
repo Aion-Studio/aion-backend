@@ -3,10 +3,14 @@ use actix_web::{
     web::{Data, Path},
     HttpResponse, Responder,
 };
+use tokio::sync::oneshot;
 
-use crate::{configuration::{ChannelDurations, DurationType}, services::tasks::action_names::TaskAction};
-use crate::services::tasks::channel::ChannelingAction;
-use crate::{events::game::GameEvent, models::hero::Hero, services::tasks::explore::ExploreAction};
+use crate::models::hero::Hero;
+use crate::{
+    configuration::{ChannelDurations, DurationType},
+    messenger::MESSENGER,
+    services::tasks::action_names::{Command, TaskAction},
+};
 use crate::{handlers::response::ApiResponse, models::region::RegionName};
 use crate::{infra::Infra, webserver::AppState};
 
@@ -25,13 +29,12 @@ pub async fn explore_region(path: Path<String>) -> impl Responder {
             });
         }
     }
-
     let current_region = Infra::repo()
         .get_current_hero_region(&hero_id)
         .await
         .unwrap();
 
-    match do_explore(&hero, &current_region.region_name) {
+    match do_explore(hero, current_region.region_name).await {
         Ok(_) => HttpResponse::Ok().json(ApiResponse {
             message: "Exploration started".to_string(),
             status: "Ok".to_string(),
@@ -61,7 +64,7 @@ pub async fn channel_leyline(path: Path<(String, String)>, app: Data<AppState>) 
     }
     .unwrap();
 
-    match do_channel(&hero, &leyline_name, &durations) {
+    match do_channel(hero, leyline_name, durations).await {
         Ok(_) => HttpResponse::Ok().json(ApiResponse {
             message: "Channeling started".to_string(),
             status: "Ok".to_string(),
@@ -73,28 +76,63 @@ pub async fn channel_leyline(path: Path<(String, String)>, app: Data<AppState>) 
     }
 }
 
-pub fn do_channel(
-    hero: &Hero,
-    leyline_name: &str,
-    durations: &ChannelDurations,
+pub async fn do_channel(
+    hero: Hero,
+    leyline_name: String,
+    durations: ChannelDurations,
 ) -> Result<(), anyhow::Error> {
-    let task = ChannelingAction::new(hero.to_owned(), leyline_name, &durations);
-    match task {
-        Some(task) => {
-            Infra::dispatch(GameEvent::Channeling(task.clone()));
-            Ok(())
+    let response = tokio::spawn(async move {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let cmd = Command::Channel {
+            hero_id: hero.id.unwrap(),
+            leyline_name,
+            durations,
+            resp: resp_tx,
+        };
+        MESSENGER.send(cmd);
+        let res = resp_rx.await;
+        res
+    });
+    match response.await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => {
+            Err(anyhow::Error::msg(format!("Error starting channel: {}", e.to_string())).into())
         }
-        None => Err(anyhow::Error::msg("Not enough stamina")),
+        Err(e) => Err(anyhow::Error::msg(e.to_string())),
     }
+
+    // let task = ChannelingAction::new(hero.to_owned(), leyline_name, &durations);
+    // match task {
+    //     Some(task) => {
+    //         Infra::dispatch(GameEvent::Channeling(task.clone()));
+    //         Ok(())
+    //     }
+    //     None => Err(anyhow::Error::msg("Not enough stamina")),
+    // }
 }
 
-pub fn do_explore(hero: &Hero, region_name: &RegionName) -> Result<(), anyhow::Error> {
-    let task = ExploreAction::new(hero.to_owned(), region_name.to_owned());
-    match task {
-        Some(task) => {
-            Infra::dispatch(GameEvent::HeroExplores(task.clone()));
-            Ok(())
+pub async fn do_explore(hero: Hero, region_name: RegionName) -> Result<(), anyhow::Error> {
+    let response = tokio::spawn(async move {
+        let (resp_tx, resp_rx) = oneshot::channel();
+
+        let hero_id = hero.id.as_ref().unwrap().clone();
+        let cmd = Command::Explore {
+            hero_id,
+            region_name,
+            resp: resp_tx,
+        };
+
+        MESSENGER.send(cmd);
+        // Await the response
+        let res = resp_rx.await;
+        res
+    });
+
+    match response.await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => {
+            Err(anyhow::Error::msg(format!("Error starting explore: {}", e.to_string())).into())
         }
-        None => Err(anyhow::Error::msg("Not enough stamina")),
+        Err(e) => Err(anyhow::Error::msg(e.to_string())),
     }
 }

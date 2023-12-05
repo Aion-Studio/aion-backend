@@ -7,7 +7,8 @@ use serde_json::json;
 use tokio::join;
 
 use crate::{
-    events::game::GameEvent, handlers::response::ApiResponse, infra::Infra, models::quest::Quest,
+    events::game::GameEvent, handlers::response::ApiResponse, infra::Infra, messenger::MESSENGER,
+    models::quest::Quest, services::tasks::action_names::Command,
 };
 
 #[post("/quests")]
@@ -32,15 +33,12 @@ async fn get_hero_quests(path: Path<String>) -> impl Responder {
 #[post("/quests/action/{hero_id}/{action_id}")]
 async fn do_quest_action(path: Path<(String, String)>) -> impl Responder {
     let (hero_id, action_id) = path.into_inner();
-
     let repo = Infra::repo();
     let action_result = repo.get_action_by_id(&action_id);
     let already_done_result = repo.is_action_completed(hero_id.clone(), action_id.clone());
-
     let result = join!(action_result, already_done_result);
 
     let (action, already_done) = result;
-
     if action.is_err() {
         return HttpResponse::InternalServerError().json(json!({"message":"Bad action id"}));
     }
@@ -56,9 +54,20 @@ async fn do_quest_action(path: Path<(String, String)>) -> impl Responder {
         }
     }
 
-    Infra::dispatch(GameEvent::QuestAction(hero_id, action_id));
-    HttpResponse::Ok().json(ApiResponse {
-        message: "Ok".to_string(),
-        status: "200".to_string(),
-    })
+    let response = tokio::spawn(async move {
+        let (tx, resp_rx) = tokio::sync::oneshot::channel();
+        MESSENGER.send(Command::QuestAction {
+            hero_id: hero_id.clone(),
+            action_id: action_id.clone(),
+            resp: tx,
+        });
+        let res = resp_rx.await;
+        res
+    });
+
+    match response.await {
+        Ok(Ok(_)) => HttpResponse::Ok().json(json!({"message":"OK"})),
+        Ok(Err(e)) => HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }

@@ -8,11 +8,12 @@ use tracing::log::error;
 
 use super::region::RegionName;
 use super::resources::{MaterialType, Resource};
-use crate::events::game::{ActionDurations, ActionNames};
+use crate::events::game::ActionDurations;
 use crate::infra::Infra;
 use crate::prisma::{MaterialEnum, ResourceEnum};
+use crate::services::tasks::action_names::{TaskLootBox, ActionNames};
 use crate::{
-    events::game::{ActionCompleted, TaskLootBox},
+    events::game::ActionCompleted,
     prisma::{
         attributes, base_stats, follower, hero, hero_resource, inventory, item, retinue_slot,
     },

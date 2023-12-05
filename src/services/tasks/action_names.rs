@@ -1,8 +1,13 @@
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
-use crate::events::game::{ChannelResult, ExploreResult, QuestResult};
+use crate::{
+    configuration::ChannelDurations,
+    events::game::{ChannelResult, ExploreResult, QuestResult},
+    models::{region::RegionName, quest::Quest},
+};
+
+use anyhow::Result;
 
 use super::{channel::ChannelingAction, explore::ExploreAction, off_beat_actions::OffBeatActions};
 
@@ -48,17 +53,39 @@ impl ActionNames {
     }
 }
 
+pub type Responder<T> = oneshot::Sender<Result<T>>;
+
 #[derive(Debug, Clone, Serialize)]
 pub enum TaskAction {
     Explore(ExploreAction),
     Channel(ChannelingAction),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Command {
-    Get { key: String },
+    Explore {
+        hero_id: String,
+        region_name: RegionName,
+        resp: Responder<()>,
+    },
+    ExploreCompleted(ExploreAction),
+    Channel {
+        hero_id: String,
+        leyline_name: String,
+        durations: ChannelDurations,
+        resp: Responder<()>,
+    },
+    ChannelCompleted(ChannelingAction),
+    QuestAction {
+        hero_id: String,
+        action_id: String,
+        resp: Responder<()>,
+    },
+    QuestActionDone(String),
+    QuestCompleted(String, Quest),
 }
 
+// async-timed actions
 impl TaskAction {
     pub fn name(&self) -> String {
         match self {
