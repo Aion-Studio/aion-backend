@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 use tracing::log::error;
 
 use super::region::RegionName;
-use super::resources::{MaterialType, Resource};
+use super::resources::Resource;
 use crate::events::game::ActionDurations;
 use crate::infra::Infra;
-use crate::prisma::{MaterialEnum, ResourceEnum};
-use crate::services::tasks::action_names::{TaskLootBox, ActionNames};
+use crate::prisma::ResourceEnum;
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::{
     events::game::ActionCompleted,
     prisma::{
@@ -19,7 +19,6 @@ use crate::{
     },
 };
 use anyhow::Result;
-use prisma_client_rust::RelationNotFetchedError;
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -85,6 +84,12 @@ impl Hero {
 
     pub fn deduct_stamina(&mut self, stamina: i32) {
         self.stamina -= stamina;
+    }
+
+    pub fn deduct_shards(&mut self, cost: &i32) {
+        self.resources
+            .entry(Resource::StormShard)
+            .and_modify(|r| *r -= cost);
     }
 
     // adds the loot onto the hero struct
@@ -320,7 +325,6 @@ pub struct BaseStats {
     pub xp: i32,
     pub damage: Range<i32>,
     pub hit_points: i32,
-    pub mana: i32,
     pub armor: i32,
 }
 
@@ -439,7 +443,6 @@ impl From<base_stats::Data> for BaseStats {
                 max: data.damage_max,
             },
             hit_points: data.hit_points,
-            mana: data.mana,
             armor: data.armor,
         }
     }
@@ -533,57 +536,8 @@ impl From<hero_resource::Data> for Resource {
             match resource_data.r#type {
                 ResourceEnum::Aion => Resource::Aion,
                 ResourceEnum::Valor => Resource::Valor,
-                ResourceEnum::NexusShard => Resource::NexusShard,
-                ResourceEnum::Material => {
-                    if let Some(Some(material_data)) = resource_data.material_type {
-                        match material_data.r#type {
-                            MaterialEnum::Common => material_data
-                                .common()
-                                .and_then(|c| {
-                                    c.map(|common| common.r#type).ok_or_else(|| {
-                                        RelationNotFetchedError::new("Common type not found")
-                                    })
-                                })
-                                .map(|common_enum| {
-                                    Resource::Material(MaterialType::Common(common_enum.into()))
-                                })
-                                .unwrap_or_else(|e| {
-                                    error!("Error getting common material type: {}", e);
-                                    panic!("Error getting common material type");
-                                }),
-                            MaterialEnum::Rare => material_data
-                                .rare()
-                                .and_then(|r| {
-                                    r.map(|rare| rare.r#type).ok_or_else(|| {
-                                        RelationNotFetchedError::new("Rare type not found")
-                                    })
-                                })
-                                .map(|rare_enum| {
-                                    Resource::Material(MaterialType::Rare(rare_enum.into()))
-                                })
-                                .unwrap_or_else(|e| {
-                                    error!("Error getting rare material type: {}", e);
-                                    panic!("Error getting rare material type");
-                                }),
-                            MaterialEnum::Epic => material_data
-                                .epic()
-                                .and_then(|e| {
-                                    e.map(|epic| epic.r#type).ok_or_else(|| {
-                                        RelationNotFetchedError::new("Epic type not found")
-                                    })
-                                })
-                                .map(|epic_enum| {
-                                    Resource::Material(MaterialType::Epic(epic_enum.into()))
-                                })
-                                .unwrap_or_else(|e| {
-                                    error!("Error getting epic material type: {}", e);
-                                    panic!("Error getting epic material type");
-                                }),
-                        }
-                    } else {
-                        panic!("Invalid material type!")
-                    }
-                }
+                ResourceEnum::NexusOrb => Resource::NexusOrb,
+                ResourceEnum::StormShard => Resource::StormShard,
             }
         } else {
             panic!("Invalid resource type!")

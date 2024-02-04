@@ -3,13 +3,15 @@ use std::{collections::HashMap, sync::Arc};
 use futures::future::{join_all, try_join_all};
 use prisma_client_rust::{chrono, Direction, QueryError};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use tracing::{error, info, warn};
 
 use crate::models::hero::{Attributes, BaseStats};
-use crate::models::quest::{Action, Quest};
+use crate::models::quest::{Action, HeroQuest, Quest};
 use crate::prisma::{action, hero_actions, hero_quests, quest, resource_type, ResourceEnum};
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
+use crate::services::tasks::explore::ExploreAction;
+use crate::utils::merge;
 use crate::webserver::get_prisma_client;
 use crate::{
     events::game::ActionCompleted,
@@ -54,7 +56,6 @@ impl Repo {
                 new_hero.base_stats.damage.min,
                 new_hero.base_stats.damage.max,
                 new_hero.base_stats.hit_points,
-                new_hero.base_stats.mana,
                 new_hero.base_stats.armor,
                 vec![],
             )
@@ -266,6 +267,22 @@ impl Repo {
         Ok(())
     }
 
+    pub async fn get_quest_by_id(&self, quest_id: String) -> Result<Quest, QueryError> {
+        let quest = self
+            .prisma
+            .quest()
+            .find_unique(quest::id::equals(quest_id.clone()))
+            .exec()
+            .await?;
+        match quest {
+            Some(quest) => Ok(quest.into()),
+            None => Err(QueryError::Serialize(format!(
+                "No quest found with id: {}",
+                quest_id
+            ))),
+        }
+    }
+
     pub async fn add_quest(&self, quest: Quest) -> Result<(), QueryError> {
         let actions = quest.actions.clone();
         let action_futures = actions.into_iter().map(|action| async move {
@@ -324,7 +341,33 @@ impl Repo {
         Ok(())
     }
 
-    pub async fn get_quest_by_hero_id(&self, hero_id: String) -> Result<Quest, QueryError> {
+    pub async fn get_hero_quest(
+        &self,
+        quest_id: String,
+        hero_id: String,
+    ) -> Result<HeroQuest, QueryError> {
+        let hero_quests = self
+            .prisma
+            .hero_quests()
+            .find_first(vec![
+                hero_quests::quest_id::equals(quest_id.clone()),
+                hero_quests::hero_id::equals(hero_id),
+            ])
+            .exec()
+            .await?;
+        match hero_quests {
+            Some(hq) => Ok(hq.into()),
+            None => Err(QueryError::Serialize(format!(
+                "No hero quest found with id: {}",
+                quest_id
+            ))),
+        }
+    }
+
+    pub async fn get_quest_by_hero_id(
+        &self,
+        hero_id: String,
+    ) -> Result<(Quest, HeroQuest), QueryError> {
         let hero_quest = self
             .prisma
             .hero_quests()
@@ -334,7 +377,7 @@ impl Repo {
             ])
             .exec()
             .await?;
-        let quest_id = hero_quest.unwrap().quest_id;
+        let quest_id = hero_quest.clone().unwrap().quest_id;
         let quest = self
             .prisma
             .quest()
@@ -342,7 +385,7 @@ impl Repo {
             .exec()
             .await;
 
-        Ok(quest.unwrap().unwrap().into())
+        Ok((quest.unwrap().unwrap().into(), hero_quest.unwrap().into()))
     }
 
     pub async fn mark_quest_complete(
@@ -402,7 +445,10 @@ impl Repo {
         Ok(actions.into_iter().map(|action| action.id).collect())
     }
 
-    pub async fn get_available_quest(&self, hero_id: String) -> Result<Quest, QueryError> {
+    pub async fn get_available_quest(
+        &self,
+        hero_id: String,
+    ) -> Result<(Quest, HeroQuest), QueryError> {
         let hero_quest_data = self
             .prisma
             .hero_quests()
@@ -422,6 +468,11 @@ impl Repo {
             .exec()
             .await?;
 
+        let hero_quest: HeroQuest = match hero_quest_data.clone() {
+            Some(hq) => hq.into(),
+            None => return Err(QueryError::Serialize("No hero quest found".to_string())),
+        };
+
         let quest: Option<Quest> = hero_quest_data.and_then(|hero_quest| {
             hero_quest.quest.map(|boxed_quest_data| {
                 // Dereference the boxed_quest_data and convert it to Quest
@@ -434,8 +485,10 @@ impl Repo {
                 "------------------Returning existing quest for hero: {}",
                 hero_id
             );
-            return Ok(quest);
+            return Ok((quest, hero_quest));
         }
+
+        // if no quest is found, create a new one by creating hero_quest first
 
         let current_region = self.get_current_hero_region(&hero_id).await?;
         let first_quest_in_region = self
@@ -466,7 +519,10 @@ impl Repo {
                 )
                 .exec()
                 .await?;
-        Ok((*hero_quest.quest.unwrap()).into())
+        Ok((
+            (*hero_quest.clone().quest.unwrap()).into(),
+            hero_quest.into(),
+        ))
     }
 
     pub async fn get_action_by_id(&self, action_id: &str) -> Result<Action, QueryError> {
@@ -474,6 +530,7 @@ impl Repo {
             .prisma
             .action()
             .find_unique(action::UniqueWhereParam::IdEquals(String::from(action_id)))
+            .with(action::quest::fetch())
             .exec()
             .await?;
 
@@ -639,6 +696,7 @@ impl Repo {
             )
             .exec()
             .await;
+        println!("Daaaaaaaaaaaaaaaaaaaat {:?}", data);
         match data {
             Ok(data) => Ok(data.into_iter().map(ActionCompleted::from).collect()),
             Err(e) => {
@@ -771,6 +829,47 @@ impl Repo {
         }
     }
 
+    pub async fn get_or_create_hero_explore_action(
+        &self,
+        hero_id: &str,
+    ) -> Result<Action, QueryError> {
+        let hero_region = self.get_current_hero_region(hero_id).await?;
+        let region_name = hero_region.region_name.clone();
+
+        let actions = self
+            .prisma
+            .action()
+            .find_many(vec![
+                action::region_name::equals(region_name.to_str()),
+                action::name::equals(ActionNames::Explore.to_string()),
+            ])
+            .exec()
+            .await?;
+
+        let action = actions.into_iter().next();
+
+        match action {
+            Some(action) => Ok(action.into()),
+            None => {
+                let new_action = self
+                    .prisma
+                    .action()
+                    .create(
+                        ActionNames::Explore.to_string(),
+                        region::name::equals(region_name.to_str()),
+                        vec![action::cost::set(Some(ExploreAction::get_stamina_cost(
+                            &region_name,
+                            hero_region.discovery_level,
+                        )))],
+                    )
+                    .exec()
+                    .await?;
+
+                Ok(new_action.into())
+            }
+        }
+    }
+
     pub async fn insert_new_region(
         &self,
         region_name: RegionName,
@@ -789,7 +888,7 @@ impl Repo {
         Ok(region.into())
     }
 
-    pub async fn get_all_heroes(&self) -> Result<Vec<(Hero, hero_region::Data)>, QueryError> {
+    pub async fn get_all_heroes(&self) -> Result<Vec<Value>, QueryError> {
         let heroes = self
             .prisma
             .hero()
@@ -801,7 +900,7 @@ impl Repo {
             .with(hero::hero_region::fetch(vec![]))
             .exec()
             .await?;
-        let result: Vec<(Hero, hero_region::Data)> = heroes
+        let result: Result<Vec<Value>, serde_json::Error> = heroes
             .into_iter()
             .flat_map(|hero_data| {
                 let hero = Hero::from(hero_data.clone());
@@ -809,11 +908,11 @@ impl Repo {
                     .hero_region
                     .unwrap_or_default()
                     .into_iter()
-                    .map(move |region| (hero.clone(), region))
+                    .map(move |region| merge(hero.clone(), region))
             })
             .collect();
 
-        Ok(result)
+        result.map_err(|e| QueryError::Serialize(e.to_string()))
     }
 }
 
@@ -836,7 +935,6 @@ fn base_stats_update_params(base_stats: &BaseStats) -> Vec<base_stats::SetParam>
         base_stats::damage_min::set(base_stats.damage.min),
         base_stats::damage_max::set(base_stats.damage.max),
         base_stats::hit_points::set(base_stats.hit_points),
-        base_stats::mana::set(base_stats.mana),
         base_stats::armor::set(base_stats.armor),
     ]
 }

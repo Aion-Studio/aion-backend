@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Quest" ADD COLUMN     "cost" INTEGER NOT NULL DEFAULT 0;

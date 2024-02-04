@@ -36,6 +36,7 @@ mod events {
     pub mod dispatcher;
     pub mod game;
     pub mod handle_channeling;
+    pub mod handle_costs;
     pub mod handle_explore;
     pub mod handle_lootbox;
     pub mod handle_quest;
@@ -85,13 +86,14 @@ const LOG_ENV_VAR: &str = "INDEXER_LOG";
 pub fn tracing_subscribe() -> bool {
     use std::env::{set_var, var};
 
+    use tracing::info;
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
     if var("INDEXER_LOG").is_err() {
         set_var("INDEXER_LOG", "debug,tokio=warn,prisma=info,quaint=info");
     }
 
-    println!("Tracing subscriber initialized");
+    info!("Tracing subscriber initialized");
     let env_filter = fmt::layer().with_filter(EnvFilter::from_env(LOG_ENV_VAR));
     tracing_subscriber::registry()
         .with(env_filter)

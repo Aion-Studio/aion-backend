@@ -43,6 +43,9 @@ impl TaskManager {
                 Box::new(action.clone()),
                 Uuid::parse_str(&action.hero_id()).unwrap(),
             ), // ... other cases
+            _ => {
+                panic!("Unknown task type");
+            }
         };
 
         match self.tasks.lock() {
@@ -62,7 +65,7 @@ impl TaskManager {
              *
              *
              *  */
-            info!("Executing the action................");
+            info!("Executing action {}", action.name());
             let _ = action.execute().await;
             /* Signal the completion of the action here
              *
@@ -75,6 +78,7 @@ impl TaskManager {
                 TaskAction::Explore(explore_action) => {
                     MESSENGER.send(Command::ExploreCompleted(explore_action.clone()));
                 }
+                _ => {}
             }
 
             if let Err(err) = tx.send(id) {
@@ -116,6 +120,7 @@ impl TaskManager {
             .find(|&task| match task {
                 TaskAction::Explore(explore_action) => explore_action.hero_id() == hero_id,
                 TaskAction::Channel(channeling_action) => channeling_action.hero_id() == hero_id,
+                _ => false,
             })
             .cloned()
     }
@@ -129,8 +134,7 @@ impl TaskManager {
         let statuses = tasks
             .iter()
             .map(|(_, task)| match task {
-                TaskAction::Explore(..) => task.clone(),
-                TaskAction::Channel(..) => task.clone(),
+                _ => task.clone(),
             })
             .collect::<Vec<_>>();
 

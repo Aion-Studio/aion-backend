@@ -4,6 +4,7 @@ use actix_web::{
     HttpResponse, Responder,
 };
 use tokio::sync::oneshot;
+use tracing::info;
 
 use crate::models::hero::Hero;
 use crate::{
@@ -29,6 +30,7 @@ pub async fn explore_region(path: Path<String>) -> impl Responder {
             });
         }
     }
+
     let current_region = Infra::repo()
         .get_current_hero_region(&hero_id)
         .await
@@ -84,8 +86,8 @@ pub async fn do_channel(
     let response = tokio::spawn(async move {
         let (resp_tx, resp_rx) = oneshot::channel();
         let cmd = Command::Channel {
-            hero_id: hero.id.unwrap(),
-            leyline_name,
+            hero_id: hero.get_id(),
+            leyline_name: leyline_name.clone(),
             durations,
             resp: resp_tx,
         };
@@ -100,15 +102,6 @@ pub async fn do_channel(
         }
         Err(e) => Err(anyhow::Error::msg(e.to_string())),
     }
-
-    // let task = ChannelingAction::new(hero.to_owned(), leyline_name, &durations);
-    // match task {
-    //     Some(task) => {
-    //         Infra::dispatch(GameEvent::Channeling(task.clone()));
-    //         Ok(())
-    //     }
-    //     None => Err(anyhow::Error::msg("Not enough stamina")),
-    // }
 }
 
 pub async fn do_explore(hero: Hero, region_name: RegionName) -> Result<(), anyhow::Error> {
@@ -117,13 +110,14 @@ pub async fn do_explore(hero: Hero, region_name: RegionName) -> Result<(), anyho
 
         let hero_id = hero.id.as_ref().unwrap().clone();
         let cmd = Command::Explore {
-            hero_id,
-            region_name,
+            hero_id: hero_id.clone(),
+            region_name: region_name.clone(),
             resp: resp_tx,
         };
 
         MESSENGER.send(cmd);
-        // Await the response
+
+        info!("----storing explore event on LOGS {:?}", hero_id.clone());
         let res = resp_rx.await;
         res
     });

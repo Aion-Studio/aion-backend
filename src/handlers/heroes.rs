@@ -4,14 +4,16 @@ use prisma_client_rust::chrono::{self, Local};
 use prisma_client_rust::serde_json::json;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{error, info};
 
 use crate::events::game::ActionCompleted;
 use crate::infra::Infra;
 use crate::models::hero::{Attributes, BaseStats, Hero, Range};
+use crate::models::quest::{Quest, HeroQuest};
 use crate::models::region::{HeroRegion, Leyline};
 use crate::services::tasks::action_names::{ActionNames, TaskAction};
 use crate::services::tasks::channel::ChannelingAction;
+use crate::services::tasks::explore::ExploreAction;
 use crate::services::traits::async_task::Task;
 
 #[derive(Serialize)]
@@ -33,7 +35,6 @@ async fn create_hero_endpoint() -> impl Responder {
                 max: rng.gen_range(5..10),
             },
             hit_points: rng.gen_range(90..110),
-            mana: rng.gen_range(40..60),
             armor: rng.gen_range(5..15),
         },
         Attributes {
@@ -67,8 +68,12 @@ pub struct HeroStateResponse {
     region_hero: HeroRegion,
     pub active_task: Option<TaskAction>,
     pub available_leylines: Vec<Leyline>,
-    explore_available: (bool, chrono::DateTime<Local>),
+    // explore_available returns None if there isnt enough stamina, and (bool,time) if there is a
+    // timeout since last explore
+    explore_available: Option<(bool, chrono::DateTime<Local>)>,
+    explore_cost: Option<i32>,
     channeling_available: (Vec<Leyline>, chrono::DateTime<Local>),
+    quest_accepted: (bool, Quest),
 }
 
 #[get("/heroes/{id}")]
@@ -155,6 +160,7 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
             let mut explore_available: Option<(bool, chrono::DateTime<chrono::Local>)> = None;
 
             let mut currently_channeling: Option<&ChannelingAction> = None;
+            let mut explore_cost = None;
 
             let leylines = Infra::repo()
                 .leylines_by_discovery(&hero.get_id())
@@ -162,46 +168,64 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                 .unwrap();
 
             if let Some(task) = &active_task {
-                if let TaskAction::Explore(..) = task {
-                    explore_available = Some((false, chrono::Utc::now().into()));
-                }
                 if let TaskAction::Channel(action) = task {
                     currently_channeling = Some(&action);
                 }
             }
 
-            if explore_available.is_none() {
-                explore_available = Some(
-                    match Infra::repo()
-                        .latest_action_of_type(hero.get_id(), ActionNames::Explore)
-                        .await
-                    {
-                        Ok(latest_action) => {
-                            if let Some(action) = latest_action {
-                                let timeout_duration =
-                                    hero.timeout_durations(&action.action_name).await;
-                                let time_until_avialable = ActionCompleted::time_before_available(
-                                    action.created_at.with_timezone(&Local),
-                                    timeout_duration,
-                                );
-                                if let Some(time_until) = time_until_avialable {
-                                    (false, chrono::Utc::now().with_timezone(&Local) + time_until)
-                                } else {
+            // retreieve latest available explore action
+            let hero_action_explore = Infra::repo()
+                .get_or_create_hero_explore_action(hero.get_id().as_ref())
+                .await;
+
+            if hero_action_explore.is_ok() {
+                // check if hero has enough stamina and set the cost inside constructor
+                match ExploreAction::new(
+                    hero.clone(),
+                    current_region.clone(),
+                    hero_action_explore.unwrap().cost.unwrap(),
+                ) {
+                    Some(explore_action) => {
+                        explore_cost = Some(explore_action.stamina_cost);
+                        explore_available = Some(
+                            match Infra::repo()
+                                .latest_action_of_type(hero.get_id(), ActionNames::Explore)
+                                .await
+                            {
+                                Ok(latest_action) => {
+                                    if let Some(action) = latest_action {
+                                        let timeout_duration =
+                                            hero.timeout_durations(&action.action_name).await;
+                                        let time_until_avialable =
+                                            ActionCompleted::time_before_available(
+                                                action.created_at.with_timezone(&Local),
+                                                timeout_duration,
+                                            );
+                                        if let Some(time_until) = time_until_avialable {
+                                            (
+                                                false,
+                                                chrono::Utc::now().with_timezone(&Local)
+                                                    + time_until,
+                                            )
+                                        } else {
+                                            (true, chrono::Utc::now().with_timezone(&Local))
+                                        }
+                                    } else {
+                                        (true, chrono::Utc::now().with_timezone(&Local))
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("Error getting latest action: {}", e);
                                     (true, chrono::Utc::now().with_timezone(&Local))
                                 }
-                            } else {
-                                (true, chrono::Utc::now().with_timezone(&Local))
-                            }
-                        }
-                        Err(e) => {
-                            println!("Error getting latest action: {}", e);
-                            (true, chrono::Utc::now().with_timezone(&Local))
-                        }
-                    },
-                );
+                            },
+                        );
+                    }
+                    None => {
+                        explore_available = None;
+                    }
+                };
             }
-
-            let explore_available = explore_available.unwrap();
 
             let channeling_available = {
                 match currently_channeling {
@@ -243,13 +267,32 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                 }
             };
 
+            let hero_quest_objs = match Infra::repo().get_quest_by_hero_id(hero.get_id()).await {
+                Ok(objs) => Some(objs),
+                Err(e) => {
+                    error!("Error getting quest: {}", e);
+                    None
+                }
+            };
+
             Ok(HeroStateResponse {
                 hero,
                 region_hero: current_region,
                 active_task,
                 available_leylines,
                 explore_available,
+                explore_cost,
                 channeling_available,
+                quest_accepted: match hero_quest_objs {
+                    Some((quest,hero_quest))=> {
+                        if hero_quest.accepted {
+                            (true, quest)
+                        } else {
+                            (false, Quest::default())
+                        }
+                    } 
+                    None => (false, Quest::default()),
+                },
             })
         }
         Err(err) => Err(err.into()),

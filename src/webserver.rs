@@ -106,10 +106,11 @@ impl Application {
 }
 
 async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
-    match Logger::init("http:://localhost:9000") {
-        Ok(_) => println!("Logger initialized"),
+    match Logger::init("127.0.0.1:9000") {
+        Ok(_) => println!("Logger initialized at localhost:9000"),
         Err(e) => println!("Logger failed to initialize: {:?}", e),
     };
+
     // initialize the messenger
     let _ = MESSENGER;
 

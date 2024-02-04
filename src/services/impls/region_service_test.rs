@@ -7,7 +7,6 @@ use std::sync::Arc;
 use crate::configuration::{ChannelDurations, ExploreDurations};
 use prisma_client_rust::chrono::Duration;
 
-use crate::events::initialize::initialize_handlers;
 use crate::handlers::heroes::get_hero_status;
 use crate::handlers::regions::{do_channel, do_explore};
 use crate::infra::Infra;
@@ -29,7 +28,6 @@ async fn random_hero_and_explore() -> (
 ) {
     let prisma_client = setup_test_database().await.unwrap();
     Infra::initialize();
-    initialize_handlers();
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
     let prisma_clone = prisma_client.clone().into_inner();
@@ -63,7 +61,6 @@ async fn explore(hero: Hero, region_name: RegionName) -> Result<(), Error> {
 async fn test_generate_result_for_exploration() {
     let prisma_client = setup_test_database().await.unwrap();
     Infra::initialize();
-    initialize_handlers();
     let mut durations = HashMap::new();
     durations.insert(RegionName::Dusane, Duration::milliseconds(500));
 

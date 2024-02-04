@@ -6,7 +6,8 @@ use serde::ser::{Serialize, SerializeStruct, Serializer};
 use uuid::Uuid;
 
 use crate::configuration::get_explore_durations;
-use crate::models::resources::MaterialType;
+use crate::models::hero::{Attributes, BaseStats, Range};
+use crate::models::region::HeroRegion;
 use crate::{
     models::{hero::Hero, region::RegionName},
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
@@ -27,6 +28,37 @@ pub struct ExploreAction {
     pub discovery_level: i32,
     pub start_time: Arc<Mutex<Option<chrono::DateTime<chrono::Utc>>>>,
     pub stamina_cost: i32,
+}
+
+impl Default for ExploreAction {
+    fn default() -> Self {
+        let mut rng = rand::thread_rng();
+        let hero = Hero::new(
+            BaseStats {
+                id: None,
+                level: 1,
+                xp: 0,
+                damage: Range {
+                    min: rng.gen_range(1..5),
+                    max: rng.gen_range(5..10),
+                },
+                hit_points: rng.gen_range(90..110),
+                armor: rng.gen_range(5..15),
+            },
+            Attributes {
+                id: None,
+                strength: rng.gen_range(1..20),
+                resilience: rng.gen_range(1..20),
+                agility: rng.gen_range(1..20),
+                intelligence: rng.gen_range(1..20),
+                exploration: rng.gen_range(1..20),
+                crafting: rng.gen_range(1..20),
+            },
+            rng.gen_range(80..120),
+            0,
+        );
+        ExploreAction::without_cost(hero, RegionName::Forest)
+    }
 }
 
 impl Serialize for ExploreAction {
@@ -50,10 +82,9 @@ impl Serialize for ExploreAction {
 }
 
 impl ExploreAction {
-    pub fn new(hero: Hero, region_name: RegionName) -> Option<Self> {
-        // Implement task creation logic...
-        let action = Self::without_cost(hero.clone(), region_name.clone());
-        let stamina_cost = get_stamina_cost(&region_name);
+    pub fn new(hero: Hero, hero_region: HeroRegion, stamina_cost: i32) -> Option<Self> {
+        let mut action = Self::without_cost(hero.clone(), hero_region.region_name.clone());
+        action.stamina_cost = stamina_cost;
 
         if (hero.stamina - stamina_cost) < 0 {
             return None;
@@ -83,13 +114,37 @@ impl ExploreAction {
             stamina_cost: 0,
         }
     }
+    // TODO: figure out if the costs are linear , baseline , or random per region
+    pub fn get_stamina_cost(region_name: &RegionName, hero_discovery: i32) -> i32 {
+        let discovery_range = match hero_discovery {
+            0..=25 => (10, 12),
+            26..=50 => (12, 15),
+            51..=75 => (15, 20),
+            _ => (25, 35),
+        };
 
-    pub fn get_material_reward(&self, discovery_lvl: f64) -> MaterialType {
-        match self.hero.base_stats.level {
-            1..=10 => MaterialType::get_common_rng(),
-            11..=30 => MaterialType::get_maybe_rare(&self.hero, &self, discovery_lvl),
-            31..=60 => MaterialType::get_maybe_epic(&self.hero, &self, discovery_lvl),
-            _ => unreachable!(),
+        match region_name {
+            RegionName::Forest => {
+                rand::thread_rng().gen_range(discovery_range.0..discovery_range.1)
+            }
+            RegionName::Yezer => {
+                rand::thread_rng().gen_range(discovery_range.0 + 10..discovery_range.1 + 10)
+            }
+            RegionName::Buzna => {
+                rand::thread_rng().gen_range(discovery_range.0 + 5..discovery_range.1 + 22)
+            }
+            RegionName::Dusane => {
+                rand::thread_rng().gen_range(discovery_range.0 - 5..discovery_range.1 + 5)
+            }
+            RegionName::Lindon => {
+                rand::thread_rng().gen_range(discovery_range.0..discovery_range.1 + 13)
+            }
+            RegionName::Emerlad => {
+                rand::thread_rng().gen_range(discovery_range.0 + 15..discovery_range.1 + 30)
+            }
+            RegionName::Veladria => {
+                rand::thread_rng().gen_range(discovery_range.0 + 20..discovery_range.1 + 35)
+            }
         }
     }
 
@@ -114,18 +169,6 @@ impl ExploreAction {
 
             boost
         }
-    }
-}
-
-fn get_stamina_cost(region_name: &RegionName) -> i32 {
-    match region_name {
-        RegionName::Forest => rand::thread_rng().gen_range(10..20),
-        RegionName::Yezer => rand::thread_rng().gen_range(20..30),
-        RegionName::Buzna => rand::thread_rng().gen_range(15..37),
-        RegionName::Dusane => rand::thread_rng().gen_range(5..20),
-        RegionName::Lindon => rand::thread_rng().gen_range(10..25),
-        RegionName::Emerlad => rand::thread_rng().gen_range(25..45),
-        RegionName::Veladria => rand::thread_rng().gen_range(30..50),
     }
 }
 

@@ -1,5 +1,3 @@
-use tracing::{error, info};
-
 use crate::{
     models::region::RegionName,
     services::{
@@ -19,10 +17,18 @@ pub struct ExploreHandler {}
 impl ExploreHandler {
     pub fn hero_explores(hero_id: String, region_name: RegionName, resp: Responder<()>) {
         tokio::spawn(async move {
+            let hero_region = Infra::repo()
+                .get_current_hero_region(&hero_id)
+                .await
+                .unwrap();
+            let stamina_cost =
+                ExploreAction::get_stamina_cost(&region_name, hero_region.discovery_level);
+            let region_name = hero_region.region_name.clone();
+
             let action = Infra::repo()
                 .get_hero(hero_id)
                 .await
-                .map(|hero| ExploreAction::new(hero, region_name))
+                .map(|hero| ExploreAction::new(hero, hero_region, stamina_cost))
                 .unwrap_or_else(|_| None);
 
             match action {
@@ -34,20 +40,6 @@ impl ExploreHandler {
                 None => {
                     let _ = resp.send(Err(anyhow::Error::msg("Not enough stamina")));
                 }
-            }
-        });
-    }
-
-    pub fn explore_completed(action: ExploreAction) {
-        let mut hero = action.hero;
-        hero.deduct_stamina(action.stamina_cost);
-        tokio::spawn(async move {
-            info!(
-                "Deducting stamina for explore completed for hero {}",
-                hero.get_id()
-            );
-            if let Err(e) = Infra::repo().update_hero(hero).await {
-                error!("Error updating hero: {}", e);
             }
         });
     }
