@@ -10,7 +10,7 @@ pub struct HeroRegion {
     pub id: Option<String>,
     pub hero_id: String,
     pub region_name: RegionName,
-    pub discovery_level: i32,
+    pub discovery_level: f64,
     pub current_location: bool,
 }
 

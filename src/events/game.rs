@@ -273,7 +273,7 @@ pub struct ActionDurations {}
 impl ActionDurations {
     pub fn timeouts(action_name: &ActionNames) -> Duration {
         match action_name {
-            ActionNames::Explore => Duration::minutes(3),
+            ActionNames::Explore => Duration::minutes(0),
             ActionNames::Channel => Duration::minutes(3),
             ActionNames::Quest => Duration::minutes(3),
             ActionNames::Raid => Duration::minutes(3),

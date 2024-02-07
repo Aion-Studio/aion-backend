@@ -28,6 +28,7 @@ mod repos {
     // pub mod game_engine_repo;
     // pub mod hero_repo;
     pub mod repo;
+    pub mod helpers;
     // pub mod action_repo;
     // pub mod resources_repo;
 }

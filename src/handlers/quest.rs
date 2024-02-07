@@ -5,6 +5,7 @@ use actix_web::{
 };
 use serde_json::json;
 use tokio::join;
+use tracing::info;
 
 use crate::{
     infra::Infra,
@@ -58,19 +59,28 @@ async fn accept_quest(path: Path<(String, String)>) -> impl Responder {
     let (hero_id, quest_id) = path.into_inner();
     let response = tokio::spawn(async move {
         let (tx, resp_rx) = tokio::sync::oneshot::channel();
+        info!(
+            "Attempting to accept quest for hero {} and quest_id {}",
+            hero_id, quest_id
+        );
         MESSENGER.send(Command::QuestAccepted {
             hero_id: hero_id.clone(),
             quest_id: quest_id.clone(),
             resp: tx,
         });
-        let res = resp_rx.await;
-        res
+        match resp_rx.await {
+            Ok(result) => result, // Unwraps the outer Ok, result is now either Ok(_) or Err(_) from your application logic
+            Err(e) => Err(e.into()), // Converts RecvError to your application error type if needed
+        }
     });
 
     match response.await {
-        Ok(Ok(_)) => HttpResponse::Ok().json(json!({"message":"OK"})),
-        Ok(Err(e)) => HttpResponse::InternalServerError().body(e.to_string()),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(Ok(_)) => HttpResponse::Ok().json(json!({"message": "OK"})),
+        Ok(Err(e)) => {
+            // Handle application logic error, e.g., not enough shards
+            HttpResponse::BadRequest().json(json!({"error": e.to_string()}))
+        }
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()), // Handle RecvError or task spawn error
     }
 }
 

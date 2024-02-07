@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use prisma_client_rust::chrono::{self, DateTime, Duration, Local};
 use rand::Rng;
 use serde::ser::{Serialize, SerializeStruct, Serializer};
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::configuration::get_explore_durations;
@@ -25,7 +26,7 @@ pub struct ExploreAction {
     /// The discovery level increase for doing the exploration.
     /// This is a randomly generated integer between 1 and 5 for now
     ///
-    pub discovery_level: i32,
+    pub discovery_level: f64,
     pub start_time: Arc<Mutex<Option<chrono::DateTime<chrono::Utc>>>>,
     pub stamina_cost: i32,
 }
@@ -87,6 +88,10 @@ impl ExploreAction {
         action.stamina_cost = stamina_cost;
 
         if (hero.stamina - stamina_cost) < 0 {
+            warn!(
+                "hero stamina is {:?} but cost to do action is {:?}",
+                hero.stamina, stamina_cost
+            );
             return None;
         }
 
@@ -108,15 +113,15 @@ impl ExploreAction {
             hero,
             start_time: Arc::new(Mutex::new(None)),
             region_name: region_name.clone(),
-            discovery_level: rand::thread_rng().gen_range(1..5),
+            discovery_level: rand::thread_rng().gen_range(1..5) as f64,
             // random number between 15 and 30
             xp: rand::thread_rng().gen_range(15..30),
             stamina_cost: 0,
         }
     }
     // TODO: figure out if the costs are linear , baseline , or random per region
-    pub fn get_stamina_cost(region_name: &RegionName, hero_discovery: i32) -> i32 {
-        let discovery_range = match hero_discovery {
+    pub fn get_stamina_cost(region_name: &RegionName, hero_discovery: f64) -> i32 {
+        let discovery_range = match hero_discovery as i32 {
             0..=25 => (10, 12),
             26..=50 => (12, 15),
             51..=75 => (15, 20),
@@ -153,23 +158,34 @@ impl ExploreAction {
     }
 
     pub fn calculate_boost_factor(&self, exploration: i32) -> f64 {
+        let mut rng = rand::thread_rng();
+
         if exploration <= 10 {
             1.0
         } else {
-            // Apply an exponential function where base_value = 10, max_value = 40, and growth_factor = 0.03
-            let base_value = 10.0;
-            let max_value = 40.0;
-            let growth_factor = 0.03;
+            // Define the base and maximum possible boost factors
+            let min_boost = 1.0;
+            let max_boost = 1.4;
 
-            // Calculate boost factor
-            let boost: f64 = 1.0
-                + ((max_value - base_value)
-                    * (1.0 - (-growth_factor * (exploration as f64 - base_value)).exp()))
-                .min(0.40);
+            // Map the exploration value to a range between 0 and 1
+            let normalized_exploration = ((exploration - 10) as f64) / 40.0;
 
-            boost
+            // Calculate a base boost factor linearly interpolated between min_boost and max_boost based on exploration
+            let base_boost = min_boost + (max_boost - min_boost) * normalized_exploration;
+
+            // Introduce randomness: vary the final boost by up to +/- 5% of the current base boost
+            let random_variation = rng.gen_range(-0.05..=0.05) * base_boost;
+            let randomized_boost = base_boost + random_variation;
+
+            // Ensure the boost is within the desired range
+            round(randomized_boost.clamp(min_boost, max_boost),2)
         }
     }
+}
+
+pub fn round(x: f64, decimals: u32) -> f64 {
+    let y = 10i32.pow(decimals) as f64;
+    (x * y).round() / y
 }
 
 impl Task for ExploreAction {

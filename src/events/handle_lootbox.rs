@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use crate::events::game::ActionCompleted;
 use crate::logger::Logger;
 use crate::models::quest::Quest;
+use crate::repos::helpers::update_hero_db;
 use crate::services::tasks::action_names::{ActionNames, TaskAction, TaskLootBox};
+use crate::services::tasks::explore::round;
 use crate::services::traits::async_task::Task;
 use crate::{
     infra::Infra,
@@ -25,62 +27,69 @@ use TaskLootBox::*;
 pub struct LootBoxHandler {}
 
 impl LootBoxHandler {
-    pub fn create_lootbox_explore(task_action: TaskAction) {
-        tokio::spawn(async move {
-            let action = match task_action {
-                TaskAction::Explore(action) => action,
-                _ => return,
-            };
-            let hero_id = action.clone().hero.id.unwrap();
-            let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+    pub async fn create_lootbox_explore(task_action: TaskAction) {
+        info!("Creating lootbox for explore action ...");
+        let action = match task_action {
+            TaskAction::Explore(action) => action,
+            _ => return,
+        };
+        let hero_id = action.clone().hero.id.unwrap();
+        let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
 
-            let hero_region = Infra::repo()
-                .get_current_hero_region(&hero.get_id())
-                .await
-                .unwrap();
-            // update hero region discovery level
-            let loot = match action.generate_loot_box(Some(hero_region.discovery_level as f64)) {
-                Ok(loot_box) => loot_box,
-                Err(err) => {
-                    error!("Error generating lootbox: {}", err);
-                    return;
-                }
-            };
+        let hero_region = Infra::repo()
+            .get_current_hero_region(&hero.get_id())
+            .await
+            .unwrap();
+        // update hero region discovery level
+        let loot = match action.generate_loot_box(Some(hero_region.discovery_level as f64)) {
+            Ok(loot_box) => loot_box,
+            Err(err) => {
+                error!("Error generating lootbox: {}", err);
+                return;
+            }
+        };
 
-            hero.equip_loot(loot.clone());
+        hero.equip_loot(loot.clone());
+        update_hero_db(hero.clone()).await;
 
+        // update hero_region discovery level
+
+        if let TaskLootBox::Region(result) = loot.clone() {
             if let Err(e) = Infra::repo()
-                .update_hero_region_discovery_level(&hero_id, action.discovery_level)
+                .update_hero_region_discovery_level(
+                    &hero_id,
+                    result.discovery_level_increase as f64,
+                )
                 .await
             {
                 error!("Error updating hero region discovery level: {}", e);
             }
+        }
 
-            // Store action completed
-            if let Err(e) = Infra::repo()
-                .store_action_completed(ActionCompleted::new(
-                    action.action_name(),
-                    action.hero_id(),
-                    loot.clone(),
-                ))
-                .await
-            {
-                error!("Error storing action completed: {}", e);
-            }
+        // Store action completed
+        if let Err(e) = Infra::repo()
+            .store_action_completed(ActionCompleted::new(
+                action.action_name(),
+                action.hero_id(),
+                loot.clone(),
+            ))
+            .await
+        {
+            error!("Error storing action completed: {}", e);
+        }
 
-            info!("storing loot box on LOGS {:?}", loot.clone());
-            if let TaskLootBox::Region(loot_box) = loot.clone() {
-                Logger::log(
-                    json!({"name":loot.name(),"hero_id":loot_box.hero_id, "resources": loot_box.resources,"xp": loot_box.xp, "discovery_inc": loot_box.discovery_level_increase}),
-                );
-            }
-
-            info!(
-                "Stored action completed {:?} for {:?}",
-                hero.name,
-                action.action_name()
+        info!("storing loot box on LOGS {:?}", loot.clone());
+        if let TaskLootBox::Region(loot_box) = loot.clone() {
+            Logger::log(
+                json!({"name":loot.name(),"hero_id":loot_box.hero_id, "resources": loot_box.resources,"xp": loot_box.xp, "discovery_inc": loot_box.discovery_level_increase}),
             );
-        });
+        }
+
+        info!(
+            "Stored action completed {:?} for {:?}",
+            hero.name,
+            action.action_name()
+        );
     }
 
     pub fn create_lootbox_channel(action: ChannelingAction) {
@@ -209,7 +218,11 @@ impl LootBoxGenerator<f64> for ExploreAction {
         let hero = self.hero.clone();
         let hero_id = hero.id.as_ref().unwrap();
         let boost_factor = self.calculate_boost_factor(self.hero.attributes.exploration.clone());
-        let discovery_increase = self.discovery_level as f64 * boost_factor;
+        let discovery_increase = round(self.discovery_level as f64 * boost_factor, 2);
+        info!(
+            "discovery level of action {} and boost factor {} , final result {}",
+            self.discovery_level, boost_factor, discovery_increase
+        );
         let result = ExploreResult {
             xp: (self.xp as f64 * boost_factor) as i32,
             hero_id: hero_id.clone(),

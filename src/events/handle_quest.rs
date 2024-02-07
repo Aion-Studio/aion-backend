@@ -2,6 +2,7 @@ use futures::TryFutureExt;
 
 use serde_json::json;
 use tokio::sync::oneshot;
+use tracing::warn;
 use tracing::{info, log::error};
 
 use crate::logger::Logger;
@@ -75,10 +76,17 @@ impl QuestHandler {
         });
     }
 
-    pub fn quest_accepted(hero_id: String, quest: Quest, resp: Responder<()>) {
+    pub fn quest_accepted(hero_id: String, quest_id: String, resp: Responder<()>) {
         tokio::spawn(async move {
-             
-            resp.send(Ok(())).unwrap();
+            let repo = Infra::repo();
+            if let Ok(_) = repo.accept_quest(hero_id.clone(), quest_id).await {
+                info!("Quest accepted succesfully for hero {}", hero_id);
+                resp.send(Ok(())).unwrap();
+            } else {
+                warn!("Error accepting quest for hero {}", hero_id);
+                resp.send(Err(anyhow::Error::msg("Error accepting quest")))
+                    .unwrap();
+            }
         });
     }
 
@@ -90,7 +98,7 @@ impl QuestHandler {
             let mut found_quest: Quest = Quest::default();
             let is_whole_quest_done = repo
                 .get_quest_by_hero_id(hero_id.clone())
-                .and_then(|(quest,_)| {
+                .and_then(|(quest, _)| {
                     found_quest = quest.clone();
                     repo.get_quest_action_ids(quest)
                 })

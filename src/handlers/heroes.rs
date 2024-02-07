@@ -179,7 +179,7 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                 .await;
 
             if hero_action_explore.is_ok() {
-                // check if hero has enough stamina and set the cost inside constructor
+                // checks if hero has enough stamina and set the cost inside constructor
                 match ExploreAction::new(
                     hero.clone(),
                     current_region.clone(),

@@ -4,7 +4,6 @@ use actix_web::{
     HttpResponse, Responder,
 };
 use tokio::sync::oneshot;
-use tracing::info;
 
 use crate::models::hero::Hero;
 use crate::{
@@ -108,7 +107,8 @@ pub async fn do_explore(hero: Hero, region_name: RegionName) -> Result<(), anyho
     let response = tokio::spawn(async move {
         let (resp_tx, resp_rx) = oneshot::channel();
 
-        let hero_id = hero.id.as_ref().unwrap().clone();
+        let hero_id = hero.get_id();
+        println!("checking hero in do_xplore id {:?}", &hero_id);
         let cmd = Command::Explore {
             hero_id: hero_id.clone(),
             region_name: region_name.clone(),
@@ -117,7 +117,6 @@ pub async fn do_explore(hero: Hero, region_name: RegionName) -> Result<(), anyho
 
         MESSENGER.send(cmd);
 
-        info!("----storing explore event on LOGS {:?}", hero_id.clone());
         let res = resp_rx.await;
         res
     });

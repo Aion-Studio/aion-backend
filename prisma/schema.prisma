@@ -5,7 +5,7 @@ datasource db {
 
 generator client {
   provider = "cargo prisma"
-  // The location to generate the client. Is relative to the position of the schema
+  // The location to generate the client. Is relative to the position of the schemaschemour
   output   = "../src/prisma.rs"
 }
 
@@ -29,6 +29,7 @@ model Hero {
   staminaRegenRate Int               @default(1)
   heroActions      HeroActions[]
   heroQuests       HeroQuests[]
+  lastStaminaRegenerationTime  DateTime? @map("last_stamina_regeneration_time") 
 }
 
 model HeroResource {
@@ -38,6 +39,8 @@ model HeroResource {
   resource       ResourceType @relation(fields: [resourceTypeId], references: [id])
   amount         Int
   resourceTypeId String       @map("resource_type_id")
+
+  @@unique([heroId, resourceTypeId])
 }
 
 model Action {
@@ -103,7 +106,7 @@ model ActionCompleted {
 model HeroRegion {
   id               String  @id @default(uuid())
   HeroId           String  @map("hero_id")
-  discovery_level  Int     @map("discovery_level")
+  discovery_level  Float     @map("discovery_level")
   Hero             Hero    @relation(fields: [HeroId], references: [id])
   Region           Region  @relation(fields: [region_name], references: [name])
   region_name      String  @map("region_name")

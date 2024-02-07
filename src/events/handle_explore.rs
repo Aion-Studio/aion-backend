@@ -23,7 +23,6 @@ impl ExploreHandler {
                 .unwrap();
             let stamina_cost =
                 ExploreAction::get_stamina_cost(&region_name, hero_region.discovery_level);
-            let region_name = hero_region.region_name.clone();
 
             let action = Infra::repo()
                 .get_hero(hero_id)
@@ -33,11 +32,13 @@ impl ExploreHandler {
 
             match action {
                 Some(action) => {
+                    println!("hero can explore...should work");
                     action.start_now();
                     Infra::tasks().schedule_action(TaskAction::Explore(action));
                     let _ = resp.send(Ok(()));
                 }
                 None => {
+                    print!("some shit happened ...");
                     let _ = resp.send(Err(anyhow::Error::msg("Not enough stamina")));
                 }
             }
