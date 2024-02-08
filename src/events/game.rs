@@ -9,7 +9,7 @@ use crate::models::quest::Quest;
 use crate::models::region::Leyline;
 use crate::models::resources::Resource;
 use crate::prisma::action_completed;
-use crate::services::tasks::action_names::{TaskLootBox, ActionNames};
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use prisma_client_rust::chrono::{DateTime, FixedOffset};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize, Serializer};
@@ -18,6 +18,16 @@ use crate::services::tasks::channel::ChannelingAction;
 use crate::services::tasks::explore::ExploreAction;
 
 use super::handle_lootbox::from_json_to_loot_box;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEvent<T>
+where
+    T: Serialize,
+{
+    pub name: String,
+    pub data: T,
+}
+// {name: "HeroExplores", }
 
 #[derive(Debug, Clone, Serialize)]
 pub enum GameEvent {
@@ -81,6 +91,12 @@ pub struct ChannelResult {
     pub stamina_gained: i32,
 }
 
+impl ChannelResult {
+    pub fn name(&self) -> String {
+        "channel-lootbox".to_string()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ExploreResult {
     pub hero_id: String,
@@ -94,12 +110,24 @@ pub struct ExploreResult {
     pub created_time: Option<DateTime<FixedOffset>>,
 }
 
+impl ExploreResult {
+    pub fn name(&self) -> String {
+        "explore-lootbox".to_string()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct QuestResult {
     pub hero_id: String,
     pub resources: HashMap<Resource, i32>,
     pub created_time: Option<DateTime<FixedOffset>>,
     pub quest_id: String,
+}
+
+impl QuestResult {
+    pub fn name(&self) -> String {
+        "quest-lootbox".to_string()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -245,7 +273,7 @@ pub struct ActionDurations {}
 impl ActionDurations {
     pub fn timeouts(action_name: &ActionNames) -> Duration {
         match action_name {
-            ActionNames::Explore => Duration::minutes(3),
+            ActionNames::Explore => Duration::minutes(0),
             ActionNames::Channel => Duration::minutes(3),
             ActionNames::Quest => Duration::minutes(3),
             ActionNames::Raid => Duration::minutes(3),

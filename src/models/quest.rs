@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::region::{Leyline, RegionName};
 use crate::prisma::{
-    action,
+    action, hero_quests,
     quest::{self, actions, SetParam},
 };
 
@@ -16,6 +16,7 @@ pub struct Action {
     pub leyline: Option<Leyline>,
     pub quest: Option<Quest>,
     pub hero_action: Option<HeroAction>,
+    pub cost: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -34,6 +35,29 @@ pub struct Quest {
     pub region_name: String,
     pub quest_number: i32,
     pub actions: Vec<Action>,
+    pub cost: i32,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeroQuest {
+    pub id: String,
+    pub hero_id: String,
+    pub quest_id: String,
+    pub accepted: bool,
+    pub completed: bool,
+}
+
+impl From<hero_quests::Data> for HeroQuest {
+    fn from(data: hero_quests::Data) -> Self {
+        HeroQuest {
+            id: data.id,
+            hero_id: data.hero_id,
+            quest_id: data.quest_id,
+            accepted: data.accepted,
+            completed: data.completed,
+        }
+    }
 }
 
 impl Quest {
@@ -43,6 +67,7 @@ impl Quest {
         region_name: String,
         quest_number: i32,
         actions: Vec<Action>,
+        cost: i32,
     ) -> Self {
         Quest {
             id,
@@ -50,6 +75,7 @@ impl Quest {
             region_name,
             quest_number,
             actions,
+            cost,
         }
     }
 
@@ -77,6 +103,7 @@ impl From<quest::Data> for Quest {
             title: data.title,
             region_name: data.region_name,
             quest_number: data.quest_number,
+            cost: data.cost,
             actions: match data.actions {
                 Some(actions_data) => actions_data.into_iter().map(Action::from).collect(),
                 None => Vec::new(),
@@ -116,7 +143,7 @@ impl From<action::Data> for Action {
             leyline: data.leyline.flatten().map(|l| *l).map(Leyline::from),
             // Handle the double Option and Box for quest
             quest: data.quest.flatten().map(|q| *q).map(Quest::from),
-            // ... handle other fields as necessary ...
+            cost: data.cost, // ... handle other fields as necessary ...
         }
     }
 }

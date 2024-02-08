@@ -4,7 +4,7 @@ use tokio::sync::oneshot;
 use crate::{
     configuration::ChannelDurations,
     events::game::{ChannelResult, ExploreResult, QuestResult},
-    models::{region::RegionName, quest::Quest},
+    models::{quest::Quest, region::RegionName},
 };
 
 use anyhow::Result;
@@ -27,7 +27,10 @@ impl ActionNames {
             ActionNames::Channel => "Channel".to_string(),
             ActionNames::Quest => "Quest".to_string(),
             ActionNames::Raid => "Raid".to_string(),
-            ActionNames::Unique(OffBeatActions::SlayDragonQuest) => "SlayDragonQuest".to_string(),
+            ActionNames::Unique(x) => match x {
+                OffBeatActions::SlayDragonQuest => "SlayDragonQuest".to_string(),
+                _ => unreachable!(),
+            },
         }
     }
 
@@ -59,6 +62,9 @@ pub type Responder<T> = oneshot::Sender<Result<T>>;
 pub enum TaskAction {
     Explore(ExploreAction),
     Channel(ChannelingAction),
+    QuestAction(String, String),
+    QuestComplete(String, Quest),
+    QuestAccepted(String, String),
 }
 
 #[derive(Debug)]
@@ -81,8 +87,13 @@ pub enum Command {
         action_id: String,
         resp: Responder<()>,
     },
-    QuestActionDone(String),
+    QuestActionDone(String, String),
     QuestCompleted(String, Quest),
+    QuestAccepted {
+        hero_id: String,
+        quest_id: String,
+        resp: Responder<()>,
+    },
 }
 
 // async-timed actions
@@ -91,6 +102,9 @@ impl TaskAction {
         match self {
             TaskAction::Explore { .. } => "Explore".to_string(),
             TaskAction::Channel { .. } => "Channel".to_string(),
+            TaskAction::QuestAction(_, _) => "QuestAction".to_string(),
+            TaskAction::QuestComplete(_, _) => "QuestComplete".to_string(),
+            TaskAction::QuestAccepted(_, _) => "QuestAccepted".to_string(),
         }
     }
 }
@@ -100,4 +114,14 @@ pub enum TaskLootBox {
     Region(ExploreResult),
     Channel(ChannelResult),
     Quest(QuestResult),
+}
+
+impl TaskLootBox {
+    pub fn name(&self) -> String {
+        match self {
+            TaskLootBox::Region(_) => "explore-lootbox".to_string(),
+            TaskLootBox::Channel(_) => "channel-lootbox".to_string(),
+            TaskLootBox::Quest(_) => "quest-lootbox".to_string(),
+        }
+    }
 }

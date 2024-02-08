@@ -1,8 +1,11 @@
 use futures::TryFutureExt;
 
+use serde_json::json;
 use tokio::sync::oneshot;
+use tracing::warn;
 use tracing::{info, log::error};
 
+use crate::logger::Logger;
 use crate::messenger::MESSENGER;
 use crate::services::tasks::action_names::{ActionNames, Command, Responder};
 use crate::{infra::Infra, models::quest::Quest};
@@ -13,7 +16,10 @@ pub struct QuestHandler {}
 impl QuestHandler {
     pub fn quest_action(hero_id: String, action_id: String, resp: Responder<()>) {
         tokio::spawn(async move {
-            info!("Quest action started for hero {} and action_id {} ", hero_id,action_id);
+            info!(
+                "Quest action started for hero {} and action_id {} ",
+                hero_id, action_id
+            );
             let mut errs = vec![];
             let action = match Infra::repo().get_action_by_id(&action_id).await {
                 Ok(action) => action,
@@ -37,6 +43,8 @@ impl QuestHandler {
                 }
             }
 
+            Logger::log(json!({"name":ActionNames::Quest.to_string() ,"hero_id": hero_id}));
+
             match ActionNames::from_str(&action.name) {
                 Some(ActionNames::Explore) => {
                     let (resp_tx, resp_rx): (Responder<()>, _) = oneshot::channel();
@@ -46,6 +54,7 @@ impl QuestHandler {
                         region_name: region,
                         resp: resp_tx,
                     };
+
                     MESSENGER.send(cmd);
                     let result = resp_rx.await;
                     match result {
@@ -62,8 +71,22 @@ impl QuestHandler {
                 }
             };
             resp.send(Ok(())).unwrap();
-            let done_cmd = Command::QuestActionDone(hero_id);
+            let done_cmd = Command::QuestActionDone(hero_id, action_id);
             MESSENGER.send(done_cmd);
+        });
+    }
+
+    pub fn quest_accepted(hero_id: String, quest_id: String, resp: Responder<()>) {
+        tokio::spawn(async move {
+            let repo = Infra::repo();
+            if let Ok(_) = repo.accept_quest(hero_id.clone(), quest_id).await {
+                info!("Quest accepted succesfully for hero {}", hero_id);
+                resp.send(Ok(())).unwrap();
+            } else {
+                warn!("Error accepting quest for hero {}", hero_id);
+                resp.send(Err(anyhow::Error::msg("Error accepting quest")))
+                    .unwrap();
+            }
         });
     }
 
@@ -73,9 +96,9 @@ impl QuestHandler {
             let repo_clone = repo.clone();
             let hero_id_clone = hero_id.clone();
             let mut found_quest: Quest = Quest::default();
-            let is_done = repo
+            let is_whole_quest_done = repo
                 .get_quest_by_hero_id(hero_id.clone())
-                .and_then(|quest| {
+                .and_then(|(quest, _)| {
                     found_quest = quest.clone();
                     repo.get_quest_action_ids(quest)
                 })
@@ -93,7 +116,7 @@ impl QuestHandler {
                 })
                 .await;
 
-            match is_done {
+            match is_whole_quest_done {
                 Ok(done) => {
                     if done {
                         let _ = Infra::repo()
@@ -112,6 +135,8 @@ impl QuestHandler {
 
     pub fn quest_completed(hero_id: String, quest: Quest) {
         tokio::spawn(async move {
+            Logger::log(json!({"name":"quest-completed" ,"hero_id": hero_id, 
+           "quest-name": quest.title }));
             info!("should enable next quest ? for hero {} ", hero_id);
         });
     }

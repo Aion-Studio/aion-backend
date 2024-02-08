@@ -11,18 +11,34 @@ type = "socket"
 address = "0.0.0.0:9000"
 mode = "tcp"
 
-# Structure and parse via Vector's Remap Language
-[transforms.my_parser]
-inputs = ["my_source"]
-type   = "remap"
-source = '''
-# Example: Add a new field
-.new_field = "new_value"
-'''
+# # Structure and parse via Vector's Remap Language
+# [transforms.my_parser]
+# inputs = ["my_source"]
+# type   = "remap"
+# source = '''
+# # Example: Add a new field
+# .new_field = "new_value"
+# '''
+[transforms.parse_json]
+  type = "remap"
+  inputs = ["my_source"]
+  source = '''
+  . = parse_json(.message) ?? {}
+  '''
 
 # Send structured data to Elasticsearch
 [sinks.es_cluster]
-inputs     = ["my_parser"]
+inputs     = ["parse_json"]
 type       = "elasticsearch"
-endpoint   = "http://elasticsearch:9200"
+mode = "bulk"
+endpoint   = "https://elasticsearch:9200"
+auth.strategy = "basic"
+auth.user = "elastic"
+auth.password = "vpueKI9zGtaejo*4=nQT"
 doc_type   = "_doc" # This is the default document type for Elasticsearch 7.x and later
+# bulk.index= "my_index"
+  [sinks.es_cluster.request]
+    retry_attempts = 5       # Number of retry attempts
+    retry_initial_backoff_secs = 5   # Seconds to wait between attempts
+  [sinks.es_cluster.tls]
+      verify_certificate = false

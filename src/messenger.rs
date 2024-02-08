@@ -1,12 +1,15 @@
 use tokio::sync::mpsc;
+use tracing::warn;
 
 use crate::{
     events::{
-        handle_channeling::ChannelingHandler, handle_explore::ExploreHandler,
-        handle_lootbox::LootBoxHandler, handle_quest::QuestHandler,
+        handle_channeling::ChannelingHandler, handle_costs::CostHandler,
+        handle_explore::ExploreHandler, handle_lootbox::LootBoxHandler, handle_quest::QuestHandler,
     },
+    infra::Infra,
+    models::resources::Resource,
     run_parallel,
-    services::tasks::action_names::Command,
+    services::tasks::action_names::{Command, TaskAction},
 };
 use once_cell::sync::Lazy;
 
@@ -28,38 +31,90 @@ impl MessageManager {
             use Command::*;
 
             while let Some(cmd) = rx.recv().await {
-                match cmd {
+                // Just a default value -- not used
+                // End Default
+                let task_action = match cmd {
                     Explore {
                         hero_id,
                         region_name,
                         resp,
-                    } => ExploreHandler::hero_explores(hero_id, region_name, resp),
+                    } => {
+                        ExploreHandler::hero_explores(hero_id, region_name, resp);
+                        None
+                    }
                     ExploreCompleted(action) => {
-                        run_parallel!(
-                            (action.to_owned());
-                            ExploreHandler::explore_completed,
-                            LootBoxHandler::create_lootbox_explore
-                        );
+                        let task_action = TaskAction::Explore(action.clone());
+
+                        LootBoxHandler::create_lootbox_explore(task_action.clone()).await;
+                        Some(task_action)
                     }
                     Channel {
                         hero_id,
                         leyline_name,
                         durations,
                         resp,
-                    } => ChannelingHandler::hero_channels(hero_id, leyline_name, durations, resp),
+                    } => {
+                        ChannelingHandler::hero_channels(hero_id, leyline_name, durations, resp);
+                        None
+                    }
                     ChannelCompleted(action) => {
-                        run_parallel!((action); LootBoxHandler::create_lootbox_channel);
+                        run_parallel!((action.to_owned());LootBoxHandler::create_lootbox_channel,ChannelingHandler::channel_completed);
+
+                        Some(TaskAction::Channel(action.clone()))
+                    }
+                    QuestAccepted {
+                        hero_id,
+                        quest_id,
+                        resp,
+                    } => {
+                        let quest = Infra::repo()
+                            .get_quest_by_id(quest_id.clone())
+                            .await
+                            .unwrap();
+                        let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+                        let has_sufficient_shards = match hero.resources.get(&Resource::StormShard)
+                        {
+                            Some(shards) => *shards >= quest.cost,
+                            None => false,
+                        };
+
+                        if !has_sufficient_shards {
+                            if let Err(e) = resp.send(Err(anyhow::Error::msg("not enough shards")))
+                            {
+                                warn!("Failed to send response: {:?}", e);
+                            }
+                            return;
+                        }
+                        QuestHandler::quest_accepted(hero_id.clone(), quest_id.clone(), resp);
+
+                        Some(TaskAction::QuestAccepted(hero_id.clone(), quest_id))
                     }
 
                     QuestAction {
                         hero_id,
                         action_id,
                         resp,
-                    } => QuestHandler::quest_action(hero_id, action_id, resp),
-                    QuestActionDone(hero_id) => QuestHandler::quest_action_done(hero_id),
+                    } => {
+                        QuestHandler::quest_action(hero_id, action_id, resp);
+                        None
+                    }
+                    QuestActionDone(hero_id, action_id) => {
+                        QuestHandler::quest_action_done(hero_id.clone());
+                        Some(TaskAction::QuestAction(hero_id, action_id))
+                    }
                     QuestCompleted(hero_id, quest) => {
                         run_parallel!((hero_id.to_owned(), quest.to_owned()); QuestHandler::quest_completed, LootBoxHandler::create_lootbox_quest_complete);
+
+                        Some(TaskAction::QuestComplete(hero_id.clone(), quest.clone()))
                     }
+                    _ => {
+                        None
+                        // Replace with an appropriate default
+                    }
+                };
+                match task_action {
+                    Some(task_action) => CostHandler::deduct_action_costs(task_action),
+                    None => {}
                 }
             }
         })

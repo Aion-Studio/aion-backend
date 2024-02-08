@@ -24,7 +24,6 @@ pub struct Action {
     pub timeout: Duration,
     pub xp_change: i32,     // positive for gain, negative for loss
     pub health_change: i32, // positive for gain, negative for loss
-    pub mana_change: i32,   // positive for gain, negative for loss
     pub attribute_modifiers: Vec<AttributeModifier>,
     pub created_items: Vec<Item>, // items created as a result of this action
 }

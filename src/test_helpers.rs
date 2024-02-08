@@ -113,7 +113,6 @@ pub fn random_hero() -> Hero {
                 max: rng.gen_range(5..10),
             },
             hit_points: rng.gen_range(90..110),
-            mana: rng.gen_range(40..60),
             armor: rng.gen_range(5..15),
         },
         Attributes {
@@ -131,7 +130,6 @@ pub fn random_hero() -> Hero {
 }
 
 //  example
-
 // ._execute_raw(raw!(
 //         "INSERT INTO Post (published, title) VALUES ({}, {})",
 //         PrismaValue::Boolean(false),

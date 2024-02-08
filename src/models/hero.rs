@@ -1,17 +1,18 @@
 use std::collections::HashMap;
 
-use prisma_client_rust::chrono::{self, Duration};
+use prisma_client_rust::chrono::{self, DateTime, Duration, FixedOffset, Utc};
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use tracing::info;
 use tracing::log::error;
 
 use super::region::RegionName;
-use super::resources::{MaterialType, Resource};
+use super::resources::Resource;
 use crate::events::game::ActionDurations;
 use crate::infra::Infra;
-use crate::prisma::{MaterialEnum, ResourceEnum};
-use crate::services::tasks::action_names::{TaskLootBox, ActionNames};
+use crate::prisma::ResourceEnum;
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::{
     events::game::ActionCompleted,
     prisma::{
@@ -19,7 +20,6 @@ use crate::{
     },
 };
 use anyhow::Result;
-use prisma_client_rust::RelationNotFetchedError;
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -38,6 +38,7 @@ pub struct Hero {
     pub stamina: i32,
     pub stamina_max: i32,
     pub stamina_regen_rate: i32,
+    pub last_stamina_regeneration_time: Option<DateTime<Utc>>, // Add this
 }
 
 // methods to only update the model struct based on some calculation
@@ -61,6 +62,7 @@ impl Hero {
             stamina: 100,
             stamina_max: 100,
             stamina_regen_rate: 1,
+            last_stamina_regeneration_time: None,
         }
     }
 
@@ -69,22 +71,46 @@ impl Hero {
     }
 
     pub fn regenerate_stamina(&mut self, res: &ActionCompleted) {
-        // set the self.stamina to number of seconds since last regionactionresult.created time and now
-        // multiplied by self.stamina_regen_rate
-        let now = chrono::Utc::now();
-        let seconds = now.signed_duration_since(res.updated_at).num_seconds() as i32;
+        let now = Utc::now();
 
-        let stamina = seconds * self.stamina_regen_rate;
-        // add to self.stamina only if it is less than self.stamina_max
-        if self.stamina + stamina < self.stamina_max {
-            self.stamina += stamina;
+        // Calculate seconds since last update only if last_stamina_regeneration_time is Some
+        if let Some(last_regeneration_time) = self.last_stamina_regeneration_time {
+            let seconds = now
+                .signed_duration_since(last_regeneration_time)
+                .num_seconds() as i32;
+
+            info!(
+                "(self.stamina_regen_rate as f64 / 10.0)).round() {:?}",
+                (seconds as f64 * self.stamina_regen_rate as f64 / 100.0).round()
+            );
+            let stamina_to_add =
+                ((seconds as f64) * (self.stamina_regen_rate as f64 / 100.0)).round() as i32;
+            info!("Stamina to be added: {}", stamina_to_add);
+
+            // Add to self.stamina only if it is less than self.stamina_max
+            if self.stamina + stamina_to_add < self.stamina_max {
+                self.stamina += stamina_to_add;
+            } else {
+                self.stamina = self.stamina_max;
+            }
         } else {
-            self.stamina = self.stamina_max;
+            // This is the first time we're regenerating stamina, so no need to add anything yet
+            // Just set the last regeneration time to now
+            info!("Setting initial stamina regeneration time");
         }
+
+        // Update the last stamina regeneration time to now, regardless of whether we regenerated stamina
+        self.last_stamina_regeneration_time = Some(now);
     }
 
     pub fn deduct_stamina(&mut self, stamina: i32) {
         self.stamina -= stamina;
+    }
+
+    pub fn deduct_shards(&mut self, cost: &i32) {
+        self.resources
+            .entry(Resource::StormShard)
+            .and_modify(|r| *r -= cost);
     }
 
     // adds the loot onto the hero struct
@@ -95,6 +121,7 @@ impl Hero {
                 self.gain_experience(xp);
                 // find the resource enum type in the  self.resources and increase the amount by result.resources
                 self.add_resources(result.resources);
+                println!("check resources after adding: {:?}", self.resources);
             }
             TaskLootBox::Channel(result) => {
                 let hero_id = result.hero_id.clone();
@@ -110,10 +137,11 @@ impl Hero {
     }
 
     fn add_resources(&mut self, resources: HashMap<Resource, i32>) {
-        resources.iter().for_each(|resource| {
+        resources.iter().for_each(|(resource, amount)| {
             self.resources
-                .entry(resource.0.clone())
-                .and_modify(|r| *r += resource.1);
+                .entry(resource.clone())
+                .and_modify(|r| *r += amount)
+                .or_insert(*amount);
         });
     }
 
@@ -320,7 +348,6 @@ pub struct BaseStats {
     pub xp: i32,
     pub damage: Range<i32>,
     pub hit_points: i32,
-    pub mana: i32,
     pub armor: i32,
 }
 
@@ -402,13 +429,21 @@ impl From<hero::Data> for Hero {
             Some(rslots) => rslots.into_iter().map(RetinueSlot::from).collect(),
             None => vec![],
         };
-        let resources = match data.resources {
-            Some(resources) => HashMap::from_iter(resources.into_iter().map(|r| {
-                let resource_type = r.clone().into();
-                let amount = r.amount;
-                (resource_type, amount)
-            })),
-            None => HashMap::new(),
+
+        let resources = if let Some(resources) = &data.resources {
+            // Check if any resource is None
+            if resources.iter().any(|r| r.resource.is_none()) {
+                HashMap::new()
+            } else {
+                // Proceed with original logic, assuming all resources are Some
+                HashMap::from_iter(resources.into_iter().map(|r| {
+                    let resource_type = r.clone().into();
+                    let amount = r.amount;
+                    (resource_type, amount)
+                }))
+            }
+        } else {
+            HashMap::new()
         };
 
         Self {
@@ -424,8 +459,17 @@ impl From<hero::Data> for Hero {
             stamina_max: data.stamina_max,
             stamina_regen_rate: data.stamina_regen_rate,
             resources,
+            last_stamina_regeneration_time: convert_to_utc(data.last_stamina_regeneration_time),
         }
     }
+}
+
+pub fn convert_to_utc(dt: Option<DateTime<FixedOffset>>) -> Option<DateTime<Utc>> {
+    dt.map(|datetime| datetime.with_timezone(&Utc))
+}
+
+pub fn convert_to_fixed_offset(dt: Option<DateTime<Utc>>) -> Option<DateTime<FixedOffset>> {
+    dt.map(|datetime| datetime.with_timezone(&FixedOffset::east(0)))
 }
 
 impl From<base_stats::Data> for BaseStats {
@@ -439,7 +483,6 @@ impl From<base_stats::Data> for BaseStats {
                 max: data.damage_max,
             },
             hit_points: data.hit_points,
-            mana: data.mana,
             armor: data.armor,
         }
     }
@@ -533,57 +576,8 @@ impl From<hero_resource::Data> for Resource {
             match resource_data.r#type {
                 ResourceEnum::Aion => Resource::Aion,
                 ResourceEnum::Valor => Resource::Valor,
-                ResourceEnum::NexusShard => Resource::NexusShard,
-                ResourceEnum::Material => {
-                    if let Some(Some(material_data)) = resource_data.material_type {
-                        match material_data.r#type {
-                            MaterialEnum::Common => material_data
-                                .common()
-                                .and_then(|c| {
-                                    c.map(|common| common.r#type).ok_or_else(|| {
-                                        RelationNotFetchedError::new("Common type not found")
-                                    })
-                                })
-                                .map(|common_enum| {
-                                    Resource::Material(MaterialType::Common(common_enum.into()))
-                                })
-                                .unwrap_or_else(|e| {
-                                    error!("Error getting common material type: {}", e);
-                                    panic!("Error getting common material type");
-                                }),
-                            MaterialEnum::Rare => material_data
-                                .rare()
-                                .and_then(|r| {
-                                    r.map(|rare| rare.r#type).ok_or_else(|| {
-                                        RelationNotFetchedError::new("Rare type not found")
-                                    })
-                                })
-                                .map(|rare_enum| {
-                                    Resource::Material(MaterialType::Rare(rare_enum.into()))
-                                })
-                                .unwrap_or_else(|e| {
-                                    error!("Error getting rare material type: {}", e);
-                                    panic!("Error getting rare material type");
-                                }),
-                            MaterialEnum::Epic => material_data
-                                .epic()
-                                .and_then(|e| {
-                                    e.map(|epic| epic.r#type).ok_or_else(|| {
-                                        RelationNotFetchedError::new("Epic type not found")
-                                    })
-                                })
-                                .map(|epic_enum| {
-                                    Resource::Material(MaterialType::Epic(epic_enum.into()))
-                                })
-                                .unwrap_or_else(|e| {
-                                    error!("Error getting epic material type: {}", e);
-                                    panic!("Error getting epic material type");
-                                }),
-                        }
-                    } else {
-                        panic!("Invalid material type!")
-                    }
-                }
+                ResourceEnum::NexusOrb => Resource::NexusOrb,
+                ResourceEnum::StormShard => Resource::StormShard,
             }
         } else {
             panic!("Invalid resource type!")

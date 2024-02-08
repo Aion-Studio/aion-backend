@@ -5,7 +5,7 @@ datasource db {
 
 generator client {
   provider = "cargo prisma"
-  // The location to generate the client. Is relative to the position of the schema
+  // The location to generate the client. Is relative to the position of the schemaschemour
   output   = "../src/prisma.rs"
 }
 
@@ -29,6 +29,7 @@ model Hero {
   staminaRegenRate Int               @default(1)
   heroActions      HeroActions[]
   heroQuests       HeroQuests[]
+  lastStaminaRegenerationTime  DateTime? @map("last_stamina_regeneration_time") 
 }
 
 model HeroResource {
@@ -38,14 +39,16 @@ model HeroResource {
   resource       ResourceType @relation(fields: [resourceTypeId], references: [id])
   amount         Int
   resourceTypeId String       @map("resource_type_id")
+
+  @@unique([heroId, resourceTypeId])
 }
 
 model Action {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
-  region_name String @map("region_name")
-  Region      Region @relation(fields: [region_name], references: [name])
+  region_name String  @map("region_name")
+  Region      Region  @relation(fields: [region_name], references: [name])
 
   // Optional fields for Leyline and Quest
   leyline    Leyline?      @relation(fields: [leylineId], references: [id])
@@ -53,6 +56,8 @@ model Action {
   quest      Quest?        @relation(fields: [questId], references: [id])
   questId    String?       @map("quest_id")
   heroAction HeroActions[]
+  cost       Int?          @default(0)
+
   @@unique([name, description, questId])
 }
 
@@ -67,13 +72,14 @@ model HeroActions {
 model Quest {
   id             String       @id @default(uuid())
   title          String
-  region_name         String       @map("region_name")
+  region_name    String       @map("region_name")
   Region         Region       @relation(fields: [region_name], references: [name])
   requiredQuests Quest[]      @relation("QuestRequirements")
   requiredBy     Quest[]      @relation("QuestRequirements")
   questNumber    Int
   actions        Action[]
   heroQuests     HeroQuests[]
+  cost           Int          @default(0)
 }
 
 model HeroQuests {
@@ -82,6 +88,7 @@ model HeroQuests {
   hero      Hero    @relation(fields: [heroId], references: [id])
   questId   String  @map("quest_id")
   quest     Quest   @relation(fields: [questId], references: [id])
+  accepted  Boolean @default(false)
   completed Boolean @default(false)
 }
 
@@ -99,7 +106,7 @@ model ActionCompleted {
 model HeroRegion {
   id               String  @id @default(uuid())
   HeroId           String  @map("hero_id")
-  discovery_level  Int     @map("discovery_level")
+  discovery_level  Float     @map("discovery_level")
   Hero             Hero    @relation(fields: [HeroId], references: [id])
   Region           Region  @relation(fields: [region_name], references: [name])
   region_name      String  @map("region_name")
@@ -113,7 +120,6 @@ model BaseStats {
   damageMin Int
   damageMax Int
   hitPoints Int    @map("hit_points")
-  mana      Int
   armor     Int
   hero      Hero?
 }
@@ -167,11 +173,9 @@ model Follower {
 }
 
 model ResourceType {
-  id             String         @id @default(uuid())
-  type           ResourceEnum
-  materialType   MaterialType?  @relation(fields: [materialTypeId], references: [id])
-  materialTypeId String?        @unique
-  HeroResource   HeroResource[]
+  id           String         @id @default(uuid())
+  type         ResourceEnum
+  HeroResource HeroResource[]
 
   @@unique([type])
 }
@@ -179,62 +183,8 @@ model ResourceType {
 enum ResourceEnum {
   Aion
   Valor
-  NexusShard
-  Material
-}
-
-model MaterialType {
-  id           String        @id @default(uuid())
-  type         MaterialEnum
-  common       Common?       @relation(fields: [commonId], references: [id])
-  commonId     String?       @unique
-  rare         Rare?         @relation(fields: [rareId], references: [id])
-  rareId       String?       @unique
-  epic         Epic?         @relation(fields: [epicId], references: [id])
-  epicId       String?       @unique
-  resourceType ResourceType?
-}
-
-model Common {
-  id           String        @id @default(uuid())
-  type         CommonEnum    @unique
-  materialType MaterialType?
-}
-
-model Rare {
-  id           String        @id @default(uuid())
-  type         RareEnum
-  materialType MaterialType?
-}
-
-model Epic {
-  id           String        @id @default(uuid())
-  type         EpicEnum
-  materialType MaterialType?
-}
-
-enum MaterialEnum {
-  Common
-  Rare
-  Epic
-}
-
-enum CommonEnum {
-  IronOre
-  RoughLeather
-  Quartz
-}
-
-enum RareEnum {
-  SilverOre
-  FineLeather
-  Sapphire
-}
-
-enum EpicEnum {
-  MythrilOre
-  Dragonhide
-  Ruby
+  NexusOrb
+  StormShard
 }
 
 model ResourceCost {

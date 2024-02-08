@@ -1,7 +1,9 @@
+use serde_json::json;
 use tracing::info;
 
 use crate::{
     configuration::ChannelDurations,
+    logger::Logger,
     services::{
         tasks::{
             action_names::{Responder, TaskAction},
@@ -42,5 +44,11 @@ impl ChannelingHandler {
                 }
             }
         });
+    }
+
+    pub fn channel_completed(action: ChannelingAction) {
+        Logger::log(
+            json!({"name": action.name(),"hero_id": action.hero_id(), "leyline":action.leyline }),
+        )
     }
 }

@@ -2,7 +2,7 @@ use crate::configuration::{get_durations, DurationType, Settings};
 use crate::handlers::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
-use crate::handlers::quest::{add_quest, do_quest_action, get_hero_quests};
+use crate::handlers::quest::{add_quest, do_quest_action, get_hero_quests, accept_quest};
 use crate::handlers::regions::{channel_leyline, explore_region};
 use crate::handlers::tasks::{active_actions, active_actions_ws};
 use crate::infra::Infra;
@@ -17,10 +17,7 @@ use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::process::Command;
-use std::sync::Arc;
-use tracing::info;
-
-pub struct Application {
+use std::sync::Arc; use tracing::info; pub struct Application {
     port: u16,
     server: Server,
 }
@@ -106,10 +103,11 @@ impl Application {
 }
 
 async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
-    match Logger::init("http:://localhost:9000") {
-        Ok(_) => println!("Logger initialized"),
+    match Logger::init("127.0.0.1:9000") {
+        Ok(_) => println!("Logger initialized at localhost:9000"),
         Err(e) => println!("Logger failed to initialize: {:?}", e),
     };
+
     // initialize the messenger
     let _ = MESSENGER;
 
@@ -144,6 +142,7 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
             .service(add_quest)
             .service(get_hero_quests)
             .service(do_quest_action)
+            .service(accept_quest)
             .service(completed_actions);
         app
     })
