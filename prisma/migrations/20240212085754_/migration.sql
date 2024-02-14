@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Leyline" ALTER COLUMN "npcId" DROP DEFAULT;

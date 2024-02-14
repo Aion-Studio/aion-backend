@@ -5,6 +5,7 @@ use tokio::sync::oneshot;
 use tracing::warn;
 use tracing::{info, log::error};
 
+use crate::events::combat::CombatEncounter;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
 use crate::services::tasks::action_names::{ActionNames, Command, Responder};
@@ -61,6 +62,15 @@ impl QuestHandler {
                         Ok(_) => info!("Explore action kicked off from quest action..."),
                         Err(e) => error!("Error: {:?}", e),
                     }
+                }
+                Some(ActionNames::FightNpc) => {
+                    let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+                    let npc = Infra::repo()
+                        .get_npc_by_action_id(&action_id)
+                        .await
+                        .unwrap();
+
+                    let combat_encounter = CombatEncounter::new(hero, npc);
                 }
                 Some(ActionNames::Channel) => {}
                 Some(ActionNames::Raid) => {}

@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Npc" ADD COLUMN     "hp" INTEGER NOT NULL DEFAULT 150;

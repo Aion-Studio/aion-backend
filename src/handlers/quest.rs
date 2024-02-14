@@ -1,6 +1,6 @@
 use actix_web::{
     get, post,
-    web::{Json, Path},
+    web::{Data, Json, Path},
     HttpResponse, Responder,
 };
 use serde_json::json;
@@ -13,6 +13,7 @@ use crate::{
     messenger::MESSENGER,
     models::quest::Quest,
     services::tasks::action_names::{ActionNames, Command},
+    webserver::AppState,
 };
 
 #[post("/quests")]
@@ -85,7 +86,7 @@ async fn accept_quest(path: Path<(String, String)>) -> impl Responder {
 }
 
 #[post("/quests/action/{hero_id}/{action_id}")]
-async fn do_quest_action(path: Path<(String, String)>) -> impl Responder {
+async fn do_quest_action(path: Path<(String, String)>, app: Data<AppState>) -> impl Responder {
     let (hero_id, action_id) = path.into_inner();
     let repo = Infra::repo();
     let action_result = repo.get_action_by_id(&action_id);

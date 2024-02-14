@@ -7,8 +7,9 @@ use serde_json::{json, Value};
 use tracing::{error, info, warn};
 
 use crate::models::hero::{convert_to_fixed_offset, Attributes, BaseStats};
+use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
-use crate::prisma::{action, hero_actions, hero_quests, quest, resource_type, ResourceEnum};
+use crate::prisma::{action, hero_actions, hero_quests, npc, quest, resource_type, ResourceEnum};
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::services::tasks::explore::ExploreAction;
 use crate::utils::merge;
@@ -84,7 +85,6 @@ impl Repo {
             .hero()
             .create(
                 new_hero.aion_capacity,
-                new_hero.aion_collected,
                 base_stats::id::equals(base_stats.clone().id),
                 attributes::id::equals(base_attributes.clone().id),
                 inventory::id::equals(base_inventory.clone().id),
@@ -184,7 +184,6 @@ impl Repo {
     }
 
     pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
-        info!("update_hero stamina check {:?}", hero.stamina);
         self.update_base_stats(&hero.base_stats).await?;
         self.update_attributes(&hero.attributes).await?;
         self.update_hero_resources(&hero.resources, String::from(&hero.get_id()))
@@ -197,7 +196,6 @@ impl Repo {
                 hero::id::equals(hero.get_id()),
                 vec![
                     hero::aion_capacity::set(hero.aion_capacity),
-                    hero::aion_collected::set(hero.aion_collected),
                     hero::stamina::set(hero.stamina),
                     hero::stamina_max::set(hero.stamina_max),
                     hero::stamina_regen_rate::set(hero.stamina_regen_rate),
@@ -1034,6 +1032,28 @@ impl Repo {
             .collect();
 
         result.map_err(|e| QueryError::Serialize(e.to_string()))
+    }
+
+    pub async fn get_npc_by_action_id(&self, action_id: &str) -> Result<Monster, QueryError> {
+        let npc = self
+            .prisma
+            .npc()
+            .find_first(vec![npc::WhereParam::ActionsSome(vec![
+                action::id::equals(action_id.to_string()),
+            ])])
+            .exec()
+            .await
+            .unwrap();
+        match npc {
+            Some(npc) => {
+                println!("npc: {:?}", npc);
+                Ok(npc.into())
+            }
+            None => {
+                println!("No npc found");
+                Err(QueryError::Serialize("No npc found".to_string()))
+            }
+        }
     }
 }
 

@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use tracing::log::error;
 
+use super::combatant::Combatant;
 use super::region::RegionName;
 use super::resources::Resource;
+use super::talent::{Effect, Talent};
 use crate::events::game::ActionDurations;
 use crate::infra::Infra;
 use crate::prisma::ResourceEnum;
@@ -33,12 +35,12 @@ pub struct Hero {
     pub inventory: Option<Inventory>,
     pub retinue_slots: Vec<RetinueSlot>,
     pub resources: HashMap<Resource, i32>,
-    pub aion_capacity: i32,
-    pub aion_collected: i32,
+    pub aion_capacity: i32, // NOTO: This is not used anywhere at the moment
     pub stamina: i32,
     pub stamina_max: i32,
     pub stamina_regen_rate: i32,
     pub last_stamina_regeneration_time: Option<DateTime<Utc>>, // Add this
+    pub talents: Vec<Talent>,
 }
 
 // methods to only update the model struct based on some calculation
@@ -58,13 +60,21 @@ impl Hero {
             retinue_slots: vec![],
             aion_capacity,
             resources: Resource::randomize_amounts(),
-            aion_collected,
             stamina: 100,
             stamina_max: 100,
             stamina_regen_rate: 1,
             last_stamina_regeneration_time: None,
+            talents: vec![],
         }
     }
+
+    // pub fn apply_talent_effect(&mut self, effect: &Effect) {
+    //     match effect {
+    //         Effect::Damage(damage) => self.take_damage(*damage),
+    //         Effect::DamageOverTime(damage, num_turns) => self.apply_dot(*damage, *num_turns),
+    //         _ => {}
+    //     }
+    // }
 
     pub fn level(&self) -> i32 {
         self.base_stats.level
@@ -341,6 +351,33 @@ impl Hero {
     }
 }
 
+impl Combatant for Hero {
+    fn get_id(&self) -> String {
+        self.id.clone().unwrap()
+    }
+
+    fn get_hp(&self) -> i32 {
+        self.base_stats.hit_points
+    }
+
+    fn attack(&mut self, other: &mut dyn Combatant) {
+        let damage = self.base_stats.damage.min;
+        other.take_damage(damage);
+    }
+    fn get_name(&self) -> &str {
+        &self.name
+    }
+    fn get_damage(&self) -> i32 {
+        self.base_stats.damage.roll()
+    }
+    fn take_damage(&mut self, damage: i32) {
+        self.base_stats.hit_points -= damage;
+    }
+    fn get_talents(&self) -> &Vec<Talent> {
+        &self.talents
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct BaseStats {
     pub id: Option<String>,
@@ -390,6 +427,7 @@ pub struct Follower {
     pub name: String,
     pub level: i32,
     pub bonus_attributes: Attributes,
+    pub talents: Vec<Talent>,
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
@@ -404,6 +442,12 @@ pub struct Item {
 pub struct Range<T> {
     pub min: T,
     pub max: T,
+}
+
+impl Range<i32> {
+    pub fn roll(&self) -> i32 {
+        thread_rng().gen_range(self.min..self.max)
+    }
 }
 
 impl From<hero::Data> for Hero {
@@ -454,12 +498,15 @@ impl From<hero::Data> for Hero {
             inventory: Some(inventory),
             retinue_slots,
             aion_capacity: data.aion_capacity,
-            aion_collected: data.aion_collected,
             stamina: data.stamina,
             stamina_max: data.stamina_max,
             stamina_regen_rate: data.stamina_regen_rate,
             resources,
             last_stamina_regeneration_time: convert_to_utc(data.last_stamina_regeneration_time),
+            talents: match data.hero_talents {
+                Some(talents) => talents.into_iter().map(Talent::from).collect(),
+                None => vec![],
+            },
         }
     }
 }
@@ -547,6 +594,10 @@ impl From<follower::Data> for Follower {
             name: data.name,
             level: data.level,
             bonus_attributes: attributes,
+            talents: match data.follower_talents {
+                Some(talents) => talents.into_iter().map(Talent::from).collect(),
+                None => vec![],
+            },
         }
     }
 }

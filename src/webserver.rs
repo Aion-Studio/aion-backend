@@ -1,14 +1,19 @@
 use crate::configuration::{get_durations, DurationType, Settings};
+use crate::events::combat::CombatTurnResult;
 use crate::handlers::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
-use crate::handlers::quest::{add_quest, do_quest_action, get_hero_quests, accept_quest};
+use crate::handlers::quest::{accept_quest, add_quest, do_quest_action, get_hero_quests};
 use crate::handlers::regions::{channel_leyline, explore_region};
 use crate::handlers::tasks::{active_actions, active_actions_ws};
 use crate::infra::Infra;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
 use crate::prisma::PrismaClient;
+use crate::services::impls::combat_service::{CombatCommand, CombatController};
+
+use crate::services::tasks::action_names::Responder as Sender;
+use crate::storable::MemoryStore;
 use actix_cors::Cors;
 use actix_web::dev::Server;
 use actix_web::web::{Data, Path};
@@ -17,14 +22,19 @@ use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::process::Command;
-use std::sync::Arc; use tracing::info; pub struct Application {
+use std::sync::{Arc, Mutex};
+use tokio::sync::{mpsc, RwLock};
+use tracing::info;
+pub struct Application {
     port: u16,
     server: Server,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AppState {
     pub durations: HashMap<String, DurationType>,
+    pub combat_controller: Arc<RwLock<CombatController>>,
+    pub combat_tx: mpsc::Sender<(CombatCommand, String, Sender<CombatTurnResult>)>,
 }
 
 #[allow(dead_code)]
@@ -112,9 +122,26 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
     let _ = MESSENGER;
 
     // Subscribe the task management service to the HeroExplored event
+
+    let store = Arc::new(Mutex::new(MemoryStore::new()));
+
+    let (tx, rx) = mpsc::channel(10000);
+
+    let combat_controller = Arc::new(RwLock::new(CombatController::new(rx))); // Use RwLock here
+    let combat_controller_runner = combat_controller.clone();
+
+    // our combat runner 
+    tokio::spawn(async move {
+        let mut controller = combat_controller_runner.write().await; // Get a write lock
+        controller.run().await;
+    });
+
     let app_state_s = AppState {
         durations: get_durations(),
+        combat_controller,
+        combat_tx: tx,
     };
+
     let app_state = Data::new(app_state_s.clone());
 
     Infra::initialize();
@@ -128,6 +155,7 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
 
         let app = App::new()
             .app_data(app_state.clone())
+            .app_data(store.clone())
             .wrap(cors)
             .service(health_check)
             .service(create_hero_endpoint)
@@ -143,6 +171,7 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
             .service(get_hero_quests)
             .service(do_quest_action)
             .service(accept_quest)
+            .service(npc)
             .service(completed_actions);
         app
     })
@@ -154,6 +183,16 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
 #[get("/up")]
 async fn health_check() -> impl Responder {
     HttpResponse::Ok().body("OK")
+}
+
+#[get("/npc/{action_id}")]
+async fn npc(path: Path<String>) -> impl Responder {
+    let action_id = path.into_inner();
+    let npc = Infra::repo()
+        .get_npc_by_action_id(&action_id)
+        .await
+        .unwrap();
+    HttpResponse::Ok().json(npc)
 }
 
 #[get("/all-heroes")]

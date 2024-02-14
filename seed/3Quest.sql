@@ -11,7 +11,8 @@
 -- This script only contains the table creation statements and does not fully represent the table in the database. It's still missing: indices, triggers. Do not use it as a backup.
 
 -- Table Definition
-CREATE TABLE "public"."Quest" (
+-- add only if it doesnt exist
+CREATE TABLE IF NOT EXISTS "public"."Quest" (
     "id" text NOT NULL,
     "title" text NOT NULL,
     "region_name" text NOT NULL,

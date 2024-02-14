@@ -9,6 +9,7 @@ pub mod webserver;
 
 pub mod fp_macros;
 pub mod telemetry;
+pub mod storable;
 
 #[allow(warnings, unused)]
 pub mod prisma;
@@ -22,6 +23,9 @@ mod models {
     pub mod quest;
     pub mod region;
     pub mod resources;
+    pub mod talent;
+    pub mod combatant;
+    pub mod npc;
 }
 
 mod repos {
@@ -41,6 +45,7 @@ mod events {
     pub mod handle_explore;
     pub mod handle_lootbox;
     pub mod handle_quest;
+    pub mod combat;
 }
 
 mod services {
@@ -51,12 +56,14 @@ mod services {
 
         pub mod items_service;
         pub mod tasks;
+        pub mod combat_service;
     }
 
     pub mod traits {
         pub mod async_task;
         pub mod hero_service;
         pub mod scheduler;
+        pub mod combat_decision_maker;
     }
     pub mod tasks {
         pub mod action_names;
@@ -71,12 +78,13 @@ pub mod handlers {
     pub mod regions;
     pub mod response;
     pub mod tasks;
-
+    pub mod combat;
     pub mod quest;
 }
 
 pub mod infra;
 pub mod messenger;
+pub mod jsontoken;
 
 mod logger;
 #[cfg(test)]

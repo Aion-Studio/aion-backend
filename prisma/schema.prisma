@@ -10,26 +10,26 @@ generator client {
 }
 
 model Hero {
-  id               String            @id @default(uuid())
-  name             String            @default("Default name")
-  aionCapacity     Int
-  aionCollected    Int
-  baseStatsId      String            @unique @map("base_stats_id")
-  attributesId     String            @unique @map("attributes_id")
-  baseStats        BaseStats         @relation(fields: [baseStatsId], references: [id])
-  attributes       Attributes        @relation(fields: [attributesId], references: [id])
-  inventory        Inventory         @relation(fields: [inventoryId], references: [id])
-  inventoryId      String            @unique @map("inventory_id")
-  retinueSlots     RetinueSlot[]
-  heroRegion       HeroRegion[]
-  actionsCompleted ActionCompleted[]
-  resources        HeroResource[]
-  stamina          Int               @default(100)
-  staminaMax       Int               @default(100)
-  staminaRegenRate Int               @default(1)
-  heroActions      HeroActions[]
-  heroQuests       HeroQuests[]
-  lastStaminaRegenerationTime  DateTime? @map("last_stamina_regeneration_time") 
+  id                          String            @id @default(uuid())
+  name                        String            @default("Default name")
+  aionCapacity                Int
+  baseStatsId                 String            @unique @map("base_stats_id")
+  attributesId                String            @unique @map("attributes_id")
+  baseStats                   BaseStats         @relation(fields: [baseStatsId], references: [id])
+  attributes                  Attributes        @relation(fields: [attributesId], references: [id])
+  inventory                   Inventory         @relation(fields: [inventoryId], references: [id])
+  inventoryId                 String            @unique @map("inventory_id")
+  retinueSlots                RetinueSlot[]
+  heroRegion                  HeroRegion[]
+  actionsCompleted            ActionCompleted[]
+  resources                   HeroResource[]
+  stamina                     Int               @default(100)
+  staminaMax                  Int               @default(100)
+  staminaRegenRate            Int               @default(1)
+  heroActions                 HeroActions[]
+  heroQuests                  HeroQuests[]
+  lastStaminaRegenerationTime DateTime?         @map("last_stamina_regeneration_time")
+  heroTalents                 HeroTalent[]
 }
 
 model HeroResource {
@@ -51,12 +51,17 @@ model Action {
   Region      Region  @relation(fields: [region_name], references: [name])
 
   // Optional fields for Leyline and Quest
-  leyline    Leyline?      @relation(fields: [leylineId], references: [id])
-  leylineId  String?       @map("leyline_id")
-  quest      Quest?        @relation(fields: [questId], references: [id])
-  questId    String?       @map("quest_id")
+  leyline   Leyline? @relation(fields: [leylineId], references: [id])
+  leylineId String?  @map("leyline_id")
+  quest     Quest?   @relation(fields: [questId], references: [id])
+  questId   String?  @map("quest_id")
+
+  npc   Npc?    @relation("ActionToNpc", fields: [npcId], references: [id])
+  npcId String? @map("npc_id")
+
   heroAction HeroActions[]
-  cost       Int?          @default(0)
+
+  cost Int? @default(0)
 
   @@unique([name, description, questId])
 }
@@ -106,7 +111,7 @@ model ActionCompleted {
 model HeroRegion {
   id               String  @id @default(uuid())
   HeroId           String  @map("hero_id")
-  discovery_level  Float     @map("discovery_level")
+  discovery_level  Float   @map("discovery_level")
   Hero             Hero    @relation(fields: [HeroId], references: [id])
   Region           Region  @relation(fields: [region_name], references: [name])
   region_name      String  @map("region_name")
@@ -170,6 +175,8 @@ model Follower {
   attributesId String        @map("attributes_id")
   attributes   Attributes    @relation(fields: [attributesId], references: [id])
   RetinueSlot  RetinueSlot[]
+
+  followerTalents FollowerTalent[]
 }
 
 model ResourceType {
@@ -212,13 +219,54 @@ model Leyline {
   stamina_rate       Float
   aion_rate          Float
 
+  npcId String @unique
+  npc   Npc    @relation("NpcToLeyline", fields: [npcId], references: [id])
+
   actions Action[] // This will relate Leyline to many Actions
 }
 
-// model ResourceValue {
-//   id                   String             @id @default(uuid())
-//   resource             ResourceType
-//   value                Int
-//   RegionActionResult   RegionActionResult @relation(fields: [regionActionResultId], references: [id])
-//   regionActionResultId String
-// }
+model Talent {
+  id              String           @id @default(uuid())
+  name            String
+  description     String?
+  cooldown        Int
+  effects         Json
+  heroTalents     HeroTalent[]
+  followerTalents FollowerTalent[]
+}
+
+// Join table for Hero and Talent
+model HeroTalent {
+  heroId   String
+  talentId String
+  hero     Hero   @relation(fields: [heroId], references: [id])
+  talent   Talent @relation(fields: [talentId], references: [id])
+
+  @@id([heroId, talentId])
+}
+
+// Join table for Follower and Talent
+model FollowerTalent {
+  followerId String
+  talentId   String
+  follower   Follower @relation(fields: [followerId], references: [id])
+  talent     Talent   @relation(fields: [talentId], references: [id])
+
+  @@id([followerId, talentId])
+}
+
+model Npc {
+  id         String @id @default(uuid())
+  name       String
+  level      Int
+  armor      Int @default(0)
+  resilience Int
+  strength   Int
+  agility    Int
+  damageMin  Int @default(0)
+  damageMax  Int @default(0)
+  hp         Int @default(150)
+
+  leyline Leyline? @relation("NpcToLeyline")
+  actions Action[] @relation("ActionToNpc")
+}

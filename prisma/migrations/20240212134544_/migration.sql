@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Npc" ADD COLUMN     "armor" INTEGER NOT NULL DEFAULT 0;

@@ -15,6 +15,7 @@ use super::{channel::ChannelingAction, explore::ExploreAction, off_beat_actions:
 pub enum ActionNames {
     Explore,
     Channel,
+    FightNpc,
     Quest,
     Raid,
     Unique(OffBeatActions),
@@ -27,6 +28,8 @@ impl ActionNames {
             ActionNames::Channel => "Channel".to_string(),
             ActionNames::Quest => "Quest".to_string(),
             ActionNames::Raid => "Raid".to_string(),
+            ActionNames::FightNpc => "FightNpc".to_string(),
+
             ActionNames::Unique(x) => match x {
                 OffBeatActions::SlayDragonQuest => "SlayDragonQuest".to_string(),
                 _ => unreachable!(),
