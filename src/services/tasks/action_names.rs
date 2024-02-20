@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use tokio::sync::oneshot;
+use std::sync::Arc;
+use tokio::sync::{oneshot, RwLock};
 
 use crate::{
     configuration::ChannelDurations,
@@ -7,7 +8,9 @@ use crate::{
     models::{quest::Quest, region::RegionName},
 };
 
+use crate::services::impls::combat_service::{CombatController, ControllerMessage};
 use anyhow::Result;
+use tokio::sync::mpsc::Sender;
 
 use super::{channel::ChannelingAction, explore::ExploreAction, off_beat_actions::OffBeatActions};
 
@@ -43,6 +46,7 @@ impl ActionNames {
             "Channel" => Some(ActionNames::Channel),
             "Quest" => Some(ActionNames::Quest),
             "Raid" => Some(ActionNames::Raid),
+            "FightNpc" => Some(ActionNames::FightNpc),
             // Add other cases as needed
             _ => None,
         }
@@ -60,6 +64,7 @@ impl ActionNames {
 }
 
 pub type Responder<T> = oneshot::Sender<Result<T>>;
+pub type CmdResponder<T> = oneshot::Sender<T>;
 
 #[derive(Debug, Clone, Serialize)]
 pub enum TaskAction {
@@ -70,7 +75,6 @@ pub enum TaskAction {
     QuestAccepted(String, String),
 }
 
-#[derive(Debug)]
 pub enum Command {
     Explore {
         hero_id: String,
@@ -88,7 +92,8 @@ pub enum Command {
     QuestAction {
         hero_id: String,
         action_id: String,
-        resp: Responder<()>,
+        resp: CmdResponder<ResponderType>,
+        combat_tx: Sender<ControllerMessage>,
     },
     QuestActionDone(String, String),
     QuestCompleted(String, Quest),
@@ -97,6 +102,12 @@ pub enum Command {
         quest_id: String,
         resp: Responder<()>,
     },
+}
+
+#[derive(Debug)]
+pub enum ResponderType {
+    StringResponse(String),
+    UnitResponse(()),
 }
 
 // async-timed actions

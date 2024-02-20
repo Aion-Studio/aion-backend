@@ -9,6 +9,7 @@ use thiserror::Error;
 use prisma_client_rust::chrono::{self, Duration, Local};
 use tokio::time::sleep;
 use tracing::error;
+use tracing::log::info;
 use uuid::Uuid;
 
 use crate::models::hero::Hero;
@@ -48,7 +49,6 @@ impl BaseTask {
         }
     }
 
-
     pub fn get_end_time(&self) -> Option<chrono::DateTime<chrono::Utc>> {
         let now = chrono::Utc::now();
         if let TaskStatus::Completed = self.check_status() {
@@ -83,7 +83,7 @@ impl Task for BaseTask {
     fn start_now(&self) {
         let mut start_time = self.start_time.lock().unwrap();
         *start_time = Some(chrono::Utc::now());
-        println!(
+        info!(
             "starting action now at {:?}",
             start_time.unwrap().with_timezone(&Local)
         );

@@ -1,17 +1,18 @@
 use crate::configuration::{get_durations, DurationType, Settings};
-use crate::events::combat::CombatTurnResult;
-use crate::handlers::heroes::{
+use crate::endpoints::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
-use crate::handlers::quest::{accept_quest, add_quest, do_quest_action, get_hero_quests};
-use crate::handlers::regions::{channel_leyline, explore_region};
-use crate::handlers::tasks::{active_actions, active_actions_ws};
+use crate::endpoints::quest::{accept_quest, add_quest, do_quest_action, get_hero_quests};
+use crate::endpoints::regions::{channel_leyline, explore_region};
+use crate::endpoints::tasks::{active_actions, active_actions_ws};
+use crate::events::combat::CombatTurnMessage;
 use crate::infra::Infra;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
 use crate::prisma::PrismaClient;
-use crate::services::impls::combat_service::{CombatCommand, CombatController};
+use crate::services::impls::combat_service::{CombatCommand, CombatController, ControllerMessage};
 
+use crate::endpoints::combat::combat_ws;
 use crate::services::tasks::action_names::Responder as Sender;
 use crate::storable::MemoryStore;
 use actix_cors::Cors;
@@ -25,6 +26,7 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, RwLock};
 use tracing::info;
+
 pub struct Application {
     port: u16,
     server: Server,
@@ -33,8 +35,8 @@ pub struct Application {
 #[derive(Clone)]
 pub struct AppState {
     pub durations: HashMap<String, DurationType>,
-    pub combat_controller: Arc<RwLock<CombatController>>,
-    pub combat_tx: mpsc::Sender<(CombatCommand, String, Sender<CombatTurnResult>)>,
+    // pub combat_tx: mpsc::Sender<(CombatCommand, String, Sender<CombatTurnMessage>)>,
+    pub combat_tx: mpsc::Sender<ControllerMessage>,
 }
 
 #[allow(dead_code)]
@@ -125,20 +127,18 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
 
     let store = Arc::new(Mutex::new(MemoryStore::new()));
 
-    let (tx, rx) = mpsc::channel(10000);
+    let (tx, rx) = mpsc::channel(1000);
 
-    let combat_controller = Arc::new(RwLock::new(CombatController::new(rx))); // Use RwLock here
-    let combat_controller_runner = combat_controller.clone();
+    let mut combat_controller = CombatController::new(tx.clone()); // Use RwLock here
 
-    // our combat runner 
+    // our combat runner
     tokio::spawn(async move {
-        let mut controller = combat_controller_runner.write().await; // Get a write lock
-        controller.run().await;
+        // This scope only needs a write lock briefly to start the `run` method
+        combat_controller.run(rx).await;
     });
 
     let app_state_s = AppState {
         durations: get_durations(),
-        combat_controller,
         combat_tx: tx,
     };
 
@@ -164,6 +164,7 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
             .service(get_heroes)
             .service(visible_leylines)
             .service(active_actions_ws)
+            .service(combat_ws)
             .service(active_actions)
             .service(latest_action_handler)
             .service(hero_state)

@@ -63,7 +63,6 @@ impl Message for TasksUpdate {
 
 impl Handler<TasksUpdate> for MyWebSocket {
     type Result = ();
-
     fn handle(&mut self, msg: TasksUpdate, ctx: &mut Self::Context) -> Self::Result {
         ctx.text(msg.0);
     }
@@ -99,7 +98,6 @@ pub async fn send_new_tasks_to_ws() {
     println!("addr chceck {:?}", WS_ADDR.lock().unwrap().as_ref());
 
     if let Some(addr) = WS_ADDR.lock().unwrap().as_ref() {
-        println!("{:?}", tasks_json);
         addr.do_send(TasksUpdate(tasks_json));
     }
 }

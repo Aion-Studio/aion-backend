@@ -1,7 +1,15 @@
+use crate::events::combat::{CombatTurnMessage, CombatantIndex};
+use crate::services::impls::combat_service::CombatCommand;
+use std::sync::Arc;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::Mutex;
 
-use crate::{events::combat::CombatTurnResult, services::impls::combat_service::CombatCommand};
+pub trait DecisionMaker: Send + Sync + std::fmt::Debug {
+    fn start(
+        &mut self,
+        command_sender: Sender<CombatCommand>,
+        player_idx: CombatantIndex,
+    ) -> Sender<CombatTurnMessage>;
 
-pub trait DecisionMaker {
-    fn listen_and_make_move(&mut self);
+    fn get_id(&self) -> String;
 }

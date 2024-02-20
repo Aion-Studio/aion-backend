@@ -4,7 +4,7 @@ use prisma_client_rust::chrono;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Claims {
+pub struct Claims {
     pub combatant_id: String,
     exp: usize, // Expiration time (optional)
 }
@@ -38,8 +38,4 @@ pub fn decode_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
         &Validation::default(),
     )
     .map(|data| data.claims)
-}
-
-pub fn create_token_for_client(combatant_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
-    create_token(combatant_id)
 }

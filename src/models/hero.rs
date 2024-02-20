@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::collections::HashMap;
 
 use prisma_client_rust::chrono::{self, DateTime, Duration, FixedOffset, Utc};
@@ -131,7 +132,6 @@ impl Hero {
                 self.gain_experience(xp);
                 // find the resource enum type in the  self.resources and increase the amount by result.resources
                 self.add_resources(result.resources);
-                println!("check resources after adding: {:?}", self.resources);
             }
             TaskLootBox::Channel(result) => {
                 let hero_id = result.hero_id.clone();
@@ -352,6 +352,9 @@ impl Hero {
 }
 
 impl Combatant for Hero {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_id(&self) -> String {
         self.id.clone().unwrap()
     }

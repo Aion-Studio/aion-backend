@@ -9,7 +9,7 @@ use tracing::{error, info};
 use crate::events::game::ActionCompleted;
 use crate::infra::Infra;
 use crate::models::hero::{Attributes, BaseStats, Hero, Range};
-use crate::models::quest::{Quest, HeroQuest};
+use crate::models::quest::{HeroQuest, Quest};
 use crate::models::region::{HeroRegion, Leyline};
 use crate::services::tasks::action_names::{ActionNames, TaskAction};
 use crate::services::tasks::channel::ChannelingAction;
@@ -215,7 +215,7 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                                     }
                                 }
                                 Err(e) => {
-                                    println!("Error getting latest action: {}", e);
+                                    error!("Error getting latest action: {}", e);
                                     (true, chrono::Utc::now().with_timezone(&Local))
                                 }
                             },
@@ -258,10 +258,7 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                                 }
                                 None => (leylines, chrono::Utc::now().into()),
                             },
-                            Err(e) => {
-                                println!("Error getting latest action: {}", e);
-                                (vec![], chrono::Utc::now().with_timezone(&Local))
-                            }
+                            Err(e) => (vec![], chrono::Utc::now().with_timezone(&Local)),
                         }
                     }
                 }
@@ -284,13 +281,13 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                 explore_cost,
                 channeling_available,
                 quest_accepted: match hero_quest_objs {
-                    Some((quest,hero_quest))=> {
+                    Some((quest, hero_quest)) => {
                         if hero_quest.accepted {
                             (true, quest)
                         } else {
                             (false, Quest::default())
                         }
-                    } 
+                    }
                     None => (false, Quest::default()),
                 },
             })

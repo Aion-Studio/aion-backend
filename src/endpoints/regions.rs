@@ -11,7 +11,7 @@ use crate::{
     messenger::MESSENGER,
     services::tasks::action_names::{Command, TaskAction},
 };
-use crate::{handlers::response::ApiResponse, models::region::RegionName};
+use crate::{endpoints::response::ApiResponse, models::region::RegionName};
 use crate::{infra::Infra, webserver::AppState};
 
 #[get("/region/explore/{hero_id}")]
@@ -108,7 +108,6 @@ pub async fn do_explore(hero: Hero, region_name: RegionName) -> Result<(), anyho
         let (resp_tx, resp_rx) = oneshot::channel();
 
         let hero_id = hero.get_id();
-        println!("checking hero in do_xplore id {:?}", &hero_id);
         let cmd = Command::Explore {
             hero_id: hero_id.clone(),
             region_name: region_name.clone(),

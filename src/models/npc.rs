@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -5,9 +6,11 @@ use tokio::sync::{
     mpsc::{self, Receiver, Sender},
     Mutex,
 };
+use tracing::log::info;
 
+use crate::events::combat::CombatantIndex;
 use crate::{
-    events::combat::CombatTurnResult,
+    events::combat::CombatTurnMessage,
     prisma::npc,
     services::{
         impls::combat_service::CombatCommand, traits::combat_decision_maker::DecisionMaker,
@@ -16,47 +19,82 @@ use crate::{
 
 use super::{combatant::Combatant, hero::Range, talent::Talent};
 
-struct CpuCombatantDecisionMaker {
-    command_sender: Sender<CombatCommand>,
-
-    result_receiver: Arc<Mutex<Receiver<CombatTurnResult>>>,
+#[derive(Debug)]
+pub struct CpuCombatantDecisionMaker {
+    // command_sender: Sender<CombatCommand>,
+    // result_receiver: Arc<Mutex<Receiver<CombatTurnMessage>>>,
     monster: Monster,
+    player_idx: CombatantIndex,
+    combat_controller_tx: Option<Sender<CombatCommand>>,
 }
 
 impl CpuCombatantDecisionMaker {
-    fn new(
-        command_sender: Sender<CombatCommand>,
-        result_receiver: Receiver<CombatTurnResult>,
+    pub(crate) fn new(
+        // command_sender: Sender<CombatCommand>,
+        // result_receiver: Receiver<CombatTurnMessage>,
         monster: Monster,
     ) -> Self {
         Self {
-            command_sender,
-            result_receiver: Arc::new(Mutex::new(result_receiver)),
+            // command_sender,
+            // result_receiver: Arc::new(Mutex::new(result_receiver)),
             monster,
+            player_idx: CombatantIndex::Combatant2,
+            combat_controller_tx: None,
         }
     }
 }
 
 impl DecisionMaker for CpuCombatantDecisionMaker {
-    fn listen_and_make_move(&mut self) {
-        let command_sender = self.command_sender.clone();
-
-        let result_receiver = self.result_receiver.clone();
+    fn start(
+        &mut self,
+        combat_controller_tx: Sender<CombatCommand>,
+        idx: CombatantIndex,
+    ) -> Sender<CombatTurnMessage> {
+        self.player_idx = idx.clone();
+        self.combat_controller_tx = Some(combat_controller_tx.clone());
+        let (command_sender, mut result_receiver) = mpsc::channel(10);
+        let combat_sender = combat_controller_tx.clone();
 
         tokio::spawn(async move {
-            while let Ok(result) = result_receiver.lock().await.try_recv() {
+            let npc_player_idx = idx.clone();
+            while let Some(result) = result_receiver.recv().await {
+                info!(
+                    "monster received message from combat controller: {:?}",
+                    result
+                );
+                match result {
+                    CombatTurnMessage::PlayerTurn(turn_idx) => {
+                        info!("monster received player turn message: {:?}", turn_idx);
+                        // Do nothing
+                        if npc_player_idx == turn_idx {
+                            let command = CombatCommand::Attack; // Example decision
+                            combat_sender
+                                .clone()
+                                .send(command)
+                                .await
+                                .expect("Failed to send command");
+                        }
+                    }
+                    CombatTurnMessage::Winner(idx) => {
+                        // Do nothing
+                    }
+                    CombatTurnMessage::CommandPlayed(opponent_state) => {
+                        // Do nothing for now
+                    }
+                    _ => {}
+                };
                 // --------------------CPU logic to decide next move based on the received result
-                let command = CombatCommand::Attack("target_id".to_string()); // Example decision
-                command_sender
-                    .send(command)
-                    .await
-                    .expect("Failed to send command");
             }
         });
+        info!("returning result sender of monster");
+        command_sender
+    }
+    fn get_id(&self) -> String {
+        self.monster.get_id()
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Monster {
     id: String,
     name: String,
@@ -71,10 +109,10 @@ impl Combatant for Monster {
     fn get_id(&self) -> String {
         self.id.clone()
     }
+
     fn get_name(&self) -> &str {
         &self.name
     }
-
     fn get_hp(&self) -> i32 {
         self.hit_points
     }
@@ -97,6 +135,10 @@ impl Combatant for Monster {
         if damage > 0 {
             self.hit_points -= damage;
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

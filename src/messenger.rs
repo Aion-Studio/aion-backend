@@ -94,8 +94,9 @@ impl MessageManager {
                         hero_id,
                         action_id,
                         resp,
+                        combat_tx,
                     } => {
-                        QuestHandler::quest_action(hero_id, action_id, resp);
+                        QuestHandler::quest_action(hero_id, action_id, resp, combat_tx);
                         None
                     }
                     QuestActionDone(hero_id, action_id) => {

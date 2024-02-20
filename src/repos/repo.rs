@@ -111,7 +111,6 @@ impl Repo {
         Ok(hero)
     }
     pub fn get_hero(&self, hero_id: String) -> RepoFuture<Hero> {
-        println!("get_hero ......");
         Box::pin(async move {
             match self.hero_by_id(hero_id).await {
                 Ok(hero) => {
@@ -121,7 +120,6 @@ impl Repo {
                             let mut hero = hero.clone();
                             match action_result {
                                 Some(action) => {
-                                    println!("zzzzzzzzzzzzzzzzzzzzzzzzz {:?}", hero.stamina);
                                     hero.regenerate_stamina(&action);
                                     self.prisma
                                         .action_completed()
@@ -135,20 +133,19 @@ impl Repo {
                                         .exec()
                                         .await
                                         .unwrap();
-                                    println!("xxxxxxxxxxxxxxx {:?}", hero.stamina);
                                     self.update_hero(hero.clone()).await
                                 }
                                 None => Ok(hero),
                             }
                         }
                         Err(e) => {
-                            eprintln!("Error getting last action: {}", e);
+                            error!("Error getting last action: {}", e);
                             return Err(e);
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error getting hero: {}", e);
+                    error!("Error getting hero: {}", e);
                     Err(e)
                 }
             }
@@ -549,6 +546,7 @@ impl Repo {
                 hero_quests::quest::fetch().with(
                     quest::actions::fetch(vec![])
                         .with(action::quest::fetch())
+                        // existence of action::hero_action means the hero completed the action
                         .with(action::hero_action::fetch(vec![
                             hero_actions::hero_id::equals(hero_id.clone()),
                         ])),
@@ -638,7 +636,6 @@ impl Repo {
             .await?
             .unwrap()
             .accepted;
-        println!("is_accepted: {:?}", is_accepted);
         Ok(())
     }
 
@@ -654,6 +651,9 @@ impl Repo {
         Ok(action.unwrap().into())
     }
 
+    /*
+     Adds an action to hero's completed actions list
+    */
     pub async fn add_hero_action(
         &self,
         hero_id: String,
@@ -863,7 +863,6 @@ impl Repo {
             )
             .exec()
             .await?;
-        println!("inserted hero region");
 
         Ok(hero_region.into())
     }
@@ -1045,14 +1044,8 @@ impl Repo {
             .await
             .unwrap();
         match npc {
-            Some(npc) => {
-                println!("npc: {:?}", npc);
-                Ok(npc.into())
-            }
-            None => {
-                println!("No npc found");
-                Err(QueryError::Serialize("No npc found".to_string()))
-            }
+            Some(npc) => Ok(npc.into()),
+            None => Err(QueryError::Serialize("No npc found".to_string())),
         }
     }
 }

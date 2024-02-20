@@ -7,6 +7,7 @@ use serde_json::json;
 use tokio::join;
 use tracing::info;
 
+use crate::services::tasks::action_names::ResponderType;
 use crate::{
     infra::Infra,
     logger::Logger,
@@ -19,7 +20,6 @@ use crate::{
 #[post("/quests")]
 async fn add_quest(quest: Json<Quest>) -> impl Responder {
     let quest = quest.into_inner();
-    println!("quest: {:?}", quest);
     match Infra::repo().add_quest(quest).await {
         Ok(_) => HttpResponse::Ok().body("OK"),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
@@ -99,7 +99,6 @@ async fn do_quest_action(path: Path<(String, String)>, app: Data<AppState>) -> i
     }
     let action = action.unwrap();
     // double check quest was paid for
-    println!("action: {:?}", action);
     match repo
         .get_hero_quest(
             action.clone().quest.unwrap().id.unwrap().clone(),
@@ -134,6 +133,7 @@ async fn do_quest_action(path: Path<(String, String)>, app: Data<AppState>) -> i
             hero_id: hero_id.clone(),
             action_id: action_id.clone(),
             resp: tx,
+            combat_tx: app.combat_tx.clone(),
         });
         Logger::log(json!({
             "name":ActionNames::Quest.to_string(),
@@ -146,7 +146,10 @@ async fn do_quest_action(path: Path<(String, String)>, app: Data<AppState>) -> i
     });
 
     match response.await {
-        Ok(Ok(_)) => HttpResponse::Ok().json(json!({"message":"OK"})),
+        Ok(Ok(responder_type)) => match responder_type {
+            ResponderType::StringResponse(s) => HttpResponse::Ok().json(json!({"token": s})),
+            ResponderType::UnitResponse(()) => HttpResponse::Ok().json(json!({"message": "OK"})),
+        },
         Ok(Err(e)) => HttpResponse::InternalServerError().body(e.to_string()),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }

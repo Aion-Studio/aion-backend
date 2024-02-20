@@ -1,51 +1,58 @@
 use futures::TryFutureExt;
+use std::sync::Arc;
 
 use serde_json::json;
-use tokio::sync::oneshot;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::{oneshot, RwLock};
 use tracing::warn;
 use tracing::{info, log::error};
 
 use crate::events::combat::CombatEncounter;
+use crate::jsontoken::create_token;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
-use crate::services::tasks::action_names::{ActionNames, Command, Responder};
+use crate::models::npc::CpuCombatantDecisionMaker;
+use crate::services::impls::combat_service::{CombatController, ControllerMessage};
+use crate::services::tasks::action_names::{
+    ActionNames, CmdResponder, Command, Responder, ResponderType,
+};
 use crate::{infra::Infra, models::quest::Quest};
 
 #[derive(Clone, Debug)]
 pub struct QuestHandler {}
 
 impl QuestHandler {
-    pub fn quest_action(hero_id: String, action_id: String, resp: Responder<()>) {
+    pub fn quest_action(
+        hero_id: String,
+        action_id: String,
+        resp: CmdResponder<ResponderType>,
+        combat_tx: Sender<ControllerMessage>,
+    ) {
         tokio::spawn(async move {
             info!(
                 "Quest action started for hero {} and action_id {} ",
                 hero_id, action_id
             );
-            let mut errs = vec![];
+            // let mut errs = vec![];
             let action = match Infra::repo().get_action_by_id(&action_id).await {
                 Ok(action) => action,
                 Err(e) => {
                     error!("Error: {}", e);
-                    resp.send(Err(e.into())).unwrap();
+                    // resp.send(Err(e.into())).unwrap();
                     return;
                 }
             };
 
-            let region = action.region_name;
+            info!("action found {:?}", action);
 
-            match Infra::repo()
-                .add_hero_action(hero_id.clone(), action_id.clone())
-                .await
-            {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("Error: {}", e);
-                    errs.push(e);
-                }
-            }
+            let region = action.region_name;
 
             Logger::log(json!({"name":ActionNames::Quest.to_string() ,"hero_id": hero_id}));
 
+            info!(
+                "action names check {:?}",
+                ActionNames::from_str(&action.name)
+            );
             match ActionNames::from_str(&action.name) {
                 Some(ActionNames::Explore) => {
                     let (resp_tx, resp_rx): (Responder<()>, _) = oneshot::channel();
@@ -65,12 +72,33 @@ impl QuestHandler {
                 }
                 Some(ActionNames::FightNpc) => {
                     let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+                    let hero_id = hero.get_id();
                     let npc = Infra::repo()
                         .get_npc_by_action_id(&action_id)
                         .await
                         .unwrap();
 
-                    let combat_encounter = CombatEncounter::new(hero, npc);
+                    match combat_tx
+                        .send(ControllerMessage::CreateNpcEncounter { hero, npc })
+                        .await
+                    {
+                        Ok(_) => info!("Fight created in controller"),
+                        Err(e) => error!("Error sending create npc encounter to controller: {}", e),
+                    }
+
+                    info!("created encounter in controller");
+
+                    let token = create_token(hero_id.as_ref());
+                    match token {
+                        Ok(token) => {
+                            info!("Fight created, heres your token {}", token);
+                            resp.send(ResponderType::StringResponse(token)).unwrap();
+                        }
+                        Err(e) => {
+                            error!("Error: {}", e);
+                            // resp.send(Err(e.into())).unwrap();
+                        }
+                    }
                 }
                 Some(ActionNames::Channel) => {}
                 Some(ActionNames::Raid) => {}
@@ -80,7 +108,17 @@ impl QuestHandler {
                     return;
                 }
             };
-            resp.send(Ok(())).unwrap();
+            // match Infra::repo()
+            //     .add_hero_action(hero_id.clone(), action_id.clone())
+            //     .await
+            // {
+            //     Ok(_) => {}
+            //     Err(e) => {
+            //         error!("Error: {}", e);
+            //         errs.push(e);
+            //     }
+            // }
+            // resp.send(ResponderType::UnitResponse(())).unwrap();
             let done_cmd = Command::QuestActionDone(hero_id, action_id);
             MESSENGER.send(done_cmd);
         });

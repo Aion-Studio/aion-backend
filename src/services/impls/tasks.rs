@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::handlers::tasks::send_new_tasks_to_ws;
+use crate::endpoints::tasks::send_new_tasks_to_ws;
 use crate::messenger::MESSENGER;
 use crate::services::tasks::action_names::{Command, TaskAction};
 use crate::services::traits::async_task::Task;
@@ -39,12 +39,10 @@ impl TaskManager {
                 Box::new(action.clone()),
                 Uuid::parse_str(&action.hero_id()).unwrap(),
             ),
-            TaskAction::Explore(action) => {
-                (
-                    Box::new(action.clone()),
-                    Uuid::parse_str(&action.hero_id()).unwrap(),
-                )
-            } // ... other cases
+            TaskAction::Explore(action) => (
+                Box::new(action.clone()),
+                Uuid::parse_str(&action.hero_id()).unwrap(),
+            ), // ... other cases
             _ => {
                 panic!("Unknown task type");
             }

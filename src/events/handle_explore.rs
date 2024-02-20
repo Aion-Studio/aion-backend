@@ -8,6 +8,7 @@ use crate::{
         traits::async_task::Task,
     },
 };
+use tracing::log::error;
 
 use crate::infra::Infra;
 
@@ -28,11 +29,13 @@ impl ExploreHandler {
                 .get_hero(hero_id)
                 .await
                 .map(|hero| ExploreAction::new(hero, hero_region, stamina_cost))
-                .unwrap_or_else(|_| None);
+                .unwrap_or_else(|e| {
+                    error!("error: {}", e);
+                    None
+                });
 
             match action {
                 Some(action) => {
-                    println!("hero can explore...should work");
                     action.start_now();
                     Infra::tasks().schedule_action(TaskAction::Explore(action));
                     let _ = resp.send(Ok(()));
