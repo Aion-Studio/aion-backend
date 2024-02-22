@@ -69,14 +69,6 @@ impl Hero {
         }
     }
 
-    // pub fn apply_talent_effect(&mut self, effect: &Effect) {
-    //     match effect {
-    //         Effect::Damage(damage) => self.take_damage(*damage),
-    //         Effect::DamageOverTime(damage, num_turns) => self.apply_dot(*damage, *num_turns),
-    //         _ => {}
-    //     }
-    // }
-
     pub fn level(&self) -> i32 {
         self.base_stats.level
     }
@@ -352,32 +344,40 @@ impl Hero {
 }
 
 impl Combatant for Hero {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     fn get_id(&self) -> String {
         self.id.clone().unwrap()
     }
 
+    fn get_name(&self) -> &str {
+        &self.name
+    }
     fn get_hp(&self) -> i32 {
         self.base_stats.hit_points
     }
 
-    fn attack(&mut self, other: &mut dyn Combatant) {
-        let damage = self.base_stats.damage.min;
-        other.take_damage(damage);
-    }
-    fn get_name(&self) -> &str {
-        &self.name
-    }
     fn get_damage(&self) -> i32 {
         self.base_stats.damage.roll()
+    }
+
+    fn get_talents(&self) -> &Vec<Talent> {
+        &self.talents
+    }
+
+    fn get_armor(&self) -> i32 {
+        self.base_stats.armor
+    }
+    fn get_level(&self) -> i32 {
+        self.base_stats.level
+    }
+    fn attack(&self, other: &mut dyn Combatant) {
+        let damage = self.get_damage();
+        other.take_damage(damage);
     }
     fn take_damage(&mut self, damage: i32) {
         self.base_stats.hit_points -= damage;
     }
-    fn get_talents(&self) -> &Vec<Talent> {
-        &self.talents
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

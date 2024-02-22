@@ -1,9 +1,11 @@
-use actix_web::web::{Path, Query};
+use actix_web::web::{Data, Path, Query};
 use actix_web::{get, post, HttpResponse, Responder};
 use prisma_client_rust::chrono::{self, Local};
 use prisma_client_rust::serde_json::json;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::Sender;
+use tokio::sync::oneshot;
 use tracing::{error, info};
 
 use crate::events::game::ActionCompleted;
@@ -11,10 +13,12 @@ use crate::infra::Infra;
 use crate::models::hero::{Attributes, BaseStats, Hero, Range};
 use crate::models::quest::{HeroQuest, Quest};
 use crate::models::region::{HeroRegion, Leyline};
+use crate::services::impls::combat_service::ControllerMessage;
 use crate::services::tasks::action_names::{ActionNames, TaskAction};
 use crate::services::tasks::channel::ChannelingAction;
 use crate::services::tasks::explore::ExploreAction;
 use crate::services::traits::async_task::Task;
+use crate::webserver::AppState;
 
 #[derive(Serialize)]
 struct HeroResponse {
@@ -24,32 +28,69 @@ struct HeroResponse {
 #[post("/heroes")]
 async fn create_hero_endpoint() -> impl Responder {
     let mut rng = rand::thread_rng();
-
+    let mut hp = rng.gen_range(475..725);
+    let damage_min = rng.gen_range(21..28); // Adjusted for "low end" specification
+    let damage_max = rng.gen_range(26..49); // Adjusted for "high end" specification
+    let mut armor = rng.gen_range(2..6);
+    let mut strength = rng.gen_range(15..26);
+    let mut intelligence = rng.gen_range(15..20); // Adjusted upper bound to 20 for inclusivity
+    let mut agility = rng.gen_range(10..25);
+    let mut exploration = rng.gen_range(1..20);
+    let mut crafting = rng.gen_range(1..20);
+    // Determine category based on HP
+    let category = if hp >= 650 {
+        // High HP
+        agility = rng.gen_range(10..15); // Lower agility for high HP
+        intelligence = rng.gen_range(15..17); // Low-medium intelligence
+        strength = rng.gen_range(20..26); // High strength
+        "High HP"
+    } else if hp < 500 {
+        // Low HP
+        intelligence = rng.gen_range(17..20); // High intelligence
+        exploration = rng.gen_range(15..20); // High exploration
+        crafting = rng.gen_range(15..20); // High crafting
+        agility = rng.gen_range(15..25); // High agility
+        armor = rng.gen_range(3..6); // Medium armor
+        "Low HP"
+    } else if agility > 21 {
+        // High agility
+        hp = rng.gen_range(475..550); // Medium-low HP
+        armor = rng.gen_range(4..6); // High armor
+        intelligence = rng.gen_range(15..18); // Medium intelligence
+        "High Agility"
+    } else {
+        // Medium agility and low HP
+        // Adjusting attributes to top 90% of given ranges
+        strength = rng.gen_range(22..26);
+        intelligence = rng.gen_range(17..20);
+        exploration = rng.gen_range(18..20);
+        crafting = rng.gen_range(18..20);
+        "Medium Agility & Low HP"
+    };
     let hero = Hero::new(
         BaseStats {
             id: None,
             level: 1,
             xp: 0,
             damage: Range {
-                min: rng.gen_range(1..5),
-                max: rng.gen_range(5..10),
+                min: damage_min,
+                max: damage_max,
             },
-            hit_points: rng.gen_range(90..110),
-            armor: rng.gen_range(5..15),
+            hit_points: hp,
+            armor,
         },
         Attributes {
             id: None,
-            strength: rng.gen_range(1..20),
-            resilience: rng.gen_range(1..20),
-            agility: rng.gen_range(1..20),
-            intelligence: rng.gen_range(1..20),
-            exploration: rng.gen_range(1..20),
-            crafting: rng.gen_range(1..20),
+            strength,
+            resilience: rng.gen_range(1..20), // Unspecified, so left as is
+            agility,
+            intelligence,
+            exploration,
+            crafting,
         },
         rng.gen_range(80..120),
         0,
     );
-
     let created_hero = Infra::repo().insert_hero(hero).await;
 
     match created_hero {
@@ -74,16 +115,20 @@ pub struct HeroStateResponse {
     explore_cost: Option<i32>,
     channeling_available: (Vec<Leyline>, chrono::DateTime<Local>),
     quest_accepted: (bool, Quest),
+    is_in_combat: bool, // if hero is currently in a combat encounter
 }
 
 #[get("/heroes/{id}")]
-async fn hero_state(path: Path<String>) -> impl Responder {
+async fn hero_state(path: Path<String>, app_state: Data<AppState>) -> impl Responder {
     let hero_id = path.into_inner();
     let hero = Infra::repo().get_hero(hero_id.clone()).await;
 
     info!("hero state requested....");
+    let app_state = app_state.get_ref().clone();
+    let combat_tx = app_state.combat_tx.clone();
+
     match hero {
-        Ok(hero) => match get_hero_status(hero).await {
+        Ok(hero) => match get_hero_status(hero, combat_tx).await {
             Ok(hero_state) => HttpResponse::Ok().json(hero_state),
             Err(e) => {
                 let error_response = json!({
@@ -143,7 +188,10 @@ async fn latest_action_handler(hero_id: Path<String>) -> impl Responder {
     }
 }
 
-pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Error> {
+pub async fn get_hero_status(
+    hero: Hero,
+    combat_tx: Sender<ControllerMessage>,
+) -> Result<HeroStateResponse, anyhow::Error> {
     match Infra::repo().get_hero_regions(hero.get_id().as_ref()).await {
         Ok(hero_region) => {
             // find hero region with current_location true
@@ -272,6 +320,22 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                 }
             };
 
+            // check if combat in play
+            let (tx, rx) = oneshot::channel();
+
+            let msg = ControllerMessage::RequestState {
+                combatant_id: hero.get_id().clone(),
+                tx,
+            };
+            combat_tx.send(msg).await.unwrap();
+            let is_in_combat = match rx.await {
+                Ok(res) => res.is_some(),
+                Err(e) => {
+                    error!("Error getting combat state: {}", e);
+                    false
+                }
+            };
+
             Ok(HeroStateResponse {
                 hero,
                 region_hero: current_region,
@@ -279,6 +343,7 @@ pub async fn get_hero_status(hero: Hero) -> Result<HeroStateResponse, anyhow::Er
                 available_leylines,
                 explore_available,
                 explore_cost,
+                is_in_combat,
                 channeling_available,
                 quest_accepted: match hero_quest_objs {
                     Some((quest, hero_quest)) => {

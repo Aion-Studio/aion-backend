@@ -143,14 +143,22 @@ impl CombatEncounter {
         let mut defender = defender_guard.lock().unwrap();
         let attacker_guard = self.get_combatant(attacker, None);
         let attacker = attacker_guard.lock().unwrap();
-        let damage = attacker.get_damage();
+        //Damage Reduction % = Armor / Armor + (50 * EnemyLvl)
+        let damage_reduction = defender.get_armor() as f32
+            / (defender.get_armor() as f32 + (50.0 * defender.get_level() as f32));
+        let attacker_damage = attacker.get_damage();
+        let damage = (attacker_damage as f32 * (1.0 - damage_reduction)) as i32;
+
         info!(
-            "{} attacks {} for {} damage",
+            "{} attacks {} for {} damage with {} original damage, damage reduction: {}",
             attacker.get_name(),
             defender.get_name(),
-            damage
+            damage,
+            attacker_damage,
+            damage_reduction
         );
         defender.take_damage(damage);
+        // defender.take_damage(damage);
     }
 
     fn get_current_turn(&self) -> CombatantIndex {
@@ -176,11 +184,15 @@ impl CombatEncounter {
                 let current_attacker = self.get_current_turn();
                 self.perform_attack(current_attacker.clone());
                 let opponent = self
-                    .get_combatant(current_attacker, Some(true))
+                    .get_combatant(current_attacker.clone(), Some(true))
                     .lock()
                     .unwrap()
                     .clone_box();
-                Ok(CombatTurnMessage::CommandPlayed(opponent))
+                if opponent.get_hp() <= 0 {
+                    Ok(CombatTurnMessage::Winner(current_attacker))
+                } else {
+                    Ok(CombatTurnMessage::CommandPlayed(opponent))
+                }
             }
             _ => {
                 todo!()

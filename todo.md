@@ -8,13 +8,21 @@
 
 [:heavy_check_mark] show lootbox once each of those is clicked
 
+today:
+- [] fight ui on dashboard
+- [] timer for turn in fight
 log:
+
 [] add talent points per level up
+
 [] add 3 talent trees with achievable talents with 
-[] fight mechanic turn based <Raid, Arena>
+
 [] events: value.resource_used.Aion , resource_used.stamina
+
 [] dashboard of xp gained daily
+
 [] dashboard aion gained, aion spent
+
 [] region badges- a badge for all the lore quests, one for completing the raid, one for complete discovery, finally leaderboard /global based badges
 
 

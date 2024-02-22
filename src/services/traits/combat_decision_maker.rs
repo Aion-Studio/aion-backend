@@ -12,4 +12,5 @@ pub trait DecisionMaker: Send + Sync + std::fmt::Debug {
     ) -> Sender<CombatTurnMessage>;
 
     fn get_id(&self) -> String;
+    fn shutdown(&mut self);
 }

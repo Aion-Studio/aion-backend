@@ -4,7 +4,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
-    Mutex,
+    oneshot, Mutex,
 };
 use tracing::log::info;
 
@@ -26,6 +26,8 @@ pub struct CpuCombatantDecisionMaker {
     monster: Monster,
     player_idx: CombatantIndex,
     combat_controller_tx: Option<Sender<CombatCommand>>,
+    shutdown_signal: Option<oneshot::Receiver<()>>,
+    shutdown_trigger: Option<oneshot::Sender<()>>,
 }
 
 impl CpuCombatantDecisionMaker {
@@ -34,12 +36,16 @@ impl CpuCombatantDecisionMaker {
         // result_receiver: Receiver<CombatTurnMessage>,
         monster: Monster,
     ) -> Self {
+        let (shutdown_trigger, shutdown_signal) = oneshot::channel();
+
         Self {
             // command_sender,
             // result_receiver: Arc::new(Mutex::new(result_receiver)),
             monster,
             player_idx: CombatantIndex::Combatant2,
             combat_controller_tx: None,
+            shutdown_signal: Some(shutdown_signal),
+            shutdown_trigger: Some(shutdown_trigger),
         }
     }
 }
@@ -54,36 +60,44 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
         self.combat_controller_tx = Some(combat_controller_tx.clone());
         let (command_sender, mut result_receiver) = mpsc::channel(10);
         let combat_sender = combat_controller_tx.clone();
+        let shutdown_signal = self
+            .shutdown_signal
+            .take()
+            .expect("Shutdown signal must be present when starting.");
 
         tokio::spawn(async move {
+            let mut result_receiver = result_receiver;
             let npc_player_idx = idx.clone();
-            while let Some(result) = result_receiver.recv().await {
-                info!(
-                    "monster received message from combat controller: {:?}",
-                    result
-                );
-                match result {
-                    CombatTurnMessage::PlayerTurn(turn_idx) => {
-                        info!("monster received player turn message: {:?}", turn_idx);
-                        // Do nothing
-                        if npc_player_idx == turn_idx {
-                            let command = CombatCommand::Attack; // Example decision
-                            combat_sender
-                                .clone()
-                                .send(command)
-                                .await
-                                .expect("Failed to send command");
-                        }
+            tokio::select! {
+                _ = shutdown_signal => {
+                    info!("Shutting down decision maker for monster.");
+                },
+                _ = async {
+                    while let Some(result) = result_receiver.recv().await {
+                        match result {
+                            CombatTurnMessage::PlayerTurn(turn_idx) => {
+                                // Do nothing
+                                if npc_player_idx == turn_idx {
+                                    let command = CombatCommand::Attack; // Example decision
+                                    combat_sender
+                                        .clone()
+                                        .send(command)
+                                        .await
+                                        .expect("Failed to send command");
+                                }
+                            }
+                            CombatTurnMessage::Winner(idx) => {
+                                // Do nothing
+                            }
+                            CombatTurnMessage::CommandPlayed(opponent_state) => {
+                                // Do nothing for now
+                            }
+                            _ => {}
+                        };
+                        // --------------------CPU logic to decide next move based on the received result
+                            // Existing logic to handle combat results
                     }
-                    CombatTurnMessage::Winner(idx) => {
-                        // Do nothing
-                    }
-                    CombatTurnMessage::CommandPlayed(opponent_state) => {
-                        // Do nothing for now
-                    }
-                    _ => {}
-                };
-                // --------------------CPU logic to decide next move based on the received result
+                } => {}
             }
         });
         info!("returning result sender of monster");
@@ -91,6 +105,12 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
     }
     fn get_id(&self) -> String {
         self.monster.get_id()
+    }
+
+    fn shutdown(&mut self) {
+        if let Some(trigger) = self.shutdown_trigger.take() {
+            let _ = trigger.send(());
+        }
     }
 }
 
@@ -101,6 +121,7 @@ pub struct Monster {
     pub damage: Range<i32>,
     pub hit_points: i32,
     pub armor: i32,
+    pub level: i32,
     monster_type: Option<String>,
     pub talents: Vec<Talent>,
 }
@@ -116,25 +137,29 @@ impl Combatant for Monster {
     fn get_hp(&self) -> i32 {
         self.hit_points
     }
-
     fn get_damage(&self) -> i32 {
-        self.damage.min
+        self.damage.roll()
     }
 
     fn get_talents(&self) -> &Vec<Talent> {
         &self.talents
     }
 
-    fn attack(&mut self, other: &mut dyn Combatant) {
+    fn get_armor(&self) -> i32 {
+        self.armor
+    }
+
+    fn get_level(&self) -> i32 {
+        self.level
+    }
+
+    fn attack(&self, other: &mut dyn Combatant) {
         let damage = self.damage.roll();
         other.take_damage(damage);
     }
 
     fn take_damage(&mut self, damage: i32) {
-        let damage = damage - self.armor;
-        if damage > 0 {
-            self.hit_points -= damage;
-        }
+        self.hit_points -= damage;
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -151,6 +176,7 @@ impl From<npc::Data> for Monster {
                 min: data.damage_min,
                 max: data.damage_max,
             },
+            level: data.level,
             hit_points: data.hp,
             armor: data.armor,
             monster_type: None,

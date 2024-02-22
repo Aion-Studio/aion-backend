@@ -13,8 +13,10 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn get_hp(&self) -> i32;
     fn get_damage(&self) -> i32;
     fn get_talents(&self) -> &Vec<Talent>;
+    fn get_armor(&self) -> i32;
+    fn get_level(&self) -> i32;
 
-    fn attack(&mut self, other: &mut dyn Combatant);
+    fn attack(&self, other: &mut dyn Combatant);
     fn take_damage(&mut self, damage: i32);
     fn as_any(&self) -> &dyn Any;
 }

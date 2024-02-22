@@ -8,7 +8,7 @@ use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, Notify};
 use tracing::error;
 use tracing::log::info;
 use uuid::Uuid;
@@ -43,34 +43,36 @@ pub enum ControllerMessage {
     },
     RequestState {
         combatant_id: String,
-        tx: tokio::sync::oneshot::Sender<CombatTurnMessage>,
+        tx: tokio::sync::oneshot::Sender<Option<CombatTurnMessage>>,
     },
     CreateNpcEncounter {
         hero: Hero,
         npc: Monster,
     },
     Combat((CombatCommand, String, Responder<()>)), // Add other messages as necessary
+    CleanupEncounter {
+        encounter_id: String,
+    },
 }
 
 pub struct CombatController {
     encounters: HashMap<String, Arc<Mutex<CombatEncounter>>>,
-    // Track in-progress encounters
-    message_sender: mpsc::Sender<ControllerMessage>, // New, for internal use
-    // command_receiver: mpsc::Receiver<(CombatCommand, String, Responder<CombatTurnMessage>)>,
-    // Command , attacker_id
+    message_sender: Sender<ControllerMessage>, // New, for internal use
     decision_makers: HashMap<String, Arc<Mutex<dyn DecisionMaker + Send + Sync>>>,
+    shutdown_signals: HashMap<String, Arc<Notify>>,
 }
 
 impl CombatController {
     pub fn new(
         // command_receiver: mpsc::Receiver<(CombatCommand, String, Responder<CombatTurnMessage>)>,
-        message_sender: mpsc::Sender<ControllerMessage>,
+        message_sender: Sender<ControllerMessage>,
     ) -> Self {
         CombatController {
             encounters: HashMap::new(),
             // command_receiver,
             message_sender,
             decision_makers: HashMap::new(),
+            shutdown_signals: HashMap::new(),
         }
     }
 
@@ -103,7 +105,6 @@ impl CombatController {
         result_senders: Vec<Sender<CombatTurnMessage>>,
     ) {
         let result = Arc::new(Mutex::new(result)); // Wrap the result in Arc<Mutex> for shared ownership and mutability
-        info!("len of result senders: {}", result_senders.len());
         let futures = result_senders.into_iter().map(|sender| {
             let result_clone = Arc::clone(&result);
             async move {
@@ -120,9 +121,13 @@ impl CombatController {
     async fn start_encounter(&mut self, from_id: &str) {
         let encounter = self.encounter_by_combatant_id(&from_id).await.unwrap();
         let combatant_ids = encounter.lock().await.get_combatant_ids();
-
+        let shutdown_signal = Arc::new(Notify::new());
+        let encounter_id = encounter.lock().await.get_id();
+        self.shutdown_signals
+            .insert(encounter_id, shutdown_signal.clone());
         let mut result_senders = vec![];
         let mut receivers = vec![];
+
         for id in combatant_ids.clone() {
             if let Some(decision_maker) = self.decision_makers.get(&id) {
                 let (command_sender, command_receiver) = mpsc::channel(10);
@@ -135,10 +140,18 @@ impl CombatController {
         }
 
         for (mut receiver, combatant_id) in receivers {
+            let controller_sender = self.message_sender.clone();
+            let shutdown_signal_clone = shutdown_signal.clone();
+
             let senders = result_senders.clone();
             let encounter_clone = Arc::clone(&encounter);
 
             tokio::spawn(async move {
+                tokio::select! {
+                _ = shutdown_signal_clone.notified() => {
+                    info!("Shutting down listener for combatant_id: {}", combatant_id);
+                },
+                _ = async {
                 while let Some(command) = receiver.recv().await {
                     let mut encounter = encounter_clone.lock().await;
 
@@ -152,6 +165,16 @@ impl CombatController {
                                     senders.clone(),
                                 )
                                 .await;
+                            } else {
+                                info!("battle done, sending winner message");
+                                let encounter_id = encounter.get_id().clone();
+                                drop(encounter); // Drop the lock before sending the message.
+
+                                // Send a message to the main controller to clean up.
+                                controller_sender
+                                    .send(ControllerMessage::CleanupEncounter { encounter_id })
+                                    .await
+                                    .expect("Failed to send cleanup message");
                             }
                         }
                         Err(e) => {
@@ -159,52 +182,11 @@ impl CombatController {
                         }
                     }
                 }
+                    }=>{}}
             });
+
+            // tokio::spawn(async move {});
         }
-
-        //
-        // for participant_id in combatant_ids {
-        //     if let Some(decision_maker) = self.decision_makers.get(&participant_id) {
-        //         let (command_sender, mut command_receiver) = mpsc::channel(10);
-        //
-        //         let idx = encounter
-        //             .lock()
-        //             .await
-        //             .get_combatant_idx(&participant_id)
-        //             .unwrap();
-        //
-        //         let mut decision_maker_guard = decision_maker.lock().await;
-        //
-        //         let senders_clone = result_senders.clone();
-        //         let encounter_clone = Arc::clone(&encounter);
-
-        //     tokio::spawn(async move {
-        //         while let Some(command) = command_receiver.recv().await {
-        //             let mut encounter = encounter_clone.lock().await;
-        //
-        //             match encounter.process_combat_turn(command, &participant_id) {
-        //                 Ok(result) => {
-        //                     CombatController::notify_players(
-        //                         result.clone(),
-        //                         senders_clone.clone(),
-        //                     )
-        //                     .await;
-        //                     if !matches!(result, CombatTurnMessage::Winner(_)) {
-        //                         info!("Notifying players of next turn");
-        //                         CombatController::notify_players(
-        //                             CombatTurnMessage::PlayerTurn(encounter.whos_turn()),
-        //                             senders_clone.clone(),
-        //                         )
-        //                         .await;
-        //                     }
-        //                 }
-        //                 Err(e) => {
-        //                     error!("Error processing combat turn: {:?}", e);
-        //                 }
-        //             }
-        //         }
-        //     });
-        // }
     }
     pub async fn run(&mut self, mut message_receiver: mpsc::Receiver<ControllerMessage>) {
         use ControllerMessage::*;
@@ -238,6 +220,22 @@ impl CombatController {
                     }
                     CombatCommand::UseTalent(opponent_id, talent) => {}
                 },
+                CleanupEncounter { encounter_id } => {
+                    // Perform cleanup logic here...
+                    let encounter = self.encounters.get(&encounter_id).unwrap();
+                    let combatant_ids = encounter.lock().await.get_combatant_ids();
+                    if let Some(shutdown_signal) = self.shutdown_signals.remove(&encounter_id) {
+                        shutdown_signal.notify_waiters();
+                        self.encounters.remove(&encounter_id);
+                        for id in combatant_ids.clone() {
+                            if let Some(decision_maker) = self.decision_makers.get(&id) {
+                                let mut decision_maker_guard = decision_maker.lock().await;
+                                decision_maker_guard.shutdown();
+                            }
+                            self.decision_makers.remove(&id);
+                        }
+                    }
+                }
                 AddEncounter { encounter } => {
                     let encounter_id = encounter.get_id();
                     self.encounters
@@ -265,11 +263,11 @@ impl CombatController {
                             let encounter = self.encounters.get(&id).unwrap();
                             let cmd =
                                 CombatTurnMessage::EncounterState(encounter.lock().await.clone());
-                            tx.send(cmd).unwrap();
+                            tx.send(Some(cmd)).unwrap();
                         }
                         None => {
                             error!("Could not find encounter for combatant: {:?}", combatant_id);
-                            return;
+                            tx.send(None).unwrap();
                         }
                     }
                 }
@@ -319,45 +317,7 @@ impl Serialize for CombatCommand {
         }
     }
 }
-// impl<'de> Deserialize<'de> for CombatCommand {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: Deserializer<'de>,
-//     {
-//         let s = String::deserialize(deserializer)?; // Deserialize as a String first
-//
-//         // Match against potential command patterns
-//         if s == "EnterBattle" {
-//             // Construct & return the EnterBattle variant
-//             Ok(CombatCommand::EnterBattle(None))
-//             // Replace `PlayerDecisionMaker::default()` with your actual construction logic
-//         } else if s.starts_with("Attack(") {
-//             Ok(CombatCommand::Attack)
-//         } else if s.starts_with("UseTalent(") {
-//             // Extract target_id and talent (deserialize)
-//             let parts: Vec<&str> = s
-//                 .trim_start_matches("UseTalent(")
-//                 .trim_end_matches(')')
-//                 .split(",")
-//                 .collect();
-//             if parts.len() != 2 {
-//                 return Err(serde::de::Error::custom("Invalid UseTalent command format"));
-//             }
-//             let target_id = parts[0].to_string();
-//             let talent = serde_json::from_str(parts[1]); // Assumes Talent can be deserialized
-//             match talent {
-//                 Ok(talent) => Ok(CombatCommand::UseTalent(target_id, talent)),
-//                 Err(e) => Err(serde::de::Error::custom(format!(
-//                     "Failed to deserialize talent: {}",
-//                     e
-//                 ))),
-//             }
-//             // Ok(CombatCommand::UseTalent(target_id, talent))
-//         } else {
-//             Err(serde::de::Error::custom("Unknown command"))
-//         }
-//     }
-// }
+
 impl<'de> Deserialize<'de> for CombatCommand {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

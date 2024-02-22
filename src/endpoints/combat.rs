@@ -62,26 +62,35 @@ pub async fn combat_ws(
 
     // Await the response from the combat controller
     match rx.await {
-        Ok(state) => ws::start(
-            CombatSocket::new(combatant_id, Arc::new(Mutex::new(app_state)), state),
-            &req,
-            stream,
-        )
-        .map_err(|_| actix_web::error::ErrorInternalServerError("WebSocket start failed")),
+        Ok(state) => {
+            if let Some(state) = state {
+                ws::start(
+                    CombatSocket::new(combatant_id, Arc::new(Mutex::new(app_state)), state),
+                    &req,
+                    stream,
+                )
+                .map_err(|_| actix_web::error::ErrorInternalServerError("WebSocket start failed"))
+            } else {
+                Ok(HttpResponse::Unauthorized().finish())
+            }
+        }
         Err(_) => Err(actix_web::error::ErrorUnauthorized("Unauthorized")),
     }
 }
+
 // Data exchanged over the WebSocket
 #[derive(Serialize, Deserialize, Debug)]
 enum CombatSocketMessage {
-    Command(CombatCommand),    // From Client --> Server
+    Command(CombatCommand),
+    // From Client --> Server
     Update(CombatTurnMessage), // From Server --> Client
 }
 
 #[derive(Clone)]
 pub struct CombatSocket {
     combatant_id: String,
-    app_state: Arc<Mutex<AppState>>, // Shared state to access CombatController potentially
+    app_state: Arc<Mutex<AppState>>,
+    // Shared state to access CombatController potentially
     encounter_state: Option<CombatEncounter>,
     ws_to_player_decision_maker_tx: Option<Sender<CombatCommand>>,
 }
@@ -153,8 +162,7 @@ impl Actor for CombatSocket {
         //  send messages to client from combat controller
         tokio::spawn(async move {
             while let Some(message) = ws_receiver.recv().await {
-                info!("sending message to client {:?}", message);
-                addr.do_send(message);
+                addr.do_send(message); // sends to  impl Handler<CombatTurnMessage> handle fn
             }
         });
 
@@ -173,7 +181,9 @@ impl Actor for CombatSocket {
         // Logic to dissociate socket from combatant, clean up potentially?
     }
 }
+
 struct SetWsToPlayerDecisionMakerTx(pub Sender<CombatCommand>);
+
 impl Handler<SetWsToPlayerDecisionMakerTx> for CombatSocket {
     type Result = ();
 
@@ -181,6 +191,7 @@ impl Handler<SetWsToPlayerDecisionMakerTx> for CombatSocket {
         self.ws_to_player_decision_maker_tx = Some(msg.0);
     }
 }
+
 impl Message for SetWsToPlayerDecisionMakerTx {
     type Result = ();
 }
@@ -188,8 +199,11 @@ impl Message for SetWsToPlayerDecisionMakerTx {
 impl Handler<CombatTurnMessage> for CombatSocket {
     type Result = ();
     fn handle(&mut self, msg: CombatTurnMessage, ctx: &mut Self::Context) -> Self::Result {
+        info!(
+            "received combat turn message, serializeing and sending to client {:?}",
+            msg
+        );
         let serialized = serde_json::to_string(&CombatSocketMessage::Update(msg)).unwrap();
-        info!("calling handle on Handler<CombatTurnMessage> for CombatSocket");
         ctx.text(serialized);
     }
 }
@@ -202,7 +216,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for CombatSocket {
             Ok(ws::Message::Text(text)) => {
                 match serde_json::from_str::<CombatSocketMessage>(&text) {
                     Ok(message) => match message {
-                        CombatSocketMessage::Command(command) => self.handle_command(command, ctx),
+                        CombatSocketMessage::Command(command) => self.handle_command(command),
                         _ => error!("Unexpected message type from client"),
                     },
                     Err(e) => {
@@ -217,11 +231,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for CombatSocket {
 }
 
 impl CombatSocket {
-    fn handle_command(
-        &mut self,
-        command: CombatCommand,
-        ctx: &mut <CombatSocket as actix::Actor>::Context,
-    ) {
+    fn handle_command(&mut self, command: CombatCommand) {
         let _tx = self.ws_to_player_decision_maker_tx.clone();
         tokio::spawn(async move {
             if let Some(tx) = _tx {
@@ -234,18 +244,23 @@ impl CombatSocket {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PlayerDecisionMaker {
     id: String,
-    combat_controller_tx: Option<Sender<CombatCommand>>, // provided by combat controller
+    combat_controller_tx: Option<Sender<CombatCommand>>,
+    // provided by combat controller
     pub player_idx: CombatantIndex,
     to_ws_tx: Sender<CombatTurnMessage>,
     from_ws_tx: Option<Sender<CombatCommand>>,
     notify_from_ws_tx_set: Arc<Notify>,
+    shutdown_signal: Option<oneshot::Receiver<()>>,
+    shutdown_trigger: Option<oneshot::Sender<()>>,
 }
 
 impl PlayerDecisionMaker {
     fn new(id: String, to_ws_tx: Sender<CombatTurnMessage>) -> Self {
+        let (shutdown_trigger, shutdown_signal) = oneshot::channel();
+
         Self {
             combat_controller_tx: None,
             id,
@@ -253,6 +268,8 @@ impl PlayerDecisionMaker {
             player_idx: CombatantIndex::Combatant1,
             from_ws_tx: None,
             notify_from_ws_tx_set: Arc::new(Notify::new()),
+            shutdown_signal: Some(shutdown_signal),
+            shutdown_trigger: Some(shutdown_trigger),
         }
     }
 
@@ -273,6 +290,7 @@ impl PlayerDecisionMaker {
         self.from_ws_tx.clone()
     }
 }
+
 impl DecisionMaker for PlayerDecisionMaker {
     fn start(
         &mut self,
@@ -282,23 +300,41 @@ impl DecisionMaker for PlayerDecisionMaker {
         self.player_idx = player_idx;
         self.combat_controller_tx = Some(combat_controller_tx);
 
+        let shutdown_signal = self
+            .shutdown_signal
+            .take()
+            .expect("Shutdown signal must be present when starting.");
+
         self.start_listening_for_commands();
         self.notify_from_ws_tx_set.notify_one();
 
-        let (command_sender, mut result_receiver) = mpsc::channel(10);
+        let (command_sender, result_receiver) = mpsc::channel(10);
 
         let to_ws_tx = self.to_ws_tx.clone();
 
         tokio::spawn(async move {
-            while let Some(result) = result_receiver.recv().await {
-                let to_ws_tx = to_ws_tx.clone();
-                to_ws_tx.send(result).await.unwrap();
+            let mut result_receiver = result_receiver;
+            tokio::select! {
+                _ = shutdown_signal => {
+                    info!("Shutting down decision maker for player.");
+                },
+                _ = async {
+                    while let Some(result) = result_receiver.recv().await {
+                        let to_ws_tx = to_ws_tx.clone();
+                        to_ws_tx.send(result).await.unwrap();
+                    }
+                } => {}
             }
         });
         command_sender
     }
-
     fn get_id(&self) -> String {
         self.id.clone()
+    }
+
+    fn shutdown(&mut self) {
+        if let Some(trigger) = self.shutdown_trigger.take() {
+            let _ = trigger.send(());
+        }
     }
 }
