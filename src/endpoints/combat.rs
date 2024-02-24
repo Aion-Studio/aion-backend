@@ -43,6 +43,7 @@ pub async fn combat_ws(
             return Ok(HttpResponse::Unauthorized().finish());
         }
     };
+    info!("check combatant_id: {:?}", combatant_id);
     let app_state = app_state.get_ref().clone();
     let (tx, rx) = oneshot::channel();
 
@@ -63,6 +64,7 @@ pub async fn combat_ws(
     // Await the response from the combat controller
     match rx.await {
         Ok(state) => {
+            info!("starting combat websocket anyway....");
             if let Some(state) = state {
                 ws::start(
                     CombatSocket::new(combatant_id, Arc::new(Mutex::new(app_state)), state),
@@ -178,8 +180,18 @@ impl Actor for CombatSocket {
     }
 
     fn stopped(&mut self, _ctx: &mut Self::Context) {
-        // Logic to dissociate socket from combatant, clean up potentially?
+        let app_state = self.app_state.clone();
+        let combatant_id= self.combatant_id.clone();
+        
+        tokio::spawn(async move {
+            let combat_tx = app_state.lock().await.combat_tx.clone();
+            combat_tx.send(
+                ControllerMessage::RemoveSingleDecisionMaker{combatant_id},
+            ).await.unwrap();
+        });
     }
+
+        // Logic to dissociate socket from combatant, clean up potentially?
 }
 
 struct SetWsToPlayerDecisionMakerTx(pub Sender<CombatCommand>);

@@ -8,12 +8,13 @@ use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, Mutex, Notify};
+use tokio::sync::{mpsc, Mutex, Notify, oneshot};
 use tracing::error;
 use tracing::log::info;
 use uuid::Uuid;
 
 use crate::endpoints::combat::PlayerDecisionMaker;
+use crate::events::combat::CombatTurnMessage::{PlayerTurn, YourTurn};
 use crate::models::combatant::Combatant;
 use crate::models::hero::Hero;
 use crate::models::npc::{CpuCombatantDecisionMaker, Monster};
@@ -39,7 +40,7 @@ pub enum ControllerMessage {
     },
     NotifyPlayers {
         message: CombatTurnMessage,
-        recipient_ids: Vec<String>,
+        senders: HashMap<String, Sender<CombatTurnMessage>>,
     },
     RequestState {
         combatant_id: String,
@@ -53,13 +54,16 @@ pub enum ControllerMessage {
     CleanupEncounter {
         encounter_id: String,
     },
+    RemoveDecisionMakers { encounter_id:String, resp: oneshot::Sender<()> },
+    RemoveSingleDecisionMaker { combatant_id: String },
+    DisconnectPlayer { combatant_id: String },
 }
 
 pub struct CombatController {
     encounters: HashMap<String, Arc<Mutex<CombatEncounter>>>,
     message_sender: Sender<ControllerMessage>, // New, for internal use
     decision_makers: HashMap<String, Arc<Mutex<dyn DecisionMaker + Send + Sync>>>,
-    shutdown_signals: HashMap<String, Arc<Notify>>,
+    shutdown_signals: HashMap<String, Arc<Notify>>, // decision_maker_id / combatant_id to shutdown signal
 }
 
 impl CombatController {
@@ -100,48 +104,31 @@ impl CombatController {
         None
     }
 
-    pub async fn notify_players(
-        result: CombatTurnMessage,
-        result_senders: Vec<Sender<CombatTurnMessage>>,
-    ) {
-        let result = Arc::new(Mutex::new(result)); // Wrap the result in Arc<Mutex> for shared ownership and mutability
-        let futures = result_senders.into_iter().map(|sender| {
-            let result_clone = Arc::clone(&result);
-            async move {
-                let result = result_clone.lock().await;
-                sender
-                    .send(result.clone())
-                    .await
-                    .expect("Failed to send combat result");
-            }
-        });
-        join_all(futures).await;
-    }
-
     async fn start_encounter(&mut self, from_id: &str) {
         let encounter = self.encounter_by_combatant_id(&from_id).await.unwrap();
         let combatant_ids = encounter.lock().await.get_combatant_ids();
-        let shutdown_signal = Arc::new(Notify::new());
-        let encounter_id = encounter.lock().await.get_id();
-        self.shutdown_signals
-            .insert(encounter_id, shutdown_signal.clone());
-        let mut result_senders = vec![];
+
+        let mut result_senders = HashMap::new();
         let mut receivers = vec![];
 
         for id in combatant_ids.clone() {
+            let shutdown_signal = Arc::new(Notify::new());
+            self.shutdown_signals
+                .insert(id.clone(), shutdown_signal.clone());
+
             if let Some(decision_maker) = self.decision_makers.get(&id) {
                 let (command_sender, command_receiver) = mpsc::channel(10);
                 let idx = encounter.lock().await.get_combatant_idx(&id).unwrap();
                 let mut decision_maker_guard = decision_maker.lock().await;
                 let result_sender = decision_maker_guard.start(command_sender.clone(), idx);
-                result_senders.push(result_sender);
+                result_senders.insert(id.clone(), result_sender);
                 receivers.push((command_receiver, id.clone()));
             }
         }
 
         for (mut receiver, combatant_id) in receivers {
             let controller_sender = self.message_sender.clone();
-            let shutdown_signal_clone = shutdown_signal.clone();
+            let shutdown_signal_clone = self.shutdown_signals.get(&combatant_id).unwrap().clone();
 
             let senders = result_senders.clone();
             let encounter_clone = Arc::clone(&encounter);
@@ -157,14 +144,13 @@ impl CombatController {
 
                     match encounter.process_combat_turn(command, &combatant_id) {
                         Ok(result) => {
-                            CombatController::notify_players(result.clone(), senders.clone()).await;
+                             controller_sender.send(ControllerMessage::NotifyPlayers { message: result.clone(), senders: senders.clone() }).await.unwrap();
                             if !matches!(result, CombatTurnMessage::Winner(_)) {
                                 info!("Notifying players of next turn");
-                                CombatController::notify_players(
-                                    CombatTurnMessage::PlayerTurn(encounter.whos_turn()),
-                                    senders.clone(),
-                                )
-                                .await;
+                                controller_sender.send(ControllerMessage::NotifyPlayers {
+                                            message: PlayerTurn(encounter.whos_turn()), senders: senders.clone()
+                                }).await.unwrap();
+
                             } else {
                                 info!("battle done, sending winner message");
                                 let encounter_id = encounter.get_id().clone();
@@ -202,9 +188,9 @@ impl CombatController {
                             let encounter_guard = encounter.lock().await;
                             let opponent_guard = encounter_guard.get_opponent(&from_id);
                             let opponent = opponent_guard.lock().unwrap();
-
                             if let Some(npc) = opponent.as_any().downcast_ref::<Monster>() {
-                                if !self.decision_makers.contains_key(&opponent.get_id()) {
+                                let opp_dec_maker = self.decision_makers.get_mut(&opponent.get_id());
+                                if opp_dec_maker.is_none() {
                                     info!("Adding NPC decision maker for {}", npc.get_id());
                                     let npc_decision_maker = Arc::new(Mutex::new(
                                         CpuCombatantDecisionMaker::new(npc.clone()),
@@ -213,28 +199,68 @@ impl CombatController {
                                 }
                             }
                         }
+                        // Now you can safely use opponent_id without risking a Send issue
+                        let opponent_id = {
+                            let encounter = self.encounter_by_combatant_id(&from_id).await.unwrap();
+                            let encounter_guard = encounter.lock().await;
+                            let opponent_guard = encounter_guard.get_opponent(&from_id);
+                            let opponent = opponent_guard.lock().unwrap();
+                            opponent.get_id().clone() // Example of cloning data out
+                        };
+
+                        {
+                            let opp_dec_maker = self.decision_makers.get_mut(&opponent_id);
+                            if let Some(opp_dec_maker) = opp_dec_maker {
+                                let opp_dc_future = opp_dec_maker.lock();
+                                let opp_dc = opp_dc_future.await; // Safe to await here, as `opponent` guard is already dropped
+                                info!("NPC decision maker already exists for {}", opp_dc.get_id());
+                            }
+                        }
                         self.start_encounter(&from_id).await;
                     }
+
                     CombatCommand::Attack => {
                         info!("Attacking");
                     }
                     CombatCommand::UseTalent(opponent_id, talent) => {}
                 },
-                CleanupEncounter { encounter_id } => {
+
+                RemoveDecisionMakers { encounter_id ,resp} => {
                     // Perform cleanup logic here...
                     let encounter = self.encounters.get(&encounter_id).unwrap();
                     let combatant_ids = encounter.lock().await.get_combatant_ids();
-                    if let Some(shutdown_signal) = self.shutdown_signals.remove(&encounter_id) {
-                        shutdown_signal.notify_waiters();
-                        self.encounters.remove(&encounter_id);
-                        for id in combatant_ids.clone() {
-                            if let Some(decision_maker) = self.decision_makers.get(&id) {
-                                let mut decision_maker_guard = decision_maker.lock().await;
-                                decision_maker_guard.shutdown();
-                            }
-                            self.decision_makers.remove(&id);
-                        }
+                    // shuts down listeners to each decision maker
+                    for combatant_id in combatant_ids {
+                       self.message_sender.send(
+                            RemoveSingleDecisionMaker{combatant_id}
+                          ).await.unwrap();
                     }
+                    resp.send(()).unwrap();
+                }
+                RemoveSingleDecisionMaker{combatant_id}=>{
+                    if let Some(shutdown_signal) = self.shutdown_signals.remove(&combatant_id) {
+                        shutdown_signal.notify_waiters();
+                        if let Some(decision_maker) = self.decision_makers.get(&combatant_id) {
+                            let mut decision_maker_guard = decision_maker.lock().await;
+                            decision_maker_guard.shutdown();
+                        }
+                        self.decision_makers.remove(&combatant_id);
+                    }
+                }
+                CleanupEncounter {encounter_id}=>{
+                    let (tx,rx) = tokio::sync::oneshot::channel();
+                    self.message_sender.clone().send(
+                        RemoveDecisionMakers { encounter_id: encounter_id.clone(),resp: tx }
+                    ).await.unwrap();
+                    if let Ok(_) = rx.await {
+                        self.encounters.remove(&encounter_id);
+                    }
+                }
+                DisconnectPlayer { combatant_id } => {
+                    let encounter = self.encounter_by_combatant_id(&combatant_id).await.unwrap();
+                    let combatant_ids = encounter.lock().await.get_combatant_ids();
+
+
                 }
                 AddEncounter { encounter } => {
                     let encounter_id = encounter.get_id();
@@ -271,10 +297,31 @@ impl CombatController {
                         }
                     }
                 }
-                NotifyPlayers {
-                    message,
-                    recipient_ids,
-                } => {
+                NotifyPlayers { message, senders } => {
+                    for (id, sender) in senders {
+                        let message = message.clone();
+                        let message = match message {
+                            PlayerTurn(idx) => {
+                                let encounter = self.encounter_by_combatant_id(&id).await.unwrap();
+                                let encounter = encounter.lock().await;
+                                let turn_idx = encounter.get_combatant_idx(&id);
+                                if let Some(turn_idx) = turn_idx {
+                                   let combatant = encounter.get_combatant(turn_idx,None).lock().unwrap().clone_box();
+                                   YourTurn(combatant)
+                                } else {
+                                    PlayerTurn(idx)
+                                }
+                            },
+                            _ => message.clone(),
+                        };
+                        tokio::spawn(async move {
+                            sender
+                                .send(message)
+                                .await
+                                .expect("Failed to send combat result");
+
+                        });
+                    }
                     // Notify players, similar to your existing notify_players logic
                 } // Handle other messages
             }

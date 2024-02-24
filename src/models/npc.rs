@@ -58,7 +58,7 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
     ) -> Sender<CombatTurnMessage> {
         self.player_idx = idx.clone();
         self.combat_controller_tx = Some(combat_controller_tx.clone());
-        let (command_sender, mut result_receiver) = mpsc::channel(10);
+        let (command_sender, result_receiver) = mpsc::channel(10);
         let combat_sender = combat_controller_tx.clone();
         let shutdown_signal = self
             .shutdown_signal
@@ -104,6 +104,8 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
         command_sender
     }
     fn get_id(&self) -> String {
+        info!("im gonna show you my props {:?} {:?} ",self.shutdown_signal, self.monster);
+        
         self.monster.get_id()
     }
 
