@@ -1,19 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::future::{join_all, try_join_all};
-use prisma_client_rust::{chrono, raw, Direction, QueryError};
+use prisma_client_rust::{chrono, Direction, QueryError, raw};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{error, info, warn};
 
-use crate::models::hero::{convert_to_fixed_offset, Attributes, BaseStats};
-use crate::models::npc::Monster;
-use crate::models::quest::{Action, HeroQuest, Quest};
-use crate::prisma::{action, hero_actions, hero_quests, npc, quest, resource_type, ResourceEnum};
-use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
-use crate::services::tasks::explore::ExploreAction;
-use crate::utils::merge;
-use crate::webserver::get_prisma_client;
 use crate::{
     events::game::ActionCompleted,
     models::{
@@ -25,11 +17,19 @@ use crate::{
         action_completed, attributes, base_stats, hero,
         hero_region::{self, current_location, hero_id},
         hero_resource, inventory, leyline,
-        region::{self, adjacent_regions},
         PrismaClient,
+        region::{self, adjacent_regions},
     },
     types::RepoFuture,
 };
+use crate::models::hero::{Attributes, BaseStats, convert_to_fixed_offset};
+use crate::models::npc::Monster;
+use crate::models::quest::{Action, HeroQuest, Quest};
+use crate::prisma::{action, hero_actions, hero_quests, npc, quest, resource_type, ResourceEnum};
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
+use crate::services::tasks::explore::ExploreAction;
+use crate::utils::merge;
+use crate::webserver::get_prisma_client;
 
 #[derive(Clone, Debug)]
 pub struct Repo {
@@ -211,7 +211,6 @@ impl Repo {
             )
             .exec()
             .await?;
-        info!("update_hero after {:?}", updated_hero.stamina);
 
         Ok(updated_hero.into())
     }
@@ -568,10 +567,6 @@ impl Repo {
         });
 
         if quest.is_some() && hero_quest.is_some() {
-            info!(
-                "------------------Returning existing quest for hero: {}",
-                hero_id
-            );
             return Ok((quest.unwrap(), hero_quest.unwrap()));
         }
 
@@ -688,11 +683,9 @@ impl Repo {
 
         match hero_action {
             Some(_) => {
-                info!("Hero action already completed");
                 return Ok(true);
             }
             None => {
-                info!("Hero action not completed");
                 return Ok(false);
             }
         }
@@ -723,12 +716,10 @@ impl Repo {
                 }
             },
             None => {
-                info!("NONEEEEEEEE");
                 json!({})
             }
         };
 
-        info!("\n loot box should be set {:?} \n", loot_box);
         let now = chrono::Utc::now().into();
 
         self.prisma
@@ -887,10 +878,7 @@ impl Repo {
             .await;
 
         match result {
-            Ok(d) => {
-                info!("Updated hero region discovery level: {:?}", d);
-                Ok(())
-            }
+            Ok(d) => Ok(()),
             Err(e) => {
                 warn!("Error updating hero region discovery level: {}", e);
                 Err(e)

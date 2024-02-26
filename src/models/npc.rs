@@ -4,11 +4,10 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
-    oneshot, Mutex,
+    Mutex, oneshot,
 };
 use tracing::log::info;
 
-use crate::events::combat::CombatantIndex;
 use crate::{
     events::combat::CombatTurnMessage,
     prisma::npc,
@@ -16,6 +15,7 @@ use crate::{
         impls::combat_service::CombatCommand, traits::combat_decision_maker::DecisionMaker,
     },
 };
+use crate::events::combat::CombatantIndex;
 
 use super::{combatant::Combatant, hero::Range, talent::Talent};
 
@@ -31,16 +31,10 @@ pub struct CpuCombatantDecisionMaker {
 }
 
 impl CpuCombatantDecisionMaker {
-    pub(crate) fn new(
-        // command_sender: Sender<CombatCommand>,
-        // result_receiver: Receiver<CombatTurnMessage>,
-        monster: Monster,
-    ) -> Self {
+    pub(crate) fn new(monster: Monster) -> Self {
         let (shutdown_trigger, shutdown_signal) = oneshot::channel();
 
         Self {
-            // command_sender,
-            // result_receiver: Arc::new(Mutex::new(result_receiver)),
             monster,
             player_idx: CombatantIndex::Combatant2,
             combat_controller_tx: None,
@@ -77,7 +71,9 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                         match result {
                             CombatTurnMessage::PlayerTurn(turn_idx) => {
                                 // Do nothing
+                                info!("npc got turn message {:?}", turn_idx);
                                 if npc_player_idx == turn_idx {
+                                    info!("npc attacking...");
                                     let command = CombatCommand::Attack; // Example decision
                                     combat_sender
                                         .clone()
@@ -104,11 +100,13 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
         command_sender
     }
     fn get_id(&self) -> String {
-        info!("im gonna show you my props {:?} {:?} ",self.shutdown_signal, self.monster);
-        
+        info!(
+            "im gonna show you my props {:?} {:?} ",
+            self.shutdown_signal, self.monster
+        );
+
         self.monster.get_id()
     }
-
     fn shutdown(&mut self) {
         if let Some(trigger) = self.shutdown_trigger.take() {
             let _ = trigger.send(());
@@ -141,6 +139,9 @@ impl Combatant for Monster {
     }
     fn get_damage(&self) -> i32 {
         self.damage.roll()
+    }
+    fn get_damage_stats(&self) -> Range<i32> {
+        self.damage.clone()
     }
 
     fn get_talents(&self) -> &Vec<Talent> {

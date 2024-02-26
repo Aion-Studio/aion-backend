@@ -1,28 +1,29 @@
 use std::any::Any;
 use std::collections::HashMap;
 
+use anyhow::Result;
 use prisma_client_rust::chrono::{self, DateTime, Duration, FixedOffset, Utc};
+use rand::{Rng, thread_rng};
 use rand::seq::SliceRandom;
-use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use tracing::log::error;
 
-use super::combatant::Combatant;
-use super::region::RegionName;
-use super::resources::Resource;
-use super::talent::{Effect, Talent};
-use crate::events::game::ActionDurations;
-use crate::infra::Infra;
-use crate::prisma::ResourceEnum;
-use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::{
     events::game::ActionCompleted,
     prisma::{
         attributes, base_stats, follower, hero, hero_resource, inventory, item, retinue_slot,
     },
 };
-use anyhow::Result;
+use crate::events::game::ActionDurations;
+use crate::infra::Infra;
+use crate::prisma::ResourceEnum;
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
+
+use super::combatant::Combatant;
+use super::region::RegionName;
+use super::resources::Resource;
+use super::talent::{Effect, Talent};
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -82,13 +83,8 @@ impl Hero {
                 .signed_duration_since(last_regeneration_time)
                 .num_seconds() as i32;
 
-            info!(
-                "(self.stamina_regen_rate as f64 / 10.0)).round() {:?}",
-                (seconds as f64 * self.stamina_regen_rate as f64 / 100.0).round()
-            );
             let stamina_to_add =
                 ((seconds as f64) * (self.stamina_regen_rate as f64 / 100.0)).round() as i32;
-            info!("Stamina to be added: {}", stamina_to_add);
 
             // Add to self.stamina only if it is less than self.stamina_max
             if self.stamina + stamina_to_add < self.stamina_max {
@@ -99,7 +95,6 @@ impl Hero {
         } else {
             // This is the first time we're regenerating stamina, so no need to add anything yet
             // Just set the last regeneration time to now
-            info!("Setting initial stamina regeneration time");
         }
 
         // Update the last stamina regeneration time to now, regardless of whether we regenerated stamina
@@ -358,9 +353,12 @@ impl Combatant for Hero {
     fn get_damage(&self) -> i32 {
         self.base_stats.damage.roll()
     }
-
     fn get_talents(&self) -> &Vec<Talent> {
         &self.talents
+    }
+
+    fn get_damage_stats(&self) -> Range<i32> {
+        self.base_stats.damage.clone()
     }
 
     fn get_armor(&self) -> i32 {

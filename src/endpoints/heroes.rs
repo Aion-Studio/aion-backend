@@ -1,5 +1,5 @@
+use actix_web::{get, HttpResponse, post, Responder};
 use actix_web::web::{Data, Path, Query};
-use actix_web::{get, post, HttpResponse, Responder};
 use prisma_client_rust::chrono::{self, Local};
 use prisma_client_rust::serde_json::json;
 use rand::Rng;
@@ -331,7 +331,7 @@ pub async fn get_hero_status(
             let is_in_combat = match rx.await {
                 Ok(res) => res.is_some(),
                 Err(e) => {
-                    error!("Error getting combat state: {}", e);
+                    info!("Error getting combat state: {}", e);
                     false
                 }
             };

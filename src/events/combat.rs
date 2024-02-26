@@ -1,22 +1,23 @@
-use actix::Message;
-use prisma_client_rust::chrono::{DateTime, Local};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
-use serde::ser::SerializeMap;
+use actix::Message;
+use prisma_client_rust::chrono::{DateTime, Local};
 use serde::{
     de::{EnumAccess, VariantAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
+use serde::ser::SerializeMap;
+use serde_json::json;
 use tracing::log::info;
 
-use crate::events::combat::CombatantIndex::Combatant1;
-use crate::models::talent::{Effect, Talent};
 use crate::{
     models::{combatant::Combatant, hero::Hero, npc::Monster},
     services::impls::combat_service::CombatCommand,
 };
+use crate::events::combat::CombatantIndex::Combatant1;
+use crate::models::talent::{Effect, Talent};
 
 // Damage over time
 #[derive(Debug, Clone)]
@@ -42,10 +43,13 @@ pub struct CombatEncounter {
     current_turn: CombatantIndex,
     status_effects: HashMap<CombatantId, Vec<Effect>>,
     started: bool,
+    initial_hps: (i32, i32), // comb1 and comb2
 }
 
 impl CombatEncounter {
     pub fn new<T: Combatant + 'static>(hero: Hero, monster: T) -> Self {
+        let hero_hp = hero.get_hp();
+        let monster_hp = monster.get_hp();
         CombatEncounter {
             id: uuid::Uuid::new_v4().to_string(),
             combatant1: Arc::new(Mutex::new(hero)),
@@ -54,12 +58,14 @@ impl CombatEncounter {
             status_effects: HashMap::new(),
             current_turn: Combatant1,
             started: false,
+            initial_hps: (hero_hp, monster_hp),
         }
     }
 
     pub fn get_id(&self) -> String {
         self.id.clone()
     }
+
     pub fn get_combatant_ids(&self) -> Vec<String> {
         vec![
             self.combatant1.lock().unwrap().get_id(),
@@ -219,6 +225,7 @@ impl Clone for CombatEncounter {
             current_turn: self.current_turn.clone(),
             started: self.started,
             status_effects: self.status_effects.clone(),
+            initial_hps: self.initial_hps,
         }
     }
 }
@@ -238,7 +245,7 @@ pub enum CombatTurnMessage {
     YourTurn(Box<dyn Combatant>), // only sent to the next turn player to show him cooldowns
     Winner(CombatantIndex),
     // Potentially, if your rules allow for ties
-    EncounterState(CombatEncounter),
+    EncounterState(CombatEncounter, String), // id of combatant requesting state
     EncounterStarted,
 }
 
@@ -253,8 +260,8 @@ impl Clone for CombatTurnMessage {
             }
             CombatTurnMessage::PlayerTurn(index) => CombatTurnMessage::PlayerTurn(index.clone()),
             CombatTurnMessage::Winner(idx) => CombatTurnMessage::Winner(idx.clone()),
-            CombatTurnMessage::EncounterState(encounter) => {
-                CombatTurnMessage::EncounterState(encounter.clone())
+            CombatTurnMessage::EncounterState(encounter, id) => {
+                CombatTurnMessage::EncounterState(encounter.clone(), id.clone())
             }
             CombatTurnMessage::EncounterStarted => CombatTurnMessage::EncounterStarted,
         }
@@ -281,11 +288,15 @@ impl Serialize for CombatTurnMessage {
                 map.end()
             }
             CombatTurnMessage::Winner(idx) => {
-                serializer.serialize_str(format!("Winner: {:?}", idx.clone()).as_str())
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("type", "Winner")?;
+                map.serialize_entry("value", &idx)?;
+                map.end()
             }
             CombatTurnMessage::PlayerTurn(idx) => {
                 let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("PlayerTurn", &idx)?;
+                map.serialize_entry("type", "PlayerTurn")?;
+                map.serialize_entry("value", &idx)?;
                 map.end()
             }
             CombatTurnMessage::YourTurn(combatant) => {
@@ -294,22 +305,46 @@ impl Serialize for CombatTurnMessage {
                 map.serialize_entry("talents", &combatant.get_talents())?;
                 map.end()
             }
-            CombatTurnMessage::EncounterState(encounter) => {
-                let mut map = serializer.serialize_map(Some(4))?;
-                let mut combat1 = HashMap::new();
+            CombatTurnMessage::EncounterState(encounter, id) => {
+                let mut map = serializer.serialize_map(None)?;
                 let cb1 = encounter.combatant1.lock().unwrap();
                 let cb2 = encounter.combatant2.lock().unwrap();
+                let talents = {
+                    if cb1.get_id() == *id {
+                        Some(cb1.get_talents())
+                    } else {
+                        None
+                    }
+                };
                 let c1hp = cb1.get_hp().to_string();
                 let c2hp = cb2.get_hp().to_string();
-                combat1.insert("name", cb1.get_name());
-                combat1.insert("hp", &c1hp);
-                let mut combat2 = HashMap::new();
-                combat2.insert("name", cb2.get_name());
-                combat2.insert("hp", &c2hp);
+                let c1_damage = cb1.get_damage_stats();
+                let c1_armor = cb1.get_armor();
+
+                let (hp1, hp2) = encounter.initial_hps;
+                let c2_damage = cb2.get_damage_stats();
+                let c2_armor = cb2.get_armor();
+                let combat1 = json!({
+                    "name": cb1.get_name(),
+                    "current_hp": cb1.get_hp().to_string(),
+                    "hp":hp1.to_string(),
+                    "damage": cb1.get_damage_stats(), // This will now include your Range<i32> as a nested object
+                    "armor": cb1.get_armor(),
+                    "talents": if talents.is_some() { talents.unwrap() } else { cb1.get_talents() }
+                });
+                let combat2 = json!({
+                    "name": cb2.get_name(),
+                    "current_hp": cb2.get_hp().to_string(),
+                    "hp":hp2.to_string(),
+                    "damage": cb2.get_damage_stats(), // This will now include your Range<i32> as a nested object
+                    "armor": cb2.get_armor(),
+                    "talents": if talents.is_some() { None } else { Some(cb2.get_talents()) }
+                });
 
                 map.serialize_entry("Combatant1", &combat1)?;
                 map.serialize_entry("Combatant2", &combat2)?;
                 map.serialize_entry("turn", &encounter.current_turn)?;
+                map.serialize_entry("type", "EncounterState")?;
                 map.end()
             }
             CombatTurnMessage::EncounterStarted => serializer.serialize_str("EncounterStarted"),

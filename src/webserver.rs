@@ -1,4 +1,18 @@
-use crate::configuration::{get_durations, DurationType, Settings};
+use std::collections::HashMap;
+use std::net::TcpListener;
+use std::process::Command;
+use std::sync::{Arc, Mutex};
+
+use actix_cors::Cors;
+use actix_web::{App, get, HttpResponse, HttpServer, Responder};
+use actix_web::dev::Server;
+use actix_web::web::{Data, Path};
+use once_cell::sync::OnceCell;
+use tokio::sync::{mpsc, RwLock};
+use tracing::info;
+
+use crate::configuration::{DurationType, get_durations, Settings};
+use crate::endpoints::combat::combat_ws;
 use crate::endpoints::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
@@ -11,21 +25,8 @@ use crate::logger::Logger;
 use crate::messenger::MESSENGER;
 use crate::prisma::PrismaClient;
 use crate::services::impls::combat_service::{CombatCommand, CombatController, ControllerMessage};
-
-use crate::endpoints::combat::combat_ws;
 use crate::services::tasks::action_names::Responder as Sender;
 use crate::storable::MemoryStore;
-use actix_cors::Cors;
-use actix_web::dev::Server;
-use actix_web::web::{Data, Path};
-use actix_web::{get, App, HttpResponse, HttpServer, Responder};
-use once_cell::sync::OnceCell;
-use std::collections::HashMap;
-use std::net::TcpListener;
-use std::process::Command;
-use std::sync::{Arc, Mutex};
-use tokio::sync::{mpsc, RwLock};
-use tracing::info;
 
 pub struct Application {
     port: u16,
@@ -198,9 +199,7 @@ async fn npc(path: Path<String>) -> impl Responder {
 
 #[get("/all-heroes")]
 async fn get_heroes() -> impl Responder {
-    info!("Fetching all heroes....");
     let heroes = Infra::repo().get_all_heroes().await.unwrap();
-    info!("Successfully fetched all heroes....");
     HttpResponse::Ok().json(heroes)
 }
 

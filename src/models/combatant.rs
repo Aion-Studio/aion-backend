@@ -1,6 +1,7 @@
 use core::fmt;
 use std::any::Any;
 use std::fmt::Formatter;
+use crate::models::hero::Range;
 
 use crate::services::traits::combat_decision_maker::DecisionMaker;
 
@@ -13,6 +14,7 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn get_hp(&self) -> i32;
     fn get_damage(&self) -> i32;
     fn get_talents(&self) -> &Vec<Talent>;
+    fn get_damage_stats(&self) -> Range<i32>;
 
     fn get_armor(&self) -> i32;
     fn get_level(&self) -> i32;

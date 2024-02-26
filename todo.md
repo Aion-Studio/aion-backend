@@ -9,7 +9,7 @@
 [:heavy_check_mark] show lootbox once each of those is clicked
 
 today:
-- [] fight ui on dashboard
+- [] add attack on ui
 - [] timer for turn in fight
 log:
 

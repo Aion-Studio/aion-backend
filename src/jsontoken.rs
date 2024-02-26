@@ -1,5 +1,6 @@
 use std::env;
 
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use prisma_client_rust::chrono;
 use serde::{Deserialize, Serialize};
 
@@ -9,11 +10,9 @@ pub struct Claims {
     exp: usize, // Expiration time (optional)
 }
 
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-
 pub fn create_token(combatant_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = chrono::Utc::now()
-        .checked_add_signed(chrono::Duration::hours(24))
+        .checked_add_signed(chrono::Duration::hours(194))
         .expect("valid timestamp")
         .timestamp() as usize;
 

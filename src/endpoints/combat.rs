@@ -1,18 +1,15 @@
+use std::sync::Arc;
+
 use actix::prelude::*;
+use actix_web::{Error, get, HttpRequest, HttpResponse, web};
 use actix_web::web::{Data, Query};
-use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use prisma_client_rust::query_core::schema_builder::append_opt;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex, Notify, oneshot};
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tracing::{error, info};
 
-use crate::events::combat::{CombatEncounter, CombatError, CombatantIndex};
-
-use crate::jsontoken::decode_token;
-use crate::services::impls::combat_service::ControllerMessage;
 use crate::{
     events::combat::CombatTurnMessage,
     services::{
@@ -21,6 +18,10 @@ use crate::{
     // ... Other imports relevant to your combat system
     webserver::AppState,
 };
+use crate::events::combat::{CombatantIndex, CombatEncounter, CombatError};
+use crate::jsontoken::decode_token;
+use crate::models::hero::Hero;
+use crate::services::impls::combat_service::ControllerMessage;
 
 #[derive(Deserialize)]
 pub struct WsQueryParams {
@@ -106,7 +107,7 @@ impl CombatSocket {
         // if turn result is a CombatTurnMessage::EncounterState
         // set the encounter state to Some(encounter_state)
         let encounter_state = match turn_result {
-            CombatTurnMessage::EncounterState(state) => Some(state),
+            CombatTurnMessage::EncounterState(state, ..) => Some(state),
             _ => None,
         };
 
@@ -168,11 +169,12 @@ impl Actor for CombatSocket {
             }
         });
 
+        let id = self.combatant_id.clone();
         // 2. (Optional) Retrieve initial combat state if the encounter's already begun
         if let Some(state) = self.encounter_state.clone() {
             ctx.text(
                 serde_json::to_string(&CombatSocketMessage::Update(
-                    CombatTurnMessage::EncounterState(state),
+                    CombatTurnMessage::EncounterState(state, id),
                 ))
                 .unwrap(),
             );
@@ -181,17 +183,18 @@ impl Actor for CombatSocket {
 
     fn stopped(&mut self, _ctx: &mut Self::Context) {
         let app_state = self.app_state.clone();
-        let combatant_id= self.combatant_id.clone();
-        
+        let combatant_id = self.combatant_id.clone();
+
         tokio::spawn(async move {
             let combat_tx = app_state.lock().await.combat_tx.clone();
-            combat_tx.send(
-                ControllerMessage::RemoveSingleDecisionMaker{combatant_id},
-            ).await.unwrap();
+            combat_tx
+                .send(ControllerMessage::RemoveSingleDecisionMaker { combatant_id })
+                .await
+                .unwrap();
         });
     }
 
-        // Logic to dissociate socket from combatant, clean up potentially?
+    // Logic to dissociate socket from combatant, clean up potentially?
 }
 
 struct SetWsToPlayerDecisionMakerTx(pub Sender<CombatCommand>);
@@ -273,7 +276,7 @@ impl PlayerDecisionMaker {
     fn new(id: String, to_ws_tx: Sender<CombatTurnMessage>) -> Self {
         let (shutdown_trigger, shutdown_signal) = oneshot::channel();
 
-        Self {
+        let instance = Self {
             combat_controller_tx: None,
             id,
             to_ws_tx,
@@ -282,7 +285,9 @@ impl PlayerDecisionMaker {
             notify_from_ws_tx_set: Arc::new(Notify::new()),
             shutdown_signal: Some(shutdown_signal),
             shutdown_trigger: Some(shutdown_trigger),
-        }
+        };
+
+        instance
     }
 
     // Receive command from player websocket, send to combat controller
@@ -343,7 +348,6 @@ impl DecisionMaker for PlayerDecisionMaker {
     fn get_id(&self) -> String {
         self.id.clone()
     }
-
     fn shutdown(&mut self) {
         if let Some(trigger) = self.shutdown_trigger.take() {
             let _ = trigger.send(());
