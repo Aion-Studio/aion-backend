@@ -16,6 +16,7 @@ use crate::{
     },
 };
 use crate::events::combat::CombatantIndex;
+use crate::models::player_decision_maker::PlayerDecisionMaker;
 
 use super::{combatant::Combatant, hero::Range, talent::Talent};
 
@@ -64,7 +65,7 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
             let npc_player_idx = idx.clone();
             tokio::select! {
                 _ = shutdown_signal => {
-                    info!("Shutting down decision maker for monster.");
+                    info!("Shutting down signal monster.");
                 },
                 _ = async {
                     while let Some(result) = result_receiver.recv().await {
@@ -113,6 +114,11 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
         }
     }
 }
+impl Drop for CpuCombatantDecisionMaker {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Monster {
@@ -140,12 +146,12 @@ impl Combatant for Monster {
     fn get_damage(&self) -> i32 {
         self.damage.roll()
     }
-    fn get_damage_stats(&self) -> Range<i32> {
-        self.damage.clone()
-    }
-
     fn get_talents(&self) -> &Vec<Talent> {
         &self.talents
+    }
+
+    fn get_damage_stats(&self) -> Range<i32> {
+        self.damage.clone()
     }
 
     fn get_armor(&self) -> i32 {

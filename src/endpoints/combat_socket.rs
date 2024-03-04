@@ -1,13 +1,13 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use actix::prelude::*;
 use actix_web::{Error, get, HttpRequest, HttpResponse, web};
 use actix_web::web::{Data, Query};
 use actix_web_actors::ws;
-use prisma_client_rust::query_core::schema_builder::append_opt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, Mutex, Notify, oneshot};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Sender;
 use tracing::{error, info};
 
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
 };
 use crate::events::combat::{CombatantIndex, CombatEncounter, CombatError};
 use crate::jsontoken::decode_token;
-use crate::models::hero::Hero;
+use crate::models::player_decision_maker::PlayerDecisionMaker;
 use crate::services::impls::combat_service::ControllerMessage;
 
 #[derive(Deserialize)]
@@ -85,7 +85,6 @@ pub async fn combat_ws(
 #[derive(Serialize, Deserialize, Debug)]
 enum CombatSocketMessage {
     Command(CombatCommand),
-    // From Client --> Server
     Update(CombatTurnMessage), // From Server --> Client
 }
 
@@ -256,101 +255,5 @@ impl CombatSocket {
 
         // 2. Assuming results come back to you eventually on an appropriate channel you receive a CombatTurnMessage
         // self.send_update(CombatTurnMessage, ctx); // Adjust how you receive results
-    }
-}
-
-#[derive(Debug)]
-pub struct PlayerDecisionMaker {
-    id: String,
-    combat_controller_tx: Option<Sender<CombatCommand>>,
-    // provided by combat controller
-    pub player_idx: CombatantIndex,
-    to_ws_tx: Sender<CombatTurnMessage>,
-    from_ws_tx: Option<Sender<CombatCommand>>,
-    notify_from_ws_tx_set: Arc<Notify>,
-    shutdown_signal: Option<oneshot::Receiver<()>>,
-    shutdown_trigger: Option<oneshot::Sender<()>>,
-}
-
-impl PlayerDecisionMaker {
-    fn new(id: String, to_ws_tx: Sender<CombatTurnMessage>) -> Self {
-        let (shutdown_trigger, shutdown_signal) = oneshot::channel();
-
-        let instance = Self {
-            combat_controller_tx: None,
-            id,
-            to_ws_tx,
-            player_idx: CombatantIndex::Combatant1,
-            from_ws_tx: None,
-            notify_from_ws_tx_set: Arc::new(Notify::new()),
-            shutdown_signal: Some(shutdown_signal),
-            shutdown_trigger: Some(shutdown_trigger),
-        };
-
-        instance
-    }
-
-    // Receive command from player websocket, send to combat controller
-    pub fn start_listening_for_commands(&mut self) {
-        let (command_sender, mut command_receiver) = mpsc::channel(10);
-        //set the sender so combat socket can get it via get_from_ws_tx it to send commands from player
-        self.from_ws_tx = Some(command_sender);
-        let combat_controller_tx = self.combat_controller_tx.clone().unwrap();
-        tokio::spawn(async move {
-            while let Some(cmd) = command_receiver.recv().await {
-                info!("Received command from ws_player: {:?}", cmd);
-                combat_controller_tx.send(cmd).await.unwrap();
-            }
-        });
-    }
-    pub fn get_from_ws_tx(&self) -> Option<Sender<CombatCommand>> {
-        self.from_ws_tx.clone()
-    }
-}
-
-impl DecisionMaker for PlayerDecisionMaker {
-    fn start(
-        &mut self,
-        combat_controller_tx: Sender<CombatCommand>,
-        player_idx: CombatantIndex,
-    ) -> Sender<CombatTurnMessage> {
-        self.player_idx = player_idx;
-        self.combat_controller_tx = Some(combat_controller_tx);
-
-        let shutdown_signal = self
-            .shutdown_signal
-            .take()
-            .expect("Shutdown signal must be present when starting.");
-
-        self.start_listening_for_commands();
-        self.notify_from_ws_tx_set.notify_one();
-
-        let (command_sender, result_receiver) = mpsc::channel(10);
-
-        let to_ws_tx = self.to_ws_tx.clone();
-
-        tokio::spawn(async move {
-            let mut result_receiver = result_receiver;
-            tokio::select! {
-                _ = shutdown_signal => {
-                    info!("Shutting down decision maker for player.");
-                },
-                _ = async {
-                    while let Some(result) = result_receiver.recv().await {
-                        let to_ws_tx = to_ws_tx.clone();
-                        to_ws_tx.send(result).await.unwrap();
-                    }
-                } => {}
-            }
-        });
-        command_sender
-    }
-    fn get_id(&self) -> String {
-        self.id.clone()
-    }
-    fn shutdown(&mut self) {
-        if let Some(trigger) = self.shutdown_trigger.take() {
-            let _ = trigger.send(());
-        }
     }
 }

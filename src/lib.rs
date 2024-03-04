@@ -23,6 +23,8 @@ mod models {
     pub mod hero;
     pub mod npc;
     pub mod quest;
+
+    pub mod player_decision_maker;
     pub mod region;
     pub mod resources;
     pub mod talent;
@@ -74,7 +76,7 @@ mod services {
 }
 
 pub mod endpoints {
-    pub mod combat;
+    pub mod combat_socket;
     pub mod heroes;
     pub mod quest;
     pub mod regions;
@@ -96,7 +98,7 @@ pub fn tracing_subscribe() -> bool {
     use std::env::{set_var, var};
 
     use tracing::info;
-    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
     if var("INDEXER_LOG").is_err() {
         set_var("INDEXER_LOG", "debug,tokio=warn,prisma=info,quaint=info");

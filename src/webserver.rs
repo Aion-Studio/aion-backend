@@ -12,7 +12,7 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::info;
 
 use crate::configuration::{DurationType, get_durations, Settings};
-use crate::endpoints::combat::combat_ws;
+use crate::endpoints::combat_socket::combat_ws;
 use crate::endpoints::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
 };
@@ -129,6 +129,7 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
     let store = Arc::new(Mutex::new(MemoryStore::new()));
 
     let (tx, rx) = mpsc::channel(1000);
+    info!("___created new combat_tx____");
 
     let mut combat_controller = CombatController::new(tx.clone()); // Use RwLock here
 
@@ -136,6 +137,7 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
     tokio::spawn(async move {
         // This scope only needs a write lock briefly to start the `run` method
         combat_controller.run(rx).await;
+        info!("combat run exiting...");
     });
 
     let app_state_s = AppState {

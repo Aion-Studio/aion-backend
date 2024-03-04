@@ -129,7 +129,10 @@ async fn hero_state(path: Path<String>, app_state: Data<AppState>) -> impl Respo
 
     match hero {
         Ok(hero) => match get_hero_status(hero, combat_tx).await {
-            Ok(hero_state) => HttpResponse::Ok().json(hero_state),
+            Ok(hero_state) => {
+                info!("returning hero state....");
+                HttpResponse::Ok().json(hero_state)
+            }
             Err(e) => {
                 let error_response = json!({
                     "error": "Error grabbing hero state",
@@ -327,9 +330,17 @@ pub async fn get_hero_status(
                 combatant_id: hero.get_id().clone(),
                 tx,
             };
-            combat_tx.send(msg).await.unwrap();
+            match combat_tx.send(msg).await {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Error sending combat state request: {}", e);
+                }
+            }
             let is_in_combat = match rx.await {
-                Ok(res) => res.is_some(),
+                Ok(res) => {
+                    info!("is in combat yes");
+                    res.is_some()
+                }
                 Err(e) => {
                     info!("Error getting combat state: {}", e);
                     false

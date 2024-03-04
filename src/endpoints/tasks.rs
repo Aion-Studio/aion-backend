@@ -1,14 +1,13 @@
 use std::sync::Mutex;
 
-use actix_web::{get, web, Error, HttpRequest, HttpResponse};
-use actix_web_actors::ws;
-
 use actix::{Actor, StreamHandler};
+use actix::prelude::*;
+use actix_web::{Error, get, HttpRequest, HttpResponse, web};
+use actix_web_actors::ws;
 use once_cell::sync::Lazy;
 use tracing::info;
 
 use crate::infra::Infra;
-use actix::prelude::*;
 
 static WS_ADDR: Lazy<Mutex<Option<Addr<MyWebSocket>>>> = Lazy::new(|| Mutex::new(None));
 
@@ -50,6 +49,7 @@ impl Actor for MyWebSocket {
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
         // Clear the address from AppState.
+        info!("Websocket connection closed");
         *WS_ADDR.lock().unwrap() = None;
         Running::Stop
     }
