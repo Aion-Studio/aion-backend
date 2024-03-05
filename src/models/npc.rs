@@ -120,7 +120,7 @@ impl Drop for CpuCombatantDecisionMaker {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Monster {
     id: String,
     name: String,
@@ -191,5 +191,11 @@ impl From<npc::Data> for Monster {
             monster_type: None,
             talents: vec![], // nothing for now
         }
+    }
+}
+
+impl From<Box<npc::Data>> for Monster {
+    fn from(data: Box<npc::Data>) -> Self {
+        Monster::from(*data)
     }
 }

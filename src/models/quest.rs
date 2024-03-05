@@ -1,22 +1,26 @@
 use serde::{Deserialize, Serialize};
 
-use super::region::{Leyline, RegionName};
+use crate::models::npc::Monster;
 use crate::prisma::{
     action, hero_quests,
     quest::{self, actions, SetParam},
 };
+use crate::services::tasks::action_names::ActionNames;
+
+use super::region::{Leyline, RegionName};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Action {
     pub id: Option<String>,
-    pub name: String,
+    pub name: ActionNames,
     pub description: Option<String>,
     pub region_name: RegionName,
     pub leyline: Option<Leyline>,
     pub quest: Option<Quest>,
     pub hero_action: Option<HeroAction>,
     pub cost: Option<i32>,
+    pub npc: Option<Monster>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -120,9 +124,14 @@ impl From<action::Data> for Action {
             Ok(vec) => vec.into_iter().next(),
             Err(_) => None, // Handle error by returning None
         };
+        let npc: Option<Monster> = data
+            .npc
+            .and_then(|data| data)
+            .map(|boxed_npc| boxed_npc.into());
+
         Action {
-            id: Some(data.id),             // Moved
-            name: data.name,               // Moved
+            id: Some(data.id), // Moved
+            name: ActionNames::try_from(data.name).expect("converting action name failed"), // Moved
             description: data.description, // Moved
             region_name: match region_name.as_str() {
                 "Dusane" => RegionName::Dusane,
@@ -134,6 +143,7 @@ impl From<action::Data> for Action {
                 "Lindon" => RegionName::Lindon,
                 _ => RegionName::Dusane,
             },
+            npc,
             hero_action: hero_action_option.map(|ha| HeroAction {
                 id: Some(ha.id),
                 hero_id: ha.hero_id,

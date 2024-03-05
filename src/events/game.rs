@@ -1,5 +1,9 @@
-use prisma_client_rust::chrono::{self, Duration, Local, Utc};
 use std::collections::HashMap;
+
+use prisma_client_rust::chrono::{self, Duration, Local, Utc};
+use prisma_client_rust::chrono::{DateTime, FixedOffset};
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeSeq;
 use tracing::info;
 use tracing::log::warn;
 
@@ -10,10 +14,6 @@ use crate::models::region::Leyline;
 use crate::models::resources::Resource;
 use crate::prisma::action_completed;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
-use prisma_client_rust::chrono::{DateTime, FixedOffset};
-use serde::ser::SerializeSeq;
-use serde::{Deserialize, Serialize, Serializer};
-
 use crate::services::tasks::channel::ChannelingAction;
 use crate::services::tasks::explore::ExploreAction;
 
@@ -127,6 +127,21 @@ pub struct QuestResult {
 impl QuestResult {
     pub fn name(&self) -> String {
         "quest-lootbox".to_string()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RaidResult {
+    pub hero_id: String,
+    pub resources: HashMap<Resource, i32>,
+    pub xp: i32,
+    pub created_time: Option<DateTime<FixedOffset>>,
+    pub action_id: String,
+}
+
+impl RaidResult {
+    pub fn name(&self) -> String {
+        "raid-lootbox".to_string()
     }
 }
 

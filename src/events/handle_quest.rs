@@ -1,6 +1,6 @@
-use futures::TryFutureExt;
 use std::sync::Arc;
 
+use futures::TryFutureExt;
 use serde_json::json;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{oneshot, RwLock};
@@ -49,12 +49,8 @@ impl QuestHandler {
 
             Logger::log(json!({"name":ActionNames::Quest.to_string() ,"hero_id": hero_id}));
 
-            info!(
-                "action names check {:?}",
-                ActionNames::from_str(&action.name)
-            );
-            match ActionNames::from_str(&action.name) {
-                Some(ActionNames::Explore) => {
+            match &action.name {
+                ActionNames::Explore => {
                     let (resp_tx, resp_rx): (Responder<()>, _) = oneshot::channel();
 
                     let cmd = Command::Explore {
@@ -70,7 +66,7 @@ impl QuestHandler {
                         Err(e) => error!("Error: {:?}", e),
                     }
                 }
-                Some(ActionNames::FightNpc) => {
+                ActionNames::Raid => {
                     let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
                     let hero_id = hero.get_id();
                     let npc = Infra::repo()
@@ -79,7 +75,11 @@ impl QuestHandler {
                         .unwrap();
 
                     match combat_tx
-                        .send(ControllerMessage::CreateNpcEncounter { hero, npc })
+                        .send(ControllerMessage::CreateNpcEncounter {
+                            hero,
+                            npc,
+                            action_id: action_id.clone(),
+                        })
                         .await
                     {
                         Ok(_) => info!("Fight created in controller"),
@@ -100,9 +100,9 @@ impl QuestHandler {
                         }
                     }
                 }
-                Some(ActionNames::Channel) => {}
-                Some(ActionNames::Raid) => {}
-                Some(ActionNames::Unique(off_beat)) => {}
+                ActionNames::Channel => {}
+                ActionNames::Raid => {}
+                ActionNames::Unique(off_beat) => {}
                 _ => {
                     error!("Action name not found");
                     return;

@@ -4,20 +4,20 @@ use std::sync::{Arc, Mutex};
 
 use actix::Message;
 use prisma_client_rust::chrono::{DateTime, Local};
+use serde::ser::SerializeMap;
 use serde::{
     de::{EnumAccess, VariantAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use serde::ser::SerializeMap;
 use serde_json::json;
 use tracing::log::info;
 
+use crate::events::combat::CombatantIndex::Combatant1;
+use crate::models::talent::{Effect, Talent};
 use crate::{
     models::{combatant::Combatant, hero::Hero, npc::Monster},
     services::impls::combat_service::CombatCommand,
 };
-use crate::events::combat::CombatantIndex::Combatant1;
-use crate::models::talent::{Effect, Talent};
 
 // Damage over time
 #[derive(Debug, Clone)]
@@ -44,6 +44,7 @@ pub struct CombatEncounter {
     status_effects: HashMap<CombatantId, Vec<Effect>>,
     started: bool,
     initial_hps: (i32, i32), // comb1 and comb2
+    pub action_id: Option<String>,
 }
 
 impl CombatEncounter {
@@ -59,7 +60,11 @@ impl CombatEncounter {
             current_turn: Combatant1,
             started: false,
             initial_hps: (hero_hp, monster_hp),
+            action_id: None,
         }
+    }
+    pub fn set_action_id(&mut self, action_id: String) {
+        self.action_id = Some(action_id);
     }
 
     pub fn get_id(&self) -> String {
@@ -226,6 +231,7 @@ impl Clone for CombatEncounter {
             started: self.started,
             status_effects: self.status_effects.clone(),
             initial_hps: self.initial_hps,
+            action_id: self.action_id.clone(),
         }
     }
 }

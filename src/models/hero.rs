@@ -130,6 +130,10 @@ impl Hero {
             TaskLootBox::Quest(result) => {
                 self.add_resources(result.resources);
             }
+            TaskLootBox::Raid(result) => {
+                self.add_resources(result.resources);
+                self.gain_experience(result.xp);
+            }
         }
     }
 

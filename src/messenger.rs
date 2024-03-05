@@ -1,3 +1,4 @@
+use once_cell::sync::Lazy;
 use tokio::sync::mpsc;
 use tracing::warn;
 
@@ -11,7 +12,6 @@ use crate::{
     run_parallel,
     services::tasks::action_names::{Command, TaskAction},
 };
-use once_cell::sync::Lazy;
 
 pub static MESSENGER: Lazy<MessageManager> = Lazy::new(|| MessageManager::new());
 
@@ -59,7 +59,6 @@ impl MessageManager {
                     }
                     ChannelCompleted(action) => {
                         run_parallel!((action.to_owned());LootBoxHandler::create_lootbox_channel,ChannelingHandler::channel_completed);
-
                         Some(TaskAction::Channel(action.clone()))
                     }
                     QuestAccepted {
@@ -101,21 +100,18 @@ impl MessageManager {
                     }
                     QuestActionDone(hero_id, action_id) => {
                         QuestHandler::quest_action_done(hero_id.clone());
-                        Some(TaskAction::QuestAction(hero_id, action_id))
+                        let task_action = TaskAction::QuestAction(hero_id, action_id);
+                        LootBoxHandler::create_lootbox_quest_action(task_action.clone()).await;
+                        Some(task_action)
                     }
                     QuestCompleted(hero_id, quest) => {
                         run_parallel!((hero_id.to_owned(), quest.to_owned()); QuestHandler::quest_completed, LootBoxHandler::create_lootbox_quest_complete);
-
                         Some(TaskAction::QuestComplete(hero_id.clone(), quest.clone()))
                     }
-                    _ => {
-                        None
-                        // Replace with an appropriate default
-                    }
+                    _ => None,
                 };
-                match task_action {
-                    Some(task_action) => CostHandler::deduct_action_costs(task_action),
-                    None => {}
+                if let Some(task_action) = task_action {
+                    CostHandler::deduct_action_costs(task_action)
                 }
             }
         })

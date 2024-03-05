@@ -47,6 +47,7 @@ pub enum ControllerMessage {
     CreateNpcEncounter {
         hero: Hero,
         npc: Monster,
+        action_id: String,
     },
     Combat((CombatCommand, String, Responder<()>)), // Add other messages as necessary
     CleanupEncounter {
@@ -149,9 +150,8 @@ impl CombatController {
                                             message: PlayerTurn(encounter.whos_turn()), sender: (combatant_id.to_string(), sender)
                                         }).await.unwrap();
                                     } else {
-                                        info!("battle done, sending winner message");
+                                        info!("Battle is over, we got a winner");
                                         let encounter_id = encounter.get_id().clone();
-                                        // drop(encounter); // Drop the lock before sending the message.
                                         let controller_sender = controller_sender.clone();
                                             controller_sender.clone()
                                                 .try_send(ControllerMessage::CleanupEncounter { encounter_id })
@@ -285,7 +285,7 @@ impl CombatController {
                     let sender = sender.clone();
                     tokio::spawn(async move {
                         match rx.await {
-                            Ok(x) => {
+                            Ok(_) => {
                                 sender
                                     .try_send(ControllerMessage::RemoveEncounter {
                                         encounter_id: encounter_id.clone(),
@@ -303,8 +303,13 @@ impl CombatController {
                     self.encounters
                         .insert(encounter_id, Arc::new(Mutex::new(encounter)));
                 }
-                ControllerMessage::CreateNpcEncounter { hero, npc } => {
-                    let encounter = CombatEncounter::new(hero, npc);
+                ControllerMessage::CreateNpcEncounter {
+                    hero,
+                    npc,
+                    action_id,
+                } => {
+                    let mut encounter = CombatEncounter::new(hero, npc);
+                    encounter.set_action_id(action_id);
                     self.add_encounter(encounter);
                 }
                 ControllerMessage::AddDecisionMaker {

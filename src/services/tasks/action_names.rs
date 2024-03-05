@@ -1,52 +1,37 @@
+use std::convert::TryFrom;
+
+use anyhow::Result;
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::mpsc::Sender;
+use tokio::sync::oneshot;
 
 use crate::{
     configuration::ChannelDurations,
     events::game::{ChannelResult, ExploreResult, QuestResult},
     models::{quest::Quest, region::RegionName},
 };
-
-use crate::services::impls::combat_service::{CombatController, ControllerMessage};
-use anyhow::Result;
-use tokio::sync::mpsc::Sender;
+use crate::events::game::RaidResult;
+use crate::services::impls::combat_service::ControllerMessage;
 
 use super::{channel::ChannelingAction, explore::ExploreAction, off_beat_actions::OffBeatActions};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Display)]
 pub enum ActionNames {
     Explore,
     Channel,
-    FightNpc,
     Quest,
     Raid,
     Unique(OffBeatActions),
 }
 
 impl ActionNames {
-    pub fn to_string(&self) -> String {
-        match self {
-            ActionNames::Explore => "Explore".to_string(),
-            ActionNames::Channel => "Channel".to_string(),
-            ActionNames::Quest => "Quest".to_string(),
-            ActionNames::Raid => "Raid".to_string(),
-            ActionNames::FightNpc => "FightNpc".to_string(),
-
-            ActionNames::Unique(x) => match x {
-                OffBeatActions::SlayDragonQuest => "SlayDragonQuest".to_string(),
-                _ => unreachable!(),
-            },
-        }
-    }
-
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "Explore" => Some(ActionNames::Explore),
             "Channel" => Some(ActionNames::Channel),
             "Quest" => Some(ActionNames::Quest),
             "Raid" => Some(ActionNames::Raid),
-            "FightNpc" => Some(ActionNames::FightNpc),
             // Add other cases as needed
             _ => None,
         }
@@ -58,7 +43,20 @@ impl ActionNames {
             "Channel" => ActionNames::Channel,
             "Quest" => ActionNames::Quest,
             "Raid" => ActionNames::Raid,
-            _ => unreachable!(),
+            _ => {
+                panic!("Invalid string for ActionNames: {}", action_name);
+            }
+        }
+    }
+}
+
+impl TryFrom<String> for ActionNames {
+    type Error = String; // Or define a more specific error type
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match ActionNames::from_str(&value) {
+            Some(action_name) => Ok(action_name),
+            None => Err(format!("Invalid string for ActionNames: {}", value)),
         }
     }
 }
@@ -128,6 +126,7 @@ pub enum TaskLootBox {
     Region(ExploreResult),
     Channel(ChannelResult),
     Quest(QuestResult),
+    Raid(RaidResult),
 }
 
 impl TaskLootBox {
@@ -136,6 +135,7 @@ impl TaskLootBox {
             TaskLootBox::Region(_) => "explore-lootbox".to_string(),
             TaskLootBox::Channel(_) => "channel-lootbox".to_string(),
             TaskLootBox::Quest(_) => "quest-lootbox".to_string(),
+            TaskLootBox::Raid(_) => "raid-lootbox".to_string(),
         }
     }
 }

@@ -6,7 +6,9 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::info;
 
 use crate::events::combat::{CombatantIndex, CombatTurnMessage};
+use crate::messenger::MESSENGER;
 use crate::services::impls::combat_service::CombatCommand;
+use crate::services::tasks::action_names::Command;
 use crate::services::traits::combat_decision_maker::DecisionMaker;
 
 #[derive(Debug)]
@@ -21,10 +23,11 @@ pub struct PlayerDecisionMaker {
     shutdown_signal: Option<oneshot::Receiver<()>>,
     shutdown_trigger: Option<oneshot::Sender<()>>,
     command_receiver_shutdown: Arc<AtomicBool>,
+    action_id: Option<String>,
 }
 
 impl PlayerDecisionMaker {
-    pub fn new(id: String, to_ws_tx: Sender<CombatTurnMessage>) -> Self {
+    pub fn new(id: String, to_ws_tx: Sender<CombatTurnMessage>, action_id: Option<String>) -> Self {
         let (shutdown_trigger, shutdown_signal) = oneshot::channel();
 
         let instance = Self {
@@ -37,6 +40,7 @@ impl PlayerDecisionMaker {
             shutdown_signal: Some(shutdown_signal),
             shutdown_trigger: Some(shutdown_trigger),
             command_receiver_shutdown: Arc::new(AtomicBool::new(false)),
+            action_id,
         };
 
         instance
@@ -62,7 +66,6 @@ impl PlayerDecisionMaker {
                                 break;
                             }
                         } else {
-                            // Channel closed, also a good point to exit
                             break;
                         }
                     },
@@ -102,20 +105,35 @@ impl DecisionMaker for PlayerDecisionMaker {
         self.start_listening_for_commands();
         self.notify_from_ws_tx_set.notify_one();
 
-        let (command_sender, result_receiver) = mpsc::channel(10);
+        let (command_sender, mut result_receiver): (
+            Sender<CombatTurnMessage>,
+            Receiver<CombatTurnMessage>,
+        ) = mpsc::channel(10);
 
         let to_ws_tx = self.to_ws_tx.clone();
 
+        let player_idx = self.player_idx.clone();
+        let action_id = self.action_id.clone();
+        let id = self.id.clone();
         tokio::spawn(async move {
-            let mut result_receiver = result_receiver;
             tokio::select! {
                 _ = shutdown_signal => {
                     info!("Shutting down decision maker for player.");
                 },
                 _ = async {
                     while let Some(result) = result_receiver.recv().await {
+                    let id = id.clone();
+
                         let to_ws_tx = to_ws_tx.clone();
-                        to_ws_tx.send(result).await.unwrap();
+
+                        to_ws_tx.send(result.clone()).await.unwrap();
+                          if let CombatTurnMessage::Winner(idx) = &result {
+
+                            if *idx == player_idx && action_id.is_some(){
+                               MESSENGER.send(Command::QuestActionDone(id,action_id.clone().unwrap()));
+                                info!("Player has won the game.");
+                            }
+                        }
                     }
                 } => {}
             }

@@ -1,15 +1,19 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use actix::prelude::*;
-use actix_web::{Error, get, HttpRequest, HttpResponse, web};
 use actix_web::web::{Data, Query};
+use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, Mutex, Notify, oneshot};
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tracing::{error, info};
 
+use crate::events::combat::{CombatEncounter, CombatError, CombatantIndex};
+use crate::jsontoken::decode_token;
+use crate::models::player_decision_maker::PlayerDecisionMaker;
+use crate::services::impls::combat_service::ControllerMessage;
 use crate::{
     events::combat::CombatTurnMessage,
     services::{
@@ -18,10 +22,6 @@ use crate::{
     // ... Other imports relevant to your combat system
     webserver::AppState,
 };
-use crate::events::combat::{CombatantIndex, CombatEncounter, CombatError};
-use crate::jsontoken::decode_token;
-use crate::models::player_decision_maker::PlayerDecisionMaker;
-use crate::services::impls::combat_service::ControllerMessage;
 
 #[derive(Deserialize)]
 pub struct WsQueryParams {
@@ -52,6 +52,7 @@ pub async fn combat_ws(
         combatant_id: combatant_id.clone(),
         tx,
     };
+
     app_state
         .combat_tx
         .send(msg)
@@ -65,7 +66,6 @@ pub async fn combat_ws(
     // Await the response from the combat controller
     match rx.await {
         Ok(state) => {
-            info!("starting combat websocket anyway....");
             if let Some(state) = state {
                 ws::start(
                     CombatSocket::new(combatant_id, Arc::new(Mutex::new(app_state)), state),
@@ -125,7 +125,13 @@ impl Actor for CombatSocket {
     fn started(&mut self, ctx: &mut Self::Context) {
         let (ws_sender, mut ws_receiver) = mpsc::channel(10);
 
-        let decision_maker = PlayerDecisionMaker::new(self.combatant_id.clone(), ws_sender);
+        let decision_maker = PlayerDecisionMaker::new(
+            self.combatant_id.clone(),
+            ws_sender,
+            self.encounter_state
+                .as_ref()
+                .and_then(|state| state.action_id.clone()),
+        );
         let notify_handle = decision_maker.notify_from_ws_tx_set.clone();
 
         let decision_maker_arc = Arc::new(Mutex::new(decision_maker));
@@ -134,7 +140,6 @@ impl Actor for CombatSocket {
         let id = self.combatant_id.clone();
 
         let addr = ctx.address();
-        // let decision_maker_clone = decision_maker.clone();
 
         let decision_maker_clone = decision_maker_arc.clone();
         ctx.spawn(fut::wrap_future(async move {
@@ -142,7 +147,6 @@ impl Actor for CombatSocket {
             let state = app_state.lock().await;
             let (sender, _) = oneshot::channel();
             let tx = state.combat_tx.clone();
-            // let mut decision_maker = decision_maker_clone.lock().await;
 
             let message = ControllerMessage::Combat((
                 CombatCommand::EnterBattle(Some(decision_maker)),
@@ -150,7 +154,6 @@ impl Actor for CombatSocket {
                 sender,
             ));
             let _ = tx.send(message).await;
-            //make sure controller sets its sender
             notify_handle.notified().await;
 
             let decision_maker_clone = decision_maker_clone.lock().await;
@@ -213,10 +216,6 @@ impl Message for SetWsToPlayerDecisionMakerTx {
 impl Handler<CombatTurnMessage> for CombatSocket {
     type Result = ();
     fn handle(&mut self, msg: CombatTurnMessage, ctx: &mut Self::Context) -> Self::Result {
-        info!(
-            "received combat turn message, serializeing and sending to client {:?}",
-            msg
-        );
         let serialized = serde_json::to_string(&CombatSocketMessage::Update(msg)).unwrap();
         ctx.text(serialized);
     }
@@ -252,8 +251,5 @@ impl CombatSocket {
                 tx.send(command).await.unwrap();
             }
         });
-
-        // 2. Assuming results come back to you eventually on an appropriate channel you receive a CombatTurnMessage
-        // self.send_update(CombatTurnMessage, ctx); // Adjust how you receive results
     }
 }

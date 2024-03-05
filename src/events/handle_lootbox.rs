@@ -1,32 +1,56 @@
 use std::collections::HashMap;
 
-use crate::events::game::ActionCompleted;
-use crate::logger::Logger;
-use crate::models::quest::Quest;
-use crate::repos::helpers::update_hero_db;
-use crate::services::tasks::action_names::{ActionNames, TaskAction, TaskLootBox};
-use crate::services::tasks::explore::round;
-use crate::services::traits::async_task::Task;
+use anyhow::Result;
+use prisma_client_rust::chrono;
+use prisma_client_rust::chrono::DateTime;
+use rand::Rng;
+use serde_json::json;
+use tracing::{error, info};
+
+use TaskLootBox::*;
+
 use crate::{
     infra::Infra,
     models::resources::Resource,
     services::tasks::{channel::ChannelingAction, explore::ExploreAction},
 };
-use anyhow::Result;
-use prisma_client_rust::chrono;
-use rand::Rng;
-use serde_json::json;
-use tracing::{error, info};
+use crate::events::game::{ActionCompleted, RaidResult};
+use crate::logger::Logger;
+use crate::models::quest::{Action, Quest};
+use crate::repos::helpers::update_hero_db;
+use crate::services::tasks::action_names::{ActionNames, TaskAction, TaskLootBox};
+use crate::services::tasks::explore::round;
+use crate::services::traits::async_task::Task;
 
-use super::game::QuestResult;
 use super::game::{ChannelResult, ExploreResult};
-
-use TaskLootBox::*;
+use super::game::QuestResult;
 
 #[derive(Clone, Debug)]
 pub struct LootBoxHandler {}
 
 impl LootBoxHandler {
+    pub async fn create_lootbox_quest_action(quest_action: TaskAction) {
+        match quest_action {
+            TaskAction::QuestAction(hero_id, action_id) => {
+                let action = Infra::repo().get_action_by_id(&action_id).await.unwrap();
+                let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+                let lootbox = match action.generate_loot_box(Some(hero_id)) {
+                    Ok(loot_box) => loot_box,
+                    Err(err) => {
+                        error!("Error generating lootbox: {}", err);
+                        return;
+                    }
+                };
+                hero.equip_loot(lootbox.clone());
+                update_hero_db(hero.clone()).await;
+                info!(
+                    "equipped hero with LootBox from questAction {:?}",
+                    lootbox.clone()
+                );
+            }
+            _ => {}
+        }
+    }
     pub async fn create_lootbox_explore(task_action: TaskAction) {
         info!("Creating lootbox for explore action ...");
         let action = match task_action {
@@ -54,7 +78,7 @@ impl LootBoxHandler {
 
         // update hero_region discovery level
 
-        if let TaskLootBox::Region(result) = loot.clone() {
+        if let Region(result) = loot.clone() {
             if let Err(e) = Infra::repo()
                 .update_hero_region_discovery_level(
                     &hero_id,
@@ -166,7 +190,7 @@ impl Default for TaskLootBox {
 impl TaskLootBox {
     pub fn new() -> Self {
         //return a RegionActionResult
-        TaskLootBox::Region(ExploreResult {
+        Region(ExploreResult {
             hero_id: "hero_id".to_string(),
             resources: HashMap::new(),
             xp: 0,
@@ -232,6 +256,38 @@ impl LootBoxGenerator<f64> for ExploreAction {
         };
 
         Ok(TaskLootBox::Region(result))
+    }
+}
+// a static constant variable that maps npc monster's level to amount of valor resource to give, lvl 1-10 of monster, each level gives 35% more valor than previous  starting with 8
+const VALOR: [i32; 10] = [8, 11, 15, 20, 27, 36, 49, 66, 89, 120];
+impl GeneratesResources<()> for Action {
+    fn generate_resources(&self, _: Option<()>) -> HashMap<Resource, i32> {
+        let npc_level = self.npc.as_ref().unwrap().level;
+        if let ActionNames::Raid = self.name {
+            let valor = VALOR[npc_level as usize - 1];
+            let mut res = HashMap::new();
+            res.insert(Resource::Valor, valor);
+            return res;
+        }
+        let mut res = HashMap::new();
+        res
+    }
+}
+
+const XP_GIVEN_BY_NPC: [i32; 10] = [10, 15, 20, 30, 45, 65, 90, 120, 155, 200];
+impl LootBoxGenerator<String> for Action {
+    fn generate_loot_box(&self, hero_id: Option<String>) -> Result<TaskLootBox> {
+        let resources = self.generate_resources(None);
+        let level = self.npc.as_ref().unwrap().level as usize - 1;
+        let id = self.id.as_ref().unwrap().clone();
+        Ok(Raid(RaidResult {
+            hero_id: hero_id.unwrap(),
+            xp: XP_GIVEN_BY_NPC[level],
+            resources,
+            created_time: Some(DateTime::from(chrono::offset::Utc::now())),
+            action_id: id,
+        }))
+        // Ok()
     }
 }
 

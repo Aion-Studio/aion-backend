@@ -338,7 +338,7 @@ impl Repo {
                 .prisma
                 .action()
                 .find_first(vec![
-                    action::name::equals(action.name.clone()),
+                    action::name::equals(action.name.to_string().clone()),
                     action::region_name::equals(action.region_name.to_str()),
                 ])
                 .exec()
@@ -352,7 +352,7 @@ impl Repo {
                         .prisma
                         .action()
                         .create(
-                            action.name,
+                            action.name.to_string(),
                             region::name::equals(action.region_name.to_str()),
                             vec![action::description::set(action.description)],
                         )
@@ -640,6 +640,7 @@ impl Repo {
             .action()
             .find_unique(action::UniqueWhereParam::IdEquals(String::from(action_id)))
             .with(action::quest::fetch())
+            .with(action::npc::fetch())
             .exec()
             .await?;
 
@@ -711,6 +712,12 @@ impl Repo {
                 TaskLootBox::Quest(result) => {
                     json!({
                         "actionName": "Quest",
+                        "result": result
+                    })
+                }
+                TaskLootBox::Raid(result) => {
+                    json!({
+                        "actionName": "Raid",
                         "result": result
                     })
                 }
