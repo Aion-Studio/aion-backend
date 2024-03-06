@@ -1,17 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{
-    events::{
-        dispatcher::{EventDispatcher, EventHandler},
-        game::GameEvent,
-    },
-    repos::repo::Repo,
-    services::impls::tasks::TaskManager,
-};
 use lazy_static::lazy_static;
 
+use crate::{repos::repo::Repo, services::impls::tasks::TaskManager};
+
 pub struct Infrastructure {
-    dispatcher: EventDispatcher,
     repo: Arc<Repo>,
     tasks: Arc<TaskManager>, // Add the TaskManager here
 }
@@ -20,28 +13,9 @@ impl Infrastructure {
     fn new() -> Self {
         let repo = Arc::new(Repo::new());
 
-        let dispatcher = EventDispatcher::new();
         let tasks = Arc::new(TaskManager::new());
 
-        Infrastructure {
-            tasks,
-            dispatcher,
-            repo,
-        }
-    }
-
-    pub fn dispatch(&self, args: GameEvent) {
-        // Implement the dispatch logic here
-        self.dispatcher.dispatch(args);
-    }
-
-    pub fn subscribe<E: EventHandler + 'static + Send + Sync>(
-        &mut self,
-        event_name: &str,
-        handler: E,
-    ) {
-        let arc_handler = Arc::new(handler);
-        self.dispatcher.subscribe(event_name, arc_handler);
+        Infrastructure { tasks, repo }
     }
 
     pub fn repo(&self) -> Arc<Repo> {
@@ -77,31 +51,11 @@ impl Infra {
         }
     }
 
-    pub fn dispatch(args: GameEvent) {
-        let instance = Self::instance();
-        let mut infra_guard = instance.lock().unwrap();
-        if let Some(infra) = &mut *infra_guard {
-            infra.dispatch(args);
-        } else {
-            panic!("Infrastructure not initialized!");
-        }
-    }
-
     pub fn repo() -> Arc<Repo> {
         let instance = Self::instance();
         let infra_guard = instance.lock().unwrap();
         if let Some(infra) = &*infra_guard {
             infra.repo()
-        } else {
-            panic!("Infrastructure not initialized!");
-        }
-    }
-
-    pub fn subscribe(event_name: &str, handler: Arc<dyn EventHandler + Send + Sync>) {
-        let instance = Self::instance();
-        let mut infra_guard = instance.lock().unwrap();
-        if let Some(infra) = &mut *infra_guard {
-            infra.dispatcher.subscribe(event_name, handler);
         } else {
             panic!("Infrastructure not initialized!");
         }

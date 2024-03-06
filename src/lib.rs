@@ -41,7 +41,6 @@ mod repos {
 
 mod events {
     pub mod combat;
-    pub mod dispatcher;
     pub mod game;
     pub mod handle_channeling;
     pub mod handle_costs;
@@ -65,7 +64,6 @@ mod services {
         pub mod async_task;
         pub mod combat_decision_maker;
         pub mod hero_service;
-        pub mod scheduler;
     }
     pub mod tasks {
         pub mod action_names;

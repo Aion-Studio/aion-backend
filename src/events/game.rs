@@ -27,60 +27,6 @@ where
     pub name: String,
     pub data: T,
 }
-// {name: "HeroExplores", }
-
-#[derive(Debug, Clone, Serialize)]
-pub enum GameEvent {
-    HeroExplores(ExploreAction),
-    ExploreCompleted(ExploreAction),
-    LootBoxCreated(TaskLootBox),
-    Channeling(ChannelingAction),
-    ChannelingCompleted(ChannelingAction),
-    QuestAction(String, String),
-    QuestActionDone(String),
-    QuestComplete(String, Quest),
-}
-
-impl GameEvent {
-    pub fn hero_explores() -> &'static str {
-        "HeroExplores"
-    }
-    pub fn explore_completed() -> &'static str {
-        "ExploreCompleted"
-    }
-
-    pub fn quest_action() -> &'static str {
-        "QuestAction"
-    }
-
-    pub fn channeling() -> &'static str {
-        "Channeling"
-    }
-    pub fn channeling_completed() -> &'static str {
-        "ChannelingCompleted"
-    }
-
-    pub fn quest_action_done() -> &'static str {
-        "QuestActionDone"
-    }
-
-    pub fn quest_complete() -> &'static str {
-        "QuestComplete"
-    }
-
-    pub fn name(&self) -> String {
-        match self {
-            GameEvent::HeroExplores { .. } => "HeroExplores".to_string(),
-            GameEvent::ExploreCompleted { .. } => "ExploreCompleted".to_string(),
-            GameEvent::LootBoxCreated { .. } => "LootBoxCreated".to_string(),
-            GameEvent::Channeling { .. } => "Channeling".to_string(),
-            GameEvent::ChannelingCompleted { .. } => "ChannelingCompleted".to_string(),
-            GameEvent::QuestAction { .. } => "QuestAction".to_string(),
-            GameEvent::QuestActionDone { .. } => "QuestActionDone".to_string(),
-            GameEvent::QuestComplete { .. } => "QuestComplete".to_string(),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct ChannelResult {
