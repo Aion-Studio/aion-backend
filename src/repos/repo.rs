@@ -22,10 +22,13 @@ use crate::{
     },
     types::RepoFuture,
 };
+use crate::models::cards::Card;
 use crate::models::hero::{Attributes, BaseStats, convert_to_fixed_offset};
 use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
-use crate::prisma::{action, hero_actions, hero_quests, npc, quest, resource_type, ResourceEnum};
+use crate::prisma::{
+    action, card, hero_actions, hero_quests, npc, quest, resource_type, ResourceEnum,
+};
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::services::tasks::explore::ExploreAction;
 use crate::utils::merge;
@@ -171,6 +174,7 @@ impl Repo {
             )
             .exec()
             .await?;
+
         match hero {
             Some(hero) => Ok(hero.into()),
             None => Err(QueryError::Serialize(format!(
@@ -1028,6 +1032,29 @@ impl Repo {
         result.map_err(|e| QueryError::Serialize(e.to_string()))
     }
 
+    pub async fn add_card_to_game(&self, card: Card) -> Result<Card, QueryError> {
+        let card = self
+            .prisma
+            .card()
+            .create(
+                card.name,
+                card.nation.into(),
+                card.rarity.into(),
+                card.mana_cost,
+                card.health,
+                card.tier,
+                card.damage,
+                card.card_type.into(),
+                vec![card::img_url::set(card.img_url)],
+            )
+            .exec()
+            .await;
+        match card {
+            Ok(card) => Ok(card.into()),
+            Err(e) => Err(QueryError::Serialize(e.to_string())),
+        }
+    }
+
     pub async fn get_npc_by_action_id(&self, action_id: &str) -> Result<Monster, QueryError> {
         let npc = self
             .prisma
@@ -1045,9 +1072,7 @@ impl Repo {
     }
 }
 
-fn attributes_update_params(
-    attributes: &crate::models::hero::Attributes,
-) -> Vec<attributes::SetParam> {
+fn attributes_update_params(attributes: &Attributes) -> Vec<attributes::SetParam> {
     vec![
         attributes::strength::set(attributes.strength),
         attributes::resilience::set(attributes.resilience),

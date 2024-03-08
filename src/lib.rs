@@ -1,4 +1,6 @@
 // pub mod authentication;
+#![recursion_limit = "256"]
+
 pub mod configuration;
 // pub mod idempotency;
 // pub mod routes;
@@ -28,6 +30,8 @@ mod models {
     pub mod region;
     pub mod resources;
     pub mod talent;
+
+    pub mod cards;
 }
 
 mod repos {

@@ -17,6 +17,7 @@ use crate::{
 };
 use crate::events::game::ActionDurations;
 use crate::infra::Infra;
+use crate::models::cards::Deck;
 use crate::prisma::ResourceEnum;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 
@@ -43,6 +44,7 @@ pub struct Hero {
     pub stamina_regen_rate: i32,
     pub last_stamina_regeneration_time: Option<DateTime<Utc>>, // Add this
     pub talents: Vec<Talent>,
+    pub deck: Option<Deck>,
 }
 
 // methods to only update the model struct based on some calculation
@@ -67,6 +69,7 @@ impl Hero {
             stamina_regen_rate: 1,
             last_stamina_regeneration_time: None,
             talents: vec![],
+            deck: None,
         }
     }
 
@@ -495,6 +498,8 @@ impl From<hero::Data> for Hero {
             HashMap::new()
         };
 
+        let deck = data.deck.and_then(|data| data).map(|boxed| (*boxed).into());
+
         Self {
             id: Some(data.id),
             name: data.name,
@@ -512,6 +517,7 @@ impl From<hero::Data> for Hero {
                 Some(talents) => talents.into_iter().map(Talent::from).collect(),
                 None => vec![],
             },
+            deck,
         }
     }
 }

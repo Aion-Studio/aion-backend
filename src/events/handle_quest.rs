@@ -2,21 +2,19 @@ use std::sync::Arc;
 
 use futures::TryFutureExt;
 use serde_json::json;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::{oneshot, RwLock};
-use tracing::warn;
+use tokio::sync::mpsc::Sender;
 use tracing::{info, log::error};
+use tracing::warn;
 
-use crate::events::combat::CombatEncounter;
+use crate::{infra::Infra, models::quest::Quest};
 use crate::jsontoken::create_token;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
-use crate::models::npc::CpuCombatantDecisionMaker;
-use crate::services::impls::combat_service::{CombatController, ControllerMessage};
+use crate::services::impls::combat_service::ControllerMessage;
 use crate::services::tasks::action_names::{
     ActionNames, CmdResponder, Command, Responder, ResponderType,
 };
-use crate::{infra::Infra, models::quest::Quest};
 
 #[derive(Clone, Debug)]
 pub struct QuestHandler {}

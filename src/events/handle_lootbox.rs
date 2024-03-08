@@ -30,25 +30,22 @@ pub struct LootBoxHandler {}
 
 impl LootBoxHandler {
     pub async fn create_lootbox_quest_action(quest_action: TaskAction) {
-        match quest_action {
-            TaskAction::QuestAction(hero_id, action_id) => {
-                let action = Infra::repo().get_action_by_id(&action_id).await.unwrap();
-                let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
-                let lootbox = match action.generate_loot_box(Some(hero_id)) {
-                    Ok(loot_box) => loot_box,
-                    Err(err) => {
-                        error!("Error generating lootbox: {}", err);
-                        return;
-                    }
-                };
-                hero.equip_loot(lootbox.clone());
-                update_hero_db(hero.clone()).await;
-                info!(
-                    "equipped hero with LootBox from questAction {:?}",
-                    lootbox.clone()
-                );
-            }
-            _ => {}
+        if let TaskAction::QuestAction(hero_id, action_id) = quest_action {
+            let action = Infra::repo().get_action_by_id(&action_id).await.unwrap();
+            let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+            let lootbox = match action.generate_loot_box(Some(hero_id)) {
+                Ok(loot_box) => loot_box,
+                Err(err) => {
+                    error!("Error generating lootbox: {}", err);
+                    return;
+                }
+            };
+            hero.equip_loot(lootbox.clone());
+            update_hero_db(hero.clone()).await;
+            info!(
+                "equipped hero with LootBox from questAction {:?}",
+                lootbox.clone()
+            );
         }
     }
     pub async fn create_lootbox_explore(task_action: TaskAction) {
