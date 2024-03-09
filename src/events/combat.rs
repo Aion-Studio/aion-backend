@@ -41,6 +41,7 @@ pub struct CombatEncounter {
     pub combatant2: Arc<Mutex<dyn Combatant>>,
     active_dots: Vec<Dot>,
     current_turn: CombatantIndex,
+    pub round: i32,
     status_effects: HashMap<CombatantId, Vec<Effect>>,
     started: bool,
     initial_hps: (i32, i32), // comb1 and comb2
@@ -205,6 +206,7 @@ impl CombatEncounter {
                     Ok(CombatTurnMessage::CommandPlayed(opponent))
                 }
             }
+            PlayCard(card) => {}
             _ => {
                 todo!()
             }

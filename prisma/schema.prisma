@@ -4,10 +4,10 @@ datasource db {
 }
 
 generator client {
-  provider = "cargo prisma"
+  // provider = "cargo prisma"
   // The location to generate the client. Is relative to the position of the schemaschemour
-  output   = "../src/prisma.rs"
-  // provider = "prisma-client-js"
+  // output   = "../src/prisma.rs"
+  provider = "prisma-client-js"
 }
 
 model Hero {
@@ -271,13 +271,18 @@ model Npc {
   damageMax  Int    @default(0)
   hp         Int    @default(150)
 
-  leyline Leyline? @relation("NpcToLeyline")
-  actions Action[] @relation("ActionToNpc")
+  deck   Deck?   @relation(fields: [deckId], references: [id])
+  deckId String? @unique @default(uuid())
+
+  leyline Leyline?  @relation("NpcToLeyline")
+  actions Action[]  @relation("ActionToNpc")
+  NpcCard NpcCard[]
 }
 
 model Deck {
   id   String @id @default(uuid())
   Hero Hero?
+  Npc  Npc?
 }
 
 model Card {
@@ -298,6 +303,7 @@ model Card {
   DeckCards     DeckCard[]
   SpellEffects  SpellEffect[]
   MinionEffects MinionEffect[]
+  NpcCard       NpcCard[]
 }
 
 enum CardType {
@@ -420,8 +426,7 @@ model ChargeEffect {
 }
 
 model LifestealEffect {
-  id String @id @default(uuid())
-
+  id            String               @id @default(uuid())
   minionEffects MinionEffectEffect[]
 }
 
@@ -444,6 +449,16 @@ model HeroCard {
   card   Card   @relation(fields: [cardId], references: [id])
 
   @@unique([heroId, cardId])
+}
+
+model NpcCard {
+  id     String @id @default(uuid())
+  npcId  String
+  cardId String
+  npc    Npc    @relation(fields: [npcId], references: [id])
+  card   Card   @relation(fields: [cardId], references: [id])
+
+  @@unique([npcId, cardId])
 }
 
 model DeckCard {

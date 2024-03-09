@@ -2,17 +2,17 @@ use std::sync::{Arc, Mutex};
 
 use prisma_client_rust::chrono::{self, DateTime, Duration, Local};
 use rand::Rng;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::ser::{Serialize, Serializer, SerializeStruct};
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::configuration::get_explore_durations;
-use crate::models::hero::{Attributes, BaseStats, Range};
-use crate::models::region::HeroRegion;
 use crate::{
     models::{hero::Hero, region::RegionName},
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
 };
+use crate::configuration::get_explore_durations;
+use crate::models::hero::{Attributes, BaseStats, Range};
+use crate::models::region::HeroRegion;
 
 use super::action_names::ActionNames;
 
@@ -43,8 +43,8 @@ impl Default for ExploreAction {
                     min: rng.gen_range(1..5),
                     max: rng.gen_range(5..10),
                 },
-                hit_points: rng.gen_range(90..110),
-                armor: rng.gen_range(5..15),
+                hit_points: 30,
+                armor: rng.gen_range(0..=10),
             },
             Attributes {
                 id: None,
@@ -178,7 +178,7 @@ impl ExploreAction {
             let randomized_boost = base_boost + random_variation;
 
             // Ensure the boost is within the desired range
-            round(randomized_boost.clamp(min_boost, max_boost),2)
+            round(randomized_boost.clamp(min_boost, max_boost), 2)
         }
     }
 }

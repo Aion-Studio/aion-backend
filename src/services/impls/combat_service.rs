@@ -18,6 +18,7 @@ use crate::{
     services::{tasks::action_names::Responder, traits::combat_decision_maker::DecisionMaker},
 };
 use crate::events::combat::CombatTurnMessage::{PlayerTurn, YourTurn};
+use crate::models::cards::Card;
 use crate::models::hero::Hero;
 use crate::models::npc::{CpuCombatantDecisionMaker, Monster};
 
@@ -222,6 +223,7 @@ impl CombatController {
                         info!("Attacking");
                     }
                     CombatCommand::UseTalent(opponent_id, talent) => {}
+                    _ => {}
                 },
 
                 ControllerMessage::RemoveDecisionMakers { encounter_id, resp } => {
@@ -404,6 +406,7 @@ pub enum CombatCommand {
     EnterBattle(Option<Arc<Mutex<dyn DecisionMaker + Send + Sync>>>),
     Attack,
     UseTalent(String, Talent), // Use a talent: (Talent)
+    PlayCard(Card),
 }
 
 impl Serialize for CombatCommand {
