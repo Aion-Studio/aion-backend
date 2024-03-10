@@ -1,19 +1,15 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use actix::prelude::*;
+use actix_web::{Error, get, HttpRequest, HttpResponse, web};
 use actix_web::web::{Data, Query};
-use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
+use tokio::sync::{mpsc, Mutex, Notify, oneshot};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tracing::{error, info};
 
-use crate::events::combat::{CombatEncounter, CombatError, CombatantIndex};
-use crate::jsontoken::decode_token;
-use crate::models::player_decision_maker::PlayerDecisionMaker;
-use crate::services::impls::combat_service::ControllerMessage;
 use crate::{
     events::combat::CombatTurnMessage,
     services::{
@@ -22,6 +18,12 @@ use crate::{
     // ... Other imports relevant to your combat system
     webserver::AppState,
 };
+use crate::events::combat::{CombatantIndex, CombatEncounter, CombatError};
+use crate::jsontoken::decode_token;
+use crate::models::cards::Card;
+use crate::models::combatant::Combatant;
+use crate::models::player_decision_maker::PlayerDecisionMaker;
+use crate::services::impls::combat_service::ControllerMessage;
 
 #[derive(Deserialize)]
 pub struct WsQueryParams {
@@ -66,9 +68,13 @@ pub async fn combat_ws(
     // Await the response from the combat controller
     match rx.await {
         Ok(state) => {
-            if let Some(state) = state {
+            if let Some(turn) = state.0 {
                 ws::start(
-                    CombatSocket::new(combatant_id, Arc::new(Mutex::new(app_state)), state),
+                    CombatSocket::new(
+                        combatant_id,
+                        Arc::new(Mutex::new(app_state)),
+                        (turn, state.1),
+                    ),
                     &req,
                     stream,
                 )
@@ -89,11 +95,22 @@ enum CombatSocketMessage {
 }
 
 #[derive(Clone)]
+enum EncounterState {
+    Combat {
+        me: Arc<std::sync::Mutex<dyn Combatant>>,
+        turn: CombatantIndex,
+        my_battle_field: Vec<Card>,
+        opponent_battle_field: Vec<Card>,
+        opponent_hp: i32,
+        action_id: Option<String>, // Option if its a quest action
+    },
+}
+#[derive(Clone)]
 pub struct CombatSocket {
     combatant_id: String,
     app_state: Arc<Mutex<AppState>>,
     // Shared state to access CombatController potentially
-    encounter_state: Option<CombatEncounter>,
+    encounter_state: (CombatTurnMessage, Option<String>),
     ws_to_player_decision_maker_tx: Option<Sender<CombatCommand>>,
 }
 
@@ -101,19 +118,13 @@ impl CombatSocket {
     pub fn new(
         combatant_id: String,
         app_state: Arc<Mutex<AppState>>,
-        turn_result: CombatTurnMessage,
+        state: (CombatTurnMessage, Option<String>),
     ) -> Self {
         // if turn result is a CombatTurnMessage::EncounterState
-        // set the encounter state to Some(encounter_state)
-        let encounter_state = match turn_result {
-            CombatTurnMessage::EncounterState(state, ..) => Some(state),
-            _ => None,
-        };
-
         CombatSocket {
             combatant_id,
             app_state,
-            encounter_state,
+            encounter_state: state,
             ws_to_player_decision_maker_tx: None,
         }
     }
@@ -128,9 +139,7 @@ impl Actor for CombatSocket {
         let decision_maker = PlayerDecisionMaker::new(
             self.combatant_id.clone(),
             ws_sender,
-            self.encounter_state
-                .as_ref()
-                .and_then(|state| state.action_id.clone()),
+            self.encounter_state.1.clone(),
         );
         let notify_handle = decision_maker.notify_from_ws_tx_set.clone();
 
@@ -171,16 +180,29 @@ impl Actor for CombatSocket {
             }
         });
 
-        let id = self.combatant_id.clone();
+        // let id = self.combatant_id.clone();
         // 2. (Optional) Retrieve initial combat state if the encounter's already begun
-        if let Some(state) = self.encounter_state.clone() {
-            ctx.text(
-                serde_json::to_string(&CombatSocketMessage::Update(
-                    CombatTurnMessage::EncounterState(state, id),
-                ))
+        ctx.text(
+            serde_json::to_string(&CombatSocketMessage::Update(self.encounter_state.0.clone()))
                 .unwrap(),
-            );
-        }
+        );
+        // match self.encounter_state.0 {
+        //     CombatTurnMessage::PlayerState {
+        //         me,
+        //         turn,
+        //         my_battle_field,
+        //         opponent_battle_field,
+        //         opponent_hp,
+        //     } => {
+        //         ctx.text(
+        //             serde_json::to_string(&CombatSocketMessage::Update(
+        //
+        //             ))
+        //                 .unwrap(),
+        //         );
+        //     }
+        //
+        // }
     }
 
     fn stopped(&mut self, _ctx: &mut Self::Context) {

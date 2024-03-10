@@ -339,7 +339,7 @@ pub async fn get_hero_status(
             let is_in_combat = match rx.await {
                 Ok(res) => {
                     info!("is in combat yes");
-                    res.is_some()
+                    res.0.is_some()
                 }
                 Err(e) => {
                     info!("Error getting combat state: {}", e);

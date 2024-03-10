@@ -4,20 +4,23 @@ use std::sync::{Arc, Mutex};
 
 use actix::Message;
 use prisma_client_rust::chrono::{DateTime, Local};
-use serde::ser::SerializeMap;
 use serde::{
     de::{EnumAccess, VariantAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
+use serde::ser::SerializeMap;
 use serde_json::json;
 use tracing::log::info;
+use tracing::warn;
 
-use crate::events::combat::CombatantIndex::Combatant1;
-use crate::models::talent::{Effect, Talent};
 use crate::{
     models::{combatant::Combatant, hero::Hero, npc::Monster},
     services::impls::combat_service::CombatCommand,
 };
+use crate::events::combat::CombatantIndex::Combatant1;
+use crate::models::cards::Card;
+use crate::models::hero_combatant::HeroCombatant;
+use crate::models::talent::{Effect, Talent};
 
 // Damage over time
 #[derive(Debug, Clone)]
@@ -28,7 +31,7 @@ pub struct Dot {
     target: CombatantIndex, // Our enhancement
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub enum CombatantIndex {
     Combatant1,
     Combatant2,
@@ -39,29 +42,32 @@ pub struct CombatEncounter {
     id: String,
     pub combatant1: Arc<Mutex<dyn Combatant>>,
     pub combatant2: Arc<Mutex<dyn Combatant>>,
+    pub battle_fields: HashMap<CombatantIndex, Vec<Card>>,
+    pub round: i32,
+    pub action_id: Option<String>,
     active_dots: Vec<Dot>,
     current_turn: CombatantIndex,
-    pub round: i32,
     status_effects: HashMap<CombatantId, Vec<Effect>>,
     started: bool,
     initial_hps: (i32, i32), // comb1 and comb2
-    pub action_id: Option<String>,
 }
 
 impl CombatEncounter {
-    pub fn new<T: Combatant + 'static>(hero: Hero, monster: T) -> Self {
+    pub fn new<T: Combatant + 'static>(hero: HeroCombatant, monster: T) -> Self {
         let hero_hp = hero.get_hp();
         let monster_hp = monster.get_hp();
         CombatEncounter {
             id: uuid::Uuid::new_v4().to_string(),
             combatant1: Arc::new(Mutex::new(hero)),
             combatant2: Arc::new(Mutex::new(monster)), // Box the generic monster
+            battle_fields: HashMap::new(),
             active_dots: Vec::new(),
             status_effects: HashMap::new(),
             current_turn: Combatant1,
             started: false,
             initial_hps: (hero_hp, monster_hp),
             action_id: None,
+            round: 1,
         }
     }
     pub fn set_action_id(&mut self, action_id: String) {
@@ -177,6 +183,32 @@ impl CombatEncounter {
         self.current_turn.clone()
     }
 
+    fn shuffle_cards(&mut self, combatant: CombatantIndex) {
+        let combatant_arc_mutex = self.get_combatant(combatant, None); // This creates a longer-lived value
+        let mut combatant = combatant_arc_mutex.lock().unwrap();
+        combatant.shuffle_deck();
+    }
+
+    // shuffles deck and draws 5 cards
+    pub fn initialize(&self, combatant_id: &str) -> anyhow::Result<()> {
+        let combatant = self.get_combatant_by_id(combatant_id).unwrap();
+        let mut locked = combatant.lock().unwrap();
+        if locked.get_hand().is_empty() {
+            locked.shuffle_deck();
+            locked.draw_cards(5);
+        }
+        Ok(())
+    }
+
+    pub fn request_state(&self) -> EncounterState {
+        EncounterState {
+            combatant_1: self.combatant1.lock().unwrap().clone_box(),
+            combatant_2: self.combatant2.lock().unwrap().clone_box(),
+            battle_fields: self.battle_fields.clone(),
+            turn: self.current_turn.clone(),
+        }
+    }
+
     pub fn process_combat_turn(
         &mut self,
         cmd: CombatCommand,
@@ -190,7 +222,7 @@ impl CombatEncounter {
         if !is_valid_turn {
             return Err(CombatError::OutOfTurnAction);
         }
-        let result = match cmd {
+        let result = match cmd.clone() {
             Attack => {
                 self.apply_dots();
                 let current_attacker = self.get_current_turn();
@@ -203,10 +235,14 @@ impl CombatEncounter {
                 if opponent.get_hp() <= 0 {
                     Ok(CombatTurnMessage::Winner(current_attacker))
                 } else {
-                    Ok(CombatTurnMessage::CommandPlayed(opponent))
+                    Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
                 }
             }
-            PlayCard(card) => {}
+            PlayCards(card) => {
+                info!("Playing card: {:?}", card);
+                // add logic here for card effects
+                Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
+            }
             _ => {
                 todo!()
             }
@@ -222,6 +258,32 @@ impl CombatEncounter {
     }
 }
 
+#[derive(Debug)]
+pub enum CombatTurnMessage {
+    CommandPlayed(CombatCommand),
+    // Command played , result of the defender
+    PlayerTurn(CombatantIndex),
+    YourTurn(Box<dyn Combatant>), // only sent to the next turn player to show him cooldowns
+    Winner(CombatantIndex),
+    PlayerState {
+        me: Box<dyn Combatant>,
+        turn: CombatantIndex,
+        my_battle_field: Vec<Card>,
+        opponent_battle_field: Vec<Card>,
+        opponent_hp: i32,
+    },
+    EncounterState(EncounterState), // Requested state
+    EncounterStarted,
+}
+
+#[derive(Debug)]
+pub struct EncounterState {
+    pub turn: CombatantIndex,
+    pub battle_fields: HashMap<CombatantIndex, Vec<Card>>,
+    pub combatant_1: Box<dyn Combatant>,
+    pub combatant_2: Box<dyn Combatant>,
+}
+
 impl Clone for CombatEncounter {
     fn clone(&self) -> Self {
         CombatEncounter {
@@ -234,6 +296,8 @@ impl Clone for CombatEncounter {
             status_effects: self.status_effects.clone(),
             initial_hps: self.initial_hps,
             action_id: self.action_id.clone(),
+            round: self.round,
+            battle_fields: self.battle_fields.clone(),
         }
     }
 }
@@ -242,35 +306,39 @@ impl Clone for CombatEncounter {
 #[serde(untagged)]
 enum CombatantData {
     Monster(Monster),
-    Hero(Hero),
-}
-
-#[derive(Debug)]
-pub enum CombatTurnMessage {
-    CommandPlayed(Box<dyn Combatant>),
-    // Command played , result of the defender
-    PlayerTurn(CombatantIndex),
-    YourTurn(Box<dyn Combatant>), // only sent to the next turn player to show him cooldowns
-    Winner(CombatantIndex),
-    // Potentially, if your rules allow for ties
-    EncounterState(CombatEncounter, String), // id of combatant requesting state
-    EncounterStarted,
+    Hero(HeroCombatant),
 }
 
 impl Clone for CombatTurnMessage {
     fn clone(&self) -> Self {
         match self {
-            CombatTurnMessage::CommandPlayed(combatant) => {
-                CombatTurnMessage::CommandPlayed(combatant.clone_box())
-            }
+            CombatTurnMessage::CommandPlayed(cmd) => CombatTurnMessage::CommandPlayed(cmd.clone()),
             CombatTurnMessage::YourTurn(combatant) => {
                 CombatTurnMessage::YourTurn(combatant.clone_box())
             }
             CombatTurnMessage::PlayerTurn(index) => CombatTurnMessage::PlayerTurn(index.clone()),
             CombatTurnMessage::Winner(idx) => CombatTurnMessage::Winner(idx.clone()),
-            CombatTurnMessage::EncounterState(encounter, id) => {
-                CombatTurnMessage::EncounterState(encounter.clone(), id.clone())
+            CombatTurnMessage::EncounterState(state) => {
+                CombatTurnMessage::EncounterState(EncounterState {
+                    turn: state.turn.clone(),
+                    battle_fields: state.battle_fields.clone(),
+                    combatant_1: state.combatant_1.clone_box(),
+                    combatant_2: state.combatant_2.clone_box(),
+                })
             }
+            CombatTurnMessage::PlayerState {
+                me,
+                turn,
+                my_battle_field,
+                opponent_battle_field,
+                opponent_hp,
+            } => CombatTurnMessage::PlayerState {
+                me: me.clone_box(),
+                turn: turn.clone(),
+                my_battle_field: my_battle_field.clone(),
+                opponent_battle_field: opponent_battle_field.clone(),
+                opponent_hp: *opponent_hp,
+            },
             CombatTurnMessage::EncounterStarted => CombatTurnMessage::EncounterStarted,
         }
     }
@@ -286,13 +354,10 @@ impl Serialize for CombatTurnMessage {
         S: Serializer,
     {
         match self {
-            CombatTurnMessage::CommandPlayed(combatant) => {
-                let hp = combatant.get_hp();
+            CombatTurnMessage::CommandPlayed(cmd) => {
                 let mut map = serializer.serialize_map(Some(4))?;
                 map.serialize_entry("type", "CommandPlayed")?;
-                map.serialize_entry("hp", &hp)?;
-                map.serialize_entry("name", combatant.get_name())?;
-
+                map.serialize_entry("value", &json!(cmd))?;
                 map.end()
             }
             CombatTurnMessage::Winner(idx) => {
@@ -313,49 +378,34 @@ impl Serialize for CombatTurnMessage {
                 map.serialize_entry("talents", &combatant.get_talents())?;
                 map.end()
             }
-            CombatTurnMessage::EncounterState(encounter, id) => {
+            CombatTurnMessage::PlayerState {
+                my_battle_field,
+                me,
+                opponent_battle_field,
+                opponent_hp,
+                turn,
+            } => {
                 let mut map = serializer.serialize_map(None)?;
-                let cb1 = encounter.combatant1.lock().unwrap();
-                let cb2 = encounter.combatant2.lock().unwrap();
-                let talents = {
-                    if cb1.get_id() == *id {
-                        Some(cb1.get_talents())
-                    } else {
-                        None
-                    }
-                };
-                let c1hp = cb1.get_hp().to_string();
-                let c2hp = cb2.get_hp().to_string();
-                let c1_damage = cb1.get_damage_stats();
-                let c1_armor = cb1.get_armor();
-
-                let (hp1, hp2) = encounter.initial_hps;
-                let c2_damage = cb2.get_damage_stats();
-                let c2_armor = cb2.get_armor();
-                let combat1 = json!({
-                    "name": cb1.get_name(),
-                    "current_hp": cb1.get_hp().to_string(),
-                    "hp":hp1.to_string(),
-                    "damage": cb1.get_damage_stats(), // This will now include your Range<i32> as a nested object
-                    "armor": cb1.get_armor(),
-                    "talents": if talents.is_some() { talents.unwrap() } else { cb1.get_talents() }
+                let my_hand = me.get_hand();
+                map.serialize_entry("type", "PlayerState")?;
+                map.serialize_entry("turn", &turn);
+                map.serialize_entry("my_battle_field", my_battle_field);
+                map.serialize_entry("opponent_battle_field", opponent_battle_field);
+                map.serialize_entry("hand", my_hand);
+                map.serialize_entry("opponent_hp", opponent_hp);
+                let me = json!({
+                    "hp": me.get_hp(),
+                    "name": me.get_name(),
+                    "mana": me.get_mana(),
                 });
-                let combat2 = json!({
-                    "name": cb2.get_name(),
-                    "current_hp": cb2.get_hp().to_string(),
-                    "hp":hp2.to_string(),
-                    "damage": cb2.get_damage_stats(), // This will now include your Range<i32> as a nested object
-                    "armor": cb2.get_armor(),
-                    "talents": if talents.is_some() { None } else { Some(cb2.get_talents()) }
-                });
-
-                map.serialize_entry("Combatant1", &combat1)?;
-                map.serialize_entry("Combatant2", &combat2)?;
-                map.serialize_entry("turn", &encounter.current_turn)?;
-                map.serialize_entry("type", "EncounterState")?;
+                map.serialize_entry("me", &me);
                 map.end()
             }
             CombatTurnMessage::EncounterStarted => serializer.serialize_str("EncounterStarted"),
+            x => {
+                warn!("Unimplemented serialization for {:?}", x);
+                json!(null).serialize(serializer)
+            }
         }
     }
 }
@@ -386,17 +436,7 @@ impl<'de> Deserialize<'de> for CombatTurnMessage {
                 A: EnumAccess<'de>,
             {
                 match data.variant()? {
-                    (Field::CommandPlayed, variant) => {
-                        let combatant_data: CombatantData = variant.newtype_variant()?;
-                        match combatant_data {
-                            CombatantData::Monster(monster) => {
-                                Ok(CombatTurnMessage::CommandPlayed(Box::new(monster)))
-                            }
-                            CombatantData::Hero(hero) => {
-                                Ok(CombatTurnMessage::CommandPlayed(Box::new(hero)))
-                            }
-                        }
-                    }
+                    (Field::CommandPlayed, variant) => Ok(CombatTurnMessage::Winner(Combatant1)),
                     (Field::Winner, _) => Ok(CombatTurnMessage::Winner(Combatant1)),
                 }
             }

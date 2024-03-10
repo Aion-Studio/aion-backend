@@ -17,14 +17,14 @@ use crate::{
 };
 use crate::events::game::ActionDurations;
 use crate::infra::Infra;
-use crate::models::cards::Deck;
+use crate::models::cards::{Card, Deck};
+use crate::models::hero_combatant::HeroCombatant;
 use crate::prisma::ResourceEnum;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 
-use super::combatant::Combatant;
 use super::region::RegionName;
 use super::resources::Resource;
-use super::talent::{Effect, Talent};
+use super::talent::Talent;
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -71,6 +71,18 @@ impl Hero {
             talents: vec![],
             deck: None,
         }
+    }
+
+    pub fn to_combatant(&self) -> HeroCombatant {
+        HeroCombatant::new(
+            self.id.clone().unwrap(),
+            self.name.clone(),
+            self.base_stats.clone(),
+            self.attributes.clone(),
+            self.inventory.clone().unwrap(),
+            self.deck.clone().unwrap(),
+            0,
+        )
     }
 
     pub fn level(&self) -> i32 {
@@ -342,47 +354,6 @@ impl Hero {
         }
 
         name
-    }
-}
-
-impl Combatant for Hero {
-    fn get_id(&self) -> String {
-        self.id.clone().unwrap()
-    }
-
-    fn get_name(&self) -> &str {
-        &self.name
-    }
-    fn get_hp(&self) -> i32 {
-        self.base_stats.hit_points
-    }
-
-    fn get_damage(&self) -> i32 {
-        self.base_stats.damage.roll()
-    }
-    fn get_talents(&self) -> &Vec<Talent> {
-        &self.talents
-    }
-
-    fn get_damage_stats(&self) -> Range<i32> {
-        self.base_stats.damage.clone()
-    }
-
-    fn get_armor(&self) -> i32 {
-        self.base_stats.armor
-    }
-    fn get_level(&self) -> i32 {
-        self.base_stats.level
-    }
-    fn attack(&self, other: &mut dyn Combatant) {
-        let damage = self.get_damage();
-        other.take_damage(damage);
-    }
-    fn take_damage(&mut self, damage: i32) {
-        self.base_stats.hit_points -= damage;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

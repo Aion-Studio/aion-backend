@@ -11,8 +11,10 @@ use crate::prisma::{card, DamageType, deck, deck_card, minion_effect, spell_effe
 pub struct Deck {
     id: String,
     hero_id: Option<String>,
-    cards_in_deck: Vec<Card>,
+    pub cards_in_deck: Vec<Card>,
 }
+
+impl Deck {}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Card {

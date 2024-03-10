@@ -17,7 +17,9 @@ use crate::{
     models::talent::Talent,
     services::{tasks::action_names::Responder, traits::combat_decision_maker::DecisionMaker},
 };
-use crate::events::combat::CombatTurnMessage::{PlayerTurn, YourTurn};
+use crate::events::combat::CombatantIndex::{Combatant1, Combatant2};
+use crate::events::combat::CombatTurnMessage::{PlayerState, PlayerTurn, YourTurn};
+use crate::events::combat::EncounterState;
 use crate::models::cards::Card;
 use crate::models::hero::Hero;
 use crate::models::npc::{CpuCombatantDecisionMaker, Monster};
@@ -43,7 +45,7 @@ pub enum ControllerMessage {
     },
     RequestState {
         combatant_id: String,
-        tx: oneshot::Sender<Option<CombatTurnMessage>>,
+        tx: oneshot::Sender<(Option<CombatTurnMessage>, Option<String>)>,
     },
     CreateNpcEncounter {
         hero: Hero,
@@ -129,6 +131,13 @@ impl CombatController {
             let encounter_clone =
                 Arc::clone(&self.encounter_by_combatant_id(combatant_id).await.unwrap());
 
+            // initialize the deck for this combatant
+            encounter_clone
+                .lock()
+                .await
+                .initialize(&combatant_id)
+                .expect("Failed to initialize deck");
+
             let combatant_id = combatant_id.to_string();
             tokio::spawn(async move {
                 tokio::select! {
@@ -136,6 +145,8 @@ impl CombatController {
                         info!("Shutting down listener for combatant: {}", combatant_id);
                     },
                     _ = async {
+                       use CombatTurnMessage::*;
+
                         while let Some(command) = command_receiver.recv().await {
                            let sender = result_sender.clone();
 
@@ -145,10 +156,10 @@ impl CombatController {
                                 Ok(result) => {
                                     controller_sender.send(ControllerMessage::NotifyPlayers { message: result.clone(), sender: (combatant_id.to_string(), sender.clone()) }).await.unwrap();
 
-                                    if !matches!(result, CombatTurnMessage::Winner(_)) {
+                                    if !matches!(result, Winner(_)) {
                                         info!("Notifying players of next turn, combatant {:?} is up next", encounter.whos_turn());
                                         controller_sender.clone().send(ControllerMessage::NotifyPlayers {
-                                            message: PlayerTurn(encounter.whos_turn()), sender: (combatant_id.to_string(), sender)
+                                            message: EncounterState(encounter.request_state()), sender: (combatant_id.to_string(), sender)
                                         }).await.unwrap();
                                     } else {
                                         info!("Battle is over, we got a winner");
@@ -170,8 +181,53 @@ impl CombatController {
             });
         }
     }
+    async fn construct_player_state(
+        &self,
+        combatant_id: &str,
+        encounter_state: &EncounterState, // Assuming EncounterState is the type of `state`
+    ) -> CombatTurnMessage {
+        let encounter = self.encounter_by_combatant_id(combatant_id).await.unwrap();
+        let (me_idx, opponent_idx) = if encounter
+            .lock()
+            .await
+            .get_combatant_idx(combatant_id)
+            .unwrap()
+            == Combatant1
+        {
+            (Combatant1, Combatant2)
+        } else {
+            (Combatant2, Combatant1)
+        };
+
+        let (me, opponent) = if *combatant_id == encounter_state.combatant_1.get_id() {
+            (
+                encounter_state.combatant_1.clone_box(),
+                encounter_state.combatant_2.clone_box(),
+            )
+        } else {
+            (
+                encounter_state.combatant_2.clone_box(),
+                encounter_state.combatant_1.clone_box(),
+            )
+        };
+
+        let turn = encounter_state.turn.clone();
+        let opponent_hp = opponent.get_hp();
+        PlayerState {
+            me,
+            opponent_hp,
+            turn,
+            my_battle_field: encounter_state.battle_fields.get(&me_idx).unwrap().clone(),
+            opponent_battle_field: encounter_state
+                .battle_fields
+                .get(&opponent_idx)
+                .unwrap()
+                .clone(),
+        }
+    }
 
     pub async fn run(&mut self, mut message_receiver: mpsc::Receiver<ControllerMessage>) {
+        use CombatTurnMessage::*;
         while let Some(message) = message_receiver.recv().await {
             info!("Received message: {:?}", message);
             let sender = self.message_sender.clone();
@@ -310,7 +366,7 @@ impl CombatController {
                     npc,
                     action_id,
                 } => {
-                    let mut encounter = CombatEncounter::new(hero, npc);
+                    let mut encounter = CombatEncounter::new(hero.to_combatant(), npc);
                     encounter.set_action_id(action_id);
                     self.add_encounter(encounter);
                 }
@@ -329,16 +385,16 @@ impl CombatController {
                     let encounter_id = self.encounter_id_by_combatant(&combatant_id).await;
                     match encounter_id {
                         Some(id) => {
-                            let encounter = self.encounters.get(&id).unwrap();
-                            let cmd = CombatTurnMessage::EncounterState(
-                                encounter.lock().await.clone(),
-                                combatant_id.clone(),
-                            );
-                            tx.send(Some(cmd)).unwrap();
+                            let encounter = self.encounters.get(&id).unwrap().lock().await;
+                            let state = encounter.request_state();
+                            let action_id = encounter.action_id.clone();
+                            let player_state =
+                                self.construct_player_state(&combatant_id, &state).await;
+                            tx.send((Some(player_state), action_id)).unwrap();
                         }
                         None => {
                             info!("Could not find encounter for combatant: {:?}", combatant_id);
-                            tx.send(None).unwrap();
+                            tx.send((None, None)).unwrap();
                         }
                     }
                 }
@@ -346,7 +402,6 @@ impl CombatController {
                     message,
                     sender: (id, sender),
                 } => {
-                    let message = message.clone();
                     let opponent = self
                         .encounter_by_combatant_id(&id)
                         .await
@@ -354,34 +409,20 @@ impl CombatController {
                         .lock()
                         .await
                         .get_opponent(&id);
-                    let opponent_sender =
-                        self.result_senders.get(&opponent.lock().unwrap().get_id());
-                    let message = match message {
-                        PlayerTurn(idx) => {
-                            let encounter = self.encounter_by_combatant_id(&id).await.unwrap();
-                            let encounter = encounter.lock().await;
-                            let turn_idx = encounter.get_combatant_idx(&id);
-                            match turn_idx {
-                                Some(turn_idx) => {
-                                    if turn_idx == idx {
-                                        let combatant = encounter
-                                            .get_combatant(turn_idx, None)
-                                            .lock()
-                                            .unwrap()
-                                            .clone_box();
-                                        YourTurn(combatant)
-                                    } else {
-                                        PlayerTurn(idx)
-                                    }
-                                }
-                                None => PlayerTurn(idx),
-                            }
+                    let opponent_id = opponent.lock().unwrap().get_id();
+                    let opponent_sender = self.result_senders.get(&opponent_id);
+                    let (player_message, opponent_message) = match message {
+                        EncounterState(state) => {
+                            let player_message = self.construct_player_state(&id, &state).await;
+                            let opponent_message =
+                                self.construct_player_state(&opponent_id, &state).await;
+                            (player_message, opponent_message)
                         }
-                        _ => message.clone(),
+                        _ => (message.clone(), message.clone()),
                     };
                     let (_, _) = join!(
-                        opponent_sender.unwrap().send(message.clone()),
-                        sender.send(message.clone())
+                        opponent_sender.unwrap().send(opponent_message),
+                        sender.send(player_message)
                     );
                 }
             }
@@ -401,12 +442,12 @@ impl CombatController {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CombatCommand {
     EnterBattle(Option<Arc<Mutex<dyn DecisionMaker + Send + Sync>>>),
     Attack,
     UseTalent(String, Talent), // Use a talent: (Talent)
-    PlayCard(Card),
+    PlayCards(Vec<Card>),
 }
 
 impl Serialize for CombatCommand {
@@ -416,6 +457,9 @@ impl Serialize for CombatCommand {
             CombatCommand::Attack => serializer.serialize_str("Attack"),
             CombatCommand::UseTalent(target_id, talent) => {
                 serializer.serialize_str(&format!("UseTalent({}, {:?})", target_id, talent))
+            }
+            CombatCommand::PlayCards(cards) => {
+                serializer.serialize_str(&format!("PlayCards({:?})", cards))
             }
         }
     }

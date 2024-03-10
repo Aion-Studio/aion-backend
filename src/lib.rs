@@ -23,6 +23,7 @@ mod models {
     pub mod date_times;
     pub mod game_engine;
     pub mod hero;
+    pub mod hero_combatant;
     pub mod npc;
     pub mod quest;
 
@@ -100,7 +101,7 @@ pub fn tracing_subscribe() -> bool {
     use std::env::{set_var, var};
 
     use tracing::info;
-    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
     if var("INDEXER_LOG").is_err() {
         set_var("INDEXER_LOG", "debug,tokio=warn,prisma=info,quaint=info");

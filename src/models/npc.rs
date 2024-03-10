@@ -4,10 +4,13 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
-    Mutex, oneshot,
+    oneshot, Mutex,
 };
 use tracing::log::info;
 
+use crate::events::combat::CombatantIndex;
+use crate::models::cards::{Card, Deck};
+use crate::models::player_decision_maker::PlayerDecisionMaker;
 use crate::{
     events::combat::CombatTurnMessage,
     prisma::npc,
@@ -15,8 +18,6 @@ use crate::{
         impls::combat_service::CombatCommand, traits::combat_decision_maker::DecisionMaker,
     },
 };
-use crate::events::combat::CombatantIndex;
-use crate::models::player_decision_maker::PlayerDecisionMaker;
 
 use super::{combatant::Combatant, hero::Range, talent::Talent};
 
@@ -128,6 +129,10 @@ pub struct Monster {
     pub hit_points: i32,
     pub armor: i32,
     pub level: i32,
+    pub mana: i32,
+    pub deck: Deck,
+    cards_in_discard: Vec<Card>,
+    cards_in_hand: Vec<Card>,
     monster_type: Option<String>,
     pub talents: Vec<Talent>,
 }
@@ -174,6 +179,48 @@ impl Combatant for Monster {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn shuffle_deck(&mut self) {
+        let deck = &mut self.deck;
+        if self.cards_in_discard.len() > 0 {
+            deck.cards_in_deck.append(&mut self.cards_in_discard);
+            self.cards_in_discard.clear();
+        }
+        use rand::seq::SliceRandom;
+        use rand::thread_rng;
+
+        let mut rng = thread_rng();
+        self.deck.cards_in_deck.shuffle(&mut rng);
+    }
+
+    fn add_mana(&mut self, mana: i32) {
+        self.mana += mana;
+    }
+    fn spend_mana(&mut self, mana: i32) {
+        self.mana -= mana;
+    }
+
+    fn get_mana(&self) -> i32 {
+        self.mana
+    }
+    fn add_to_discard(&mut self, card: Card) {
+        self.cards_in_discard.push(card);
+    }
+    fn draw_cards(&mut self, num_cards: i32) {
+        if self.deck.cards_in_deck.len() < num_cards as usize {
+            self.shuffle_deck();
+        }
+        self.cards_in_hand.append(
+            &mut self
+                .deck
+                .cards_in_deck
+                .drain(0..num_cards as usize)
+                .collect::<Vec<Card>>(),
+        );
+    }
+    fn get_hand(&self) -> &Vec<Card> {
+        &self.cards_in_hand
+    }
 }
 
 impl From<npc::Data> for Monster {
@@ -189,6 +236,10 @@ impl From<npc::Data> for Monster {
             hit_points: data.hp,
             armor: data.armor,
             monster_type: None,
+            mana: 0,
+            deck: (*data.deck.unwrap().unwrap()).into(),
+            cards_in_hand: vec![],
+            cards_in_discard: vec![],
             talents: vec![], // nothing for now
         }
     }
