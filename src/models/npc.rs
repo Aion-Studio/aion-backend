@@ -4,13 +4,11 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
-    oneshot, Mutex,
+    Mutex, oneshot,
 };
 use tracing::log::info;
+use tracing::warn;
 
-use crate::events::combat::CombatantIndex;
-use crate::models::cards::{Card, Deck};
-use crate::models::player_decision_maker::PlayerDecisionMaker;
 use crate::{
     events::combat::CombatTurnMessage,
     prisma::npc,
@@ -18,6 +16,9 @@ use crate::{
         impls::combat_service::CombatCommand, traits::combat_decision_maker::DecisionMaker,
     },
 };
+use crate::events::combat::{CombatantIndex, CombatError};
+use crate::models::cards::{Card, Deck};
+use crate::models::player_decision_maker::PlayerDecisionMaker;
 
 use super::{combatant::Combatant, hero::Range, talent::Talent};
 
@@ -69,6 +70,7 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                     info!("Shutting down signal monster.");
                 },
                 _ = async {
+                    info!("npc starting to listen for commands");
                     while let Some(result) = result_receiver.recv().await {
                         match result {
                             CombatTurnMessage::PlayerTurn(turn_idx) => {
@@ -87,10 +89,12 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                             CombatTurnMessage::Winner(idx) => {
                                 // Do nothing
                             }
-                            CombatTurnMessage::CommandPlayed(opponent_state) => {
-                                // Do nothing for now
+                            CombatTurnMessage::EncounterState(state)=>{
+                                info!("Npc got the encounter state since last moves{:?}",state);
                             }
-                            _ => {}
+                            x => {
+                                info!("npc got some other message {:?}", x);
+                            }
                         };
                         // --------------------CPU logic to decide next move based on the received result
                             // Existing logic to handle combat results
@@ -130,7 +134,7 @@ pub struct Monster {
     pub armor: i32,
     pub level: i32,
     pub mana: i32,
-    pub deck: Deck,
+    pub deck: Option<Deck>,
     cards_in_discard: Vec<Card>,
     cards_in_hand: Vec<Card>,
     monster_type: Option<String>,
@@ -180,17 +184,28 @@ impl Combatant for Monster {
         self
     }
 
-    fn shuffle_deck(&mut self) {
-        let deck = &mut self.deck;
-        if self.cards_in_discard.len() > 0 {
-            deck.cards_in_deck.append(&mut self.cards_in_discard);
-            self.cards_in_discard.clear();
+    fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {
+        if self.cards_in_hand.contains(card) {
+            self.cards_in_hand.retain(|c| c != card);
+            self.add_to_discard(card.clone());
+            Ok(())
+        } else {
+            Err(CombatError::CardNotInHand)
         }
-        use rand::seq::SliceRandom;
-        use rand::thread_rng;
+    }
 
-        let mut rng = thread_rng();
-        self.deck.cards_in_deck.shuffle(&mut rng);
+    fn shuffle_deck(&mut self) {
+        if let Some(deck) = &mut self.deck {
+            if self.cards_in_discard.len() > 0 {
+                deck.cards_in_deck.append(&mut self.cards_in_discard);
+                self.cards_in_discard.clear();
+            }
+            use rand::seq::SliceRandom;
+            use rand::thread_rng;
+
+            let mut rng = thread_rng();
+            deck.cards_in_deck.shuffle(&mut rng);
+        }
     }
 
     fn add_mana(&mut self, mana: i32) {
@@ -207,16 +222,27 @@ impl Combatant for Monster {
         self.cards_in_discard.push(card);
     }
     fn draw_cards(&mut self, num_cards: i32) {
-        if self.deck.cards_in_deck.len() < num_cards as usize {
+        // Ensure the deck exists and determine if we need to shuffle
+        let need_shuffle = if let Some(deck) = &self.deck {
+            deck.cards_in_deck.len() < num_cards as usize && !self.cards_in_discard.is_empty()
+        } else {
+            false
+        };
+
+        // If needed, shuffle the deck first
+        if need_shuffle {
             self.shuffle_deck();
         }
-        self.cards_in_hand.append(
-            &mut self
-                .deck
+
+        // After shuffling (if necessary), proceed with drawing cards
+        if let Some(deck) = &mut self.deck {
+            let cards_to_draw = num_cards.min(deck.cards_in_deck.len() as i32) as usize;
+            let drawn_cards = deck
                 .cards_in_deck
-                .drain(0..num_cards as usize)
-                .collect::<Vec<Card>>(),
-        );
+                .drain(0..cards_to_draw)
+                .collect::<Vec<_>>();
+            self.cards_in_hand.extend(drawn_cards);
+        }
     }
     fn get_hand(&self) -> &Vec<Card> {
         &self.cards_in_hand
@@ -237,7 +263,7 @@ impl From<npc::Data> for Monster {
             armor: data.armor,
             monster_type: None,
             mana: 0,
-            deck: (*data.deck.unwrap().unwrap()).into(),
+            deck: None,
             cards_in_hand: vec![],
             cards_in_discard: vec![],
             talents: vec![], // nothing for now

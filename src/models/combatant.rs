@@ -2,6 +2,7 @@ use core::fmt;
 use std::any::Any;
 use std::fmt::Formatter;
 
+use crate::events::combat::CombatError;
 use crate::models::cards::Card;
 use crate::models::hero::Range;
 
@@ -28,6 +29,7 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn add_mana(&mut self, mana: i32);
     fn spend_mana(&mut self, mana: i32);
     fn get_hand(&self) -> &Vec<Card>;
+    fn play_card(&mut self, card: &Card) -> Result<(),CombatError>;
     fn as_any(&self) -> &dyn Any;
 }
 

@@ -469,7 +469,7 @@ impl From<hero::Data> for Hero {
             HashMap::new()
         };
 
-        let deck = data.deck.and_then(|data| data).map(|boxed| (*boxed).into());
+        // let deck = data.deck.and_then(|data| data).map(|boxed| (*boxed).into());
 
         Self {
             id: Some(data.id),
@@ -488,7 +488,7 @@ impl From<hero::Data> for Hero {
                 Some(talents) => talents.into_iter().map(Talent::from).collect(),
                 None => vec![],
             },
-            deck,
+            deck: None, // we fill in the deck manually
         }
     }
 }

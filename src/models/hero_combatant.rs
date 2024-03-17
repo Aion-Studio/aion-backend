@@ -2,6 +2,7 @@ use std::any::Any;
 
 use serde::{Deserialize, Serialize};
 
+use crate::events::combat::CombatError;
 use crate::models::cards::{Card, Deck};
 use crate::models::combatant::Combatant;
 use crate::models::hero::{Attributes, BaseStats, Inventory, Range};
@@ -124,6 +125,16 @@ impl Combatant for HeroCombatant {
 
     fn get_hand(&self) -> &Vec<Card> {
         &self.cards_in_hand
+    }
+
+    fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {
+        if let Some(idx) = self.cards_in_hand.iter().position(|c| c == card) {
+            self.cards_in_hand.remove(idx);
+            self.add_to_discard(card.clone());
+            Ok(())
+        } else {
+            Err(CombatError::CardNotInHand)
+        }
     }
     fn as_any(&self) -> &dyn Any {
         self

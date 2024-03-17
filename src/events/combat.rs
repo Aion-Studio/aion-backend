@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
 use actix::Message;
@@ -56,10 +57,15 @@ impl CombatEncounter {
     pub fn new<T: Combatant + 'static>(hero: HeroCombatant, monster: T) -> Self {
         let hero_hp = hero.get_hp();
         let monster_hp = monster.get_hp();
+        let combatant1 = Arc::new(Mutex::new(hero));
+        let combatant2 = Arc::new(Mutex::new(monster));
+        combatant1.lock().unwrap().add_mana(1);
+        combatant2.lock().unwrap().add_mana(1);
+
         CombatEncounter {
             id: uuid::Uuid::new_v4().to_string(),
-            combatant1: Arc::new(Mutex::new(hero)),
-            combatant2: Arc::new(Mutex::new(monster)), // Box the generic monster
+            combatant1,
+            combatant2, // Box the generic monster
             battle_fields: HashMap::new(),
             active_dots: Vec::new(),
             status_effects: HashMap::new(),
@@ -190,12 +196,23 @@ impl CombatEncounter {
     }
 
     // shuffles deck and draws 5 cards
-    pub fn initialize(&self, combatant_id: &str) -> anyhow::Result<()> {
-        let combatant = self.get_combatant_by_id(combatant_id).unwrap();
-        let mut locked = combatant.lock().unwrap();
-        if locked.get_hand().is_empty() {
-            locked.shuffle_deck();
-            locked.draw_cards(5);
+    pub fn initialize(&mut self, combatant_id: &str) -> anyhow::Result<()> {
+        let combatant_idx = self.get_combatant_idx(combatant_id).unwrap();
+        let opponent_idx = match combatant_idx {
+            Combatant1 => CombatantIndex::Combatant2,
+            CombatantIndex::Combatant2 => Combatant1,
+        };
+
+        for idx in [combatant_idx, opponent_idx] {
+            self.battle_fields.insert(idx.clone(), vec![]); // Initialize battle fields
+            let combatant = self.get_combatant(idx.clone(), None);
+            let mut locked = combatant.lock().unwrap();
+            let num_cards = if self.current_turn == idx { 6 } else { 5 };
+
+            if locked.get_hand().is_empty() {
+                locked.shuffle_deck();
+                locked.draw_cards(num_cards);
+            }
         }
         Ok(())
     }
@@ -215,13 +232,13 @@ impl CombatEncounter {
         combatant_id: &str, // the ID of the combatant making the move
     ) -> Result<CombatTurnMessage, CombatError> {
         use CombatCommand::*;
-        let is_valid_turn = match self.current_turn {
-            Combatant1 => combatant_id == self.combatant1.lock().unwrap().get_id(),
-            CombatantIndex::Combatant2 => combatant_id == self.combatant2.lock().unwrap().get_id(),
-        };
+        let idx = self.get_combatant_idx(combatant_id).unwrap();
+        let is_valid_turn = self.current_turn == idx;
         if !is_valid_turn {
             return Err(CombatError::OutOfTurnAction);
         }
+        let arc = self.get_combatant_by_id(combatant_id).unwrap();
+        let mut combatant = arc.lock().unwrap();
         let result = match cmd.clone() {
             Attack => {
                 self.apply_dots();
@@ -238,9 +255,13 @@ impl CombatEncounter {
                     Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
                 }
             }
-            PlayCards(card) => {
-                info!("Playing card: {:?}", card);
-                // add logic here for card effects
+            PlayCard(card) => {
+                if combatant.get_mana() < card.mana_cost {
+                    return Err(CombatError::ManaError);
+                }
+                combatant.play_card(&card)?;
+                combatant.spend_mana(card.mana_cost);
+                self.battle_fields.get_mut(&idx).unwrap().push(card.clone()); // Add the card to the battle field
                 Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
             }
             _ => {
@@ -267,9 +288,11 @@ pub enum CombatTurnMessage {
     Winner(CombatantIndex),
     PlayerState {
         me: Box<dyn Combatant>,
+        me_idx: CombatantIndex,
         turn: CombatantIndex,
         my_battle_field: Vec<Card>,
         opponent_battle_field: Vec<Card>,
+        opponent: Box<dyn Combatant>,
         opponent_hp: i32,
     },
     EncounterState(EncounterState), // Requested state
@@ -328,12 +351,16 @@ impl Clone for CombatTurnMessage {
             }
             CombatTurnMessage::PlayerState {
                 me,
+                me_idx,
                 turn,
                 my_battle_field,
                 opponent_battle_field,
+                opponent,
                 opponent_hp,
             } => CombatTurnMessage::PlayerState {
                 me: me.clone_box(),
+                me_idx: me_idx.clone(),
+                opponent: opponent.clone_box(),
                 turn: turn.clone(),
                 my_battle_field: my_battle_field.clone(),
                 opponent_battle_field: opponent_battle_field.clone(),
@@ -380,9 +407,11 @@ impl Serialize for CombatTurnMessage {
             }
             CombatTurnMessage::PlayerState {
                 my_battle_field,
+                me_idx,
                 me,
                 opponent_battle_field,
                 opponent_hp,
+                opponent,
                 turn,
             } => {
                 let mut map = serializer.serialize_map(None)?;
@@ -397,7 +426,14 @@ impl Serialize for CombatTurnMessage {
                     "hp": me.get_hp(),
                     "name": me.get_name(),
                     "mana": me.get_mana(),
+                    "idx": me_idx
                 });
+                let oppo = json!({
+                    "hp": opponent_hp,
+                    "name": opponent.get_name(),
+                    "mana": opponent.get_mana(),
+                });
+                map.serialize_entry("opponent", &oppo);
                 map.serialize_entry("me", &me);
                 map.end()
             }
@@ -450,14 +486,18 @@ impl<'de> Deserialize<'de> for CombatTurnMessage {
 #[derive(Debug)]
 pub enum CombatError {
     OutOfTurnAction,
-    // ... (Other error variants as needed) ...
+    ManaError,
+    CardNotInHand, // ... (Other error variants as needed) ...
 }
 
-impl CombatError {
-    pub fn to_string(&self) -> String {
+impl Display for CombatError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CombatError::OutOfTurnAction => "Out of turn action".to_string(),
-            // ... (Other error variants as needed) ...
+            CombatError::OutOfTurnAction => write!(f, "Out of turn action"),
+            CombatError::ManaError => write!(f, "Not enough mana"),
+            CombatError::CardNotInHand => write!(f, "Card not in hand"),
         }
     }
 }
+
+// `?` couldn't convert the error to `events::combat::CombatError` [E0277] Note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait Help: the following other types implement trait `std::ops::FromResidual<R>`: <std::result::Result<T, F> as std::ops::FromResidual<std::ops::Yeet<E>>> <std::result::Result<T, F> as std::ops::FromResidual<std::result::Result<std::convert::Infallible, E>>> Note: required for `std::result::Result<events::combat::CombatTurnMessage, events::combat::CombatError>` to implement `std::ops::FromResidual<std::result::Result<std::convert::Infallible, anyhow::Error>>`

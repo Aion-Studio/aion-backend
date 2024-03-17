@@ -348,10 +348,11 @@ model SpellEffectEffect {
 }
 
 model MinionEffectEffect {
-  id                 String            @id @default(uuid())
-  minionEffect       MinionEffect      @relation(fields: [minionEffectId], references: [id])
-  minionEffectId     String
-  duration           Int               @default(0)
+  id             String       @id @default(uuid())
+  minionEffect   MinionEffect @relation(fields: [minionEffectId], references: [id])
+  minionEffectId String
+  duration       Int          @default(0)
+
   tauntEffect        TauntEffect?      @relation(fields: [tauntEffectId], references: [id])
   tauntEffectId      String?
   chargeEffect       ChargeEffect?     @relation(fields: [chargeEffectId], references: [id])

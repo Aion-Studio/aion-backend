@@ -123,14 +123,17 @@ async fn hero_state(path: Path<String>, app_state: Data<AppState>) -> impl Respo
     let hero_id = path.into_inner();
     let hero = Infra::repo().get_hero(hero_id.clone()).await;
 
-    info!("hero state requested....");
+    info!("hero state requested for hero {:?}....", hero_id);
     let app_state = app_state.get_ref().clone();
     let combat_tx = app_state.combat_tx.clone();
 
     match hero {
         Ok(hero) => match get_hero_status(hero, combat_tx).await {
             Ok(hero_state) => {
-                info!("returning hero state....");
+                info!(
+                    "returning hero state.... for hero {:?}",
+                    hero_state.hero.get_id()
+                );
                 HttpResponse::Ok().json(hero_state)
             }
             Err(e) => {
@@ -338,7 +341,7 @@ pub async fn get_hero_status(
             }
             let is_in_combat = match rx.await {
                 Ok(res) => {
-                    info!("is in combat yes");
+                    info!("is in combat hero {:?} yes? {:?}", hero.get_id(), res);
                     res.0.is_some()
                 }
                 Err(e) => {

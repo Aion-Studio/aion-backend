@@ -5,6 +5,7 @@ use std::time::Duration;
 use prisma_client_rust::chrono;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
+use serde::ser::SerializeMap;
 use tokio::join;
 use tokio::sync::{mpsc, Mutex, Notify, oneshot};
 use tokio::sync::mpsc::Sender;
@@ -18,7 +19,7 @@ use crate::{
     services::{tasks::action_names::Responder, traits::combat_decision_maker::DecisionMaker},
 };
 use crate::events::combat::CombatantIndex::{Combatant1, Combatant2};
-use crate::events::combat::CombatTurnMessage::{PlayerState, PlayerTurn, YourTurn};
+use crate::events::combat::CombatTurnMessage::PlayerState;
 use crate::events::combat::EncounterState;
 use crate::models::cards::Card;
 use crate::models::hero::Hero;
@@ -35,9 +36,6 @@ pub enum ControllerMessage {
     AddDecisionMaker {
         participant_id: String,
         decision_maker: Arc<Mutex<dyn DecisionMaker + Send + Sync>>,
-    },
-    StartEncounter {
-        encounter_id: String,
     },
     NotifyPlayers {
         message: CombatTurnMessage,
@@ -131,13 +129,6 @@ impl CombatController {
             let encounter_clone =
                 Arc::clone(&self.encounter_by_combatant_id(combatant_id).await.unwrap());
 
-            // initialize the deck for this combatant
-            encounter_clone
-                .lock()
-                .await
-                .initialize(&combatant_id)
-                .expect("Failed to initialize deck");
-
             let combatant_id = combatant_id.to_string();
             tokio::spawn(async move {
                 tokio::select! {
@@ -185,19 +176,14 @@ impl CombatController {
         &self,
         combatant_id: &str,
         encounter_state: &EncounterState, // Assuming EncounterState is the type of `state`
+        encounter: &CombatEncounter,
     ) -> CombatTurnMessage {
-        let encounter = self.encounter_by_combatant_id(combatant_id).await.unwrap();
-        let (me_idx, opponent_idx) = if encounter
-            .lock()
-            .await
-            .get_combatant_idx(combatant_id)
-            .unwrap()
-            == Combatant1
-        {
-            (Combatant1, Combatant2)
-        } else {
-            (Combatant2, Combatant1)
-        };
+        let (me_idx, opponent_idx) =
+            if encounter.get_combatant_idx(combatant_id).unwrap() == Combatant1 {
+                (Combatant1, Combatant2)
+            } else {
+                (Combatant2, Combatant1)
+            };
 
         let (me, opponent) = if *combatant_id == encounter_state.combatant_1.get_id() {
             (
@@ -215,7 +201,9 @@ impl CombatController {
         let opponent_hp = opponent.get_hp();
         PlayerState {
             me,
+            me_idx: me_idx.clone(),
             opponent_hp,
+            opponent,
             turn,
             my_battle_field: encounter_state.battle_fields.get(&me_idx).unwrap().clone(),
             opponent_battle_field: encounter_state
@@ -229,7 +217,6 @@ impl CombatController {
     pub async fn run(&mut self, mut message_receiver: mpsc::Receiver<ControllerMessage>) {
         use CombatTurnMessage::*;
         while let Some(message) = message_receiver.recv().await {
-            info!("Received message: {:?}", message);
             let sender = self.message_sender.clone();
 
             match message {
@@ -237,42 +224,43 @@ impl CombatController {
                     self.encounters.remove(&encounter_id);
                 }
                 ControllerMessage::Combat((command, from_id, resp)) => match command {
-                    CombatCommand::EnterBattle(maybe_decision_maker) => {
-                        if let Some(decision_maker) = maybe_decision_maker {
+                    CombatCommand::EnterBattle(battle_data) => {
+                        if let Some(decision_maker) = battle_data.0 {
                             self.add_decision_maker(from_id.clone(), decision_maker);
-                        }
-                        let opponent_id: String;
-                        let mut npc_dec_maker_started = true;
-                        {
-                            let encounter = self.encounter_by_combatant_id(&from_id).await.unwrap();
-                            let encounter_guard = encounter.lock().await;
-                            let opponent_guard = encounter_guard.get_opponent(&from_id);
-                            let opponent = opponent_guard.lock().unwrap();
-                            opponent_id = {
-                                opponent.get_id().clone() // Example of cloning data out
-                            };
-                            if let Some(npc) = opponent.as_any().downcast_ref::<Monster>() {
-                                let needs_decision_maker =
-                                    self.decision_makers.get(&opponent_id).is_none();
-                                if needs_decision_maker {
-                                    // Construct the decision maker outside of the async block
-                                    let npc_decision_maker = Arc::new(Mutex::new(
-                                        CpuCombatantDecisionMaker::new(npc.clone()),
-                                    ));
-                                    // Add the decision maker here
-                                    self.add_decision_maker(
-                                        opponent_id.clone(),
-                                        npc_decision_maker,
-                                    );
-                                    npc_dec_maker_started = false;
+                            let opponent_id: String;
+                            let mut npc_dec_maker_started = true;
+                            {
+                                let encounter =
+                                    self.encounter_by_combatant_id(&from_id).await.unwrap();
+                                let encounter_guard = encounter.lock().await;
+                                let opponent_guard = encounter_guard.get_opponent(&from_id);
+                                let opponent = opponent_guard.lock().unwrap();
+                                opponent_id = {
+                                    opponent.get_id().clone() // Example of cloning data out
+                                };
+                                if let Some(npc) = opponent.as_any().downcast_ref::<Monster>() {
+                                    let needs_decision_maker =
+                                        self.decision_makers.get(&opponent_id).is_none();
+                                    if needs_decision_maker {
+                                        // Construct the decision maker outside of the async block
+                                        let npc_decision_maker = Arc::new(Mutex::new(
+                                            CpuCombatantDecisionMaker::new(npc.clone()),
+                                        ));
+                                        // Add the decision maker here
+                                        self.add_decision_maker(
+                                            opponent_id.clone(),
+                                            npc_decision_maker,
+                                        );
+                                        npc_dec_maker_started = false;
+                                    }
                                 }
                             }
+                            if !npc_dec_maker_started {
+                                // Assuming we can start the encounter without further mutating `self` directly
+                                self.start_encounter_for_combatant(&opponent_id).await;
+                            }
+                            self.start_encounter_for_combatant(&from_id).await;
                         }
-                        if !npc_dec_maker_started {
-                            // Assuming we can start the encounter without further mutating `self` directly
-                            self.start_encounter_for_combatant(&opponent_id).await;
-                        }
-                        self.start_encounter_for_combatant(&from_id).await;
                     }
 
                     CombatCommand::Attack => {
@@ -284,7 +272,6 @@ impl CombatController {
 
                 ControllerMessage::RemoveDecisionMakers { encounter_id, resp } => {
                     // Perform cleanup logic here...
-                    info!("RemoveDecisionMakers hit");
                     let encounter = self.encounters.get(&encounter_id).unwrap();
                     let combatant_ids = encounter.lock().await.get_combatant_ids();
                     // shuts down listeners to each decision maker
@@ -376,20 +363,25 @@ impl CombatController {
                 } => {
                     self.decision_makers.insert(participant_id, decision_maker);
                 }
-                ControllerMessage::StartEncounter { encounter_id } => {
-                    if let Some(encounter) = self.encounters.get(&encounter_id) {
-                        // Start the encounter, similar to your existing start_encounter logic
-                    }
-                }
+
                 ControllerMessage::RequestState { combatant_id, tx } => {
                     let encounter_id = self.encounter_id_by_combatant(&combatant_id).await;
                     match encounter_id {
                         Some(id) => {
-                            let encounter = self.encounters.get(&id).unwrap().lock().await;
-                            let state = encounter.request_state();
+                            let mut encounter = self.encounters.get(&id).unwrap().lock().await;
+                            let mut state = encounter.request_state();
+                            let combatant_idx = encounter.get_combatant_idx(&combatant_id).unwrap();
+                            if state.battle_fields.get(&combatant_idx).is_none() {
+                                // initialize the deck for this combatant -- will only run the first time request state is called
+                                encounter
+                                    .initialize(&combatant_id)
+                                    .expect("Failed to initialize deck");
+                                state = encounter.request_state();
+                            };
                             let action_id = encounter.action_id.clone();
-                            let player_state =
-                                self.construct_player_state(&combatant_id, &state).await;
+                            let player_state = self
+                                .construct_player_state(&combatant_id, &state, &encounter)
+                                .await;
                             tx.send((Some(player_state), action_id)).unwrap();
                         }
                         None => {
@@ -413,9 +405,14 @@ impl CombatController {
                     let opponent_sender = self.result_senders.get(&opponent_id);
                     let (player_message, opponent_message) = match message {
                         EncounterState(state) => {
-                            let player_message = self.construct_player_state(&id, &state).await;
-                            let opponent_message =
-                                self.construct_player_state(&opponent_id, &state).await;
+                            let encounter_mut = self.encounter_by_combatant_id(&id).await.unwrap();
+                            let encounter = encounter_mut.lock().await;
+
+                            let player_message =
+                                self.construct_player_state(&id, &state, &encounter).await;
+                            let opponent_message = self
+                                .construct_player_state(&opponent_id, &state, &encounter)
+                                .await;
                             (player_message, opponent_message)
                         }
                         _ => (message.clone(), message.clone()),
@@ -441,57 +438,34 @@ impl CombatController {
         self.decision_makers.insert(participant_id, decision_maker);
     }
 }
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CombatCommand {
-    EnterBattle(Option<Arc<Mutex<dyn DecisionMaker + Send + Sync>>>),
+    EnterBattle(EnterBattleData),
     Attack,
     UseTalent(String, Talent), // Use a talent: (Talent)
-    PlayCards(Vec<Card>),
+    PlayCard(Card),
 }
 
-impl Serialize for CombatCommand {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            CombatCommand::EnterBattle(_) => serializer.serialize_str("EnterBattle"),
-            CombatCommand::Attack => serializer.serialize_str("Attack"),
-            CombatCommand::UseTalent(target_id, talent) => {
-                serializer.serialize_str(&format!("UseTalent({}, {:?})", target_id, talent))
-            }
-            CombatCommand::PlayCards(cards) => {
-                serializer.serialize_str(&format!("PlayCards({:?})", cards))
-            }
-        }
+#[derive(Debug, Clone)]
+pub struct EnterBattleData(pub Option<Arc<Mutex<dyn DecisionMaker + Send + Sync>>>);
+// Implement custom serialization for the complex struct
+impl Serialize for EnterBattleData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Custom serialization logic here
+        serializer.serialize_str("EnterBattle")
     }
 }
 
-impl<'de> Deserialize<'de> for CombatCommand {
+// Implement custom deserialization for the complex struct
+impl<'de> Deserialize<'de> for EnterBattleData {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        struct CommandVisitor;
-
-        impl<'de> Visitor<'de> for CommandVisitor {
-            type Value = CombatCommand;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a string representing a combat command")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                match v {
-                    "EnterBattle" => Ok(CombatCommand::EnterBattle(None)),
-                    "Attack" => Ok(CombatCommand::Attack),
-                    // ... (Handle UseTalent similar to your existing code)
-                    _ => Err(de::Error::custom("Unknown command")),
-                }
-            }
-        }
-
-        deserializer.deserialize_str(CommandVisitor)
+        // Custom deserialization logic here
+        Ok(EnterBattleData(None))
     }
 }

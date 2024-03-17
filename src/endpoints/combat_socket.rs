@@ -23,7 +23,7 @@ use crate::jsontoken::decode_token;
 use crate::models::cards::Card;
 use crate::models::combatant::Combatant;
 use crate::models::player_decision_maker::PlayerDecisionMaker;
-use crate::services::impls::combat_service::ControllerMessage;
+use crate::services::impls::combat_service::{ControllerMessage, EnterBattleData};
 
 #[derive(Deserialize)]
 pub struct WsQueryParams {
@@ -120,7 +120,6 @@ impl CombatSocket {
         app_state: Arc<Mutex<AppState>>,
         state: (CombatTurnMessage, Option<String>),
     ) -> Self {
-        // if turn result is a CombatTurnMessage::EncounterState
         CombatSocket {
             combatant_id,
             app_state,
@@ -158,7 +157,7 @@ impl Actor for CombatSocket {
             let tx = state.combat_tx.clone();
 
             let message = ControllerMessage::Combat((
-                CombatCommand::EnterBattle(Some(decision_maker)),
+                CombatCommand::EnterBattle(EnterBattleData(Some(decision_maker))),
                 id.clone(),
                 sender,
             ));
@@ -180,29 +179,10 @@ impl Actor for CombatSocket {
             }
         });
 
-        // let id = self.combatant_id.clone();
-        // 2. (Optional) Retrieve initial combat state if the encounter's already begun
         ctx.text(
             serde_json::to_string(&CombatSocketMessage::Update(self.encounter_state.0.clone()))
                 .unwrap(),
         );
-        // match self.encounter_state.0 {
-        //     CombatTurnMessage::PlayerState {
-        //         me,
-        //         turn,
-        //         my_battle_field,
-        //         opponent_battle_field,
-        //         opponent_hp,
-        //     } => {
-        //         ctx.text(
-        //             serde_json::to_string(&CombatSocketMessage::Update(
-        //
-        //             ))
-        //                 .unwrap(),
-        //         );
-        //     }
-        //
-        // }
     }
 
     fn stopped(&mut self, _ctx: &mut Self::Context) {
@@ -217,8 +197,6 @@ impl Actor for CombatSocket {
                 .unwrap();
         });
     }
-
-    // Logic to dissociate socket from combatant, clean up potentially?
 }
 
 struct SetWsToPlayerDecisionMakerTx(pub Sender<CombatCommand>);
@@ -252,10 +230,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for CombatSocket {
                 match serde_json::from_str::<CombatSocketMessage>(&text) {
                     Ok(message) => match message {
                         CombatSocketMessage::Command(command) => self.handle_command(command),
-                        _ => error!("Unexpected message type from client"),
+                        _ => error!("Unexpected message type from client {:?}", message),
                     },
                     Err(e) => {
-                        error!("Received invalid message from client: {}", e);
+                        error!("Received invalid message from client: {} and the msg: {:?}", e, text);
                     }
                 };
             }

@@ -3,14 +3,15 @@ use serde::{Deserialize, Serialize};
 use crate::prisma;
 use crate::prisma::{
     armor_effect, charge_effect, damage_effect, heal_effect, initiative_effect, lifesteal_effect,
-    pickup_effect, poison_effect, resilience_effect, stun_effect, summon_effect, taunt_effect,
+    minion_effect, pickup_effect, poison_effect, resilience_effect, stun_effect, summon_effect,
+    taunt_effect,
 };
-use crate::prisma::{card, DamageType, deck, deck_card, minion_effect, spell_effect, TargetType};
+use crate::prisma::{card, DamageType, deck, deck_card, spell_effect, TargetType};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Deck {
-    id: String,
-    hero_id: Option<String>,
+    pub id: String,
+    pub hero_id: Option<String>,
     pub cards_in_deck: Vec<Card>,
 }
 
@@ -61,13 +62,7 @@ pub struct SpellEffect {
     pub id: String,
     pub card_id: String,
     pub duration: i32,
-    pub damage_effect: Option<DamageEffect>,
-    pub heal_effect: Option<HealEffect>,
-    pub armor_effect: Option<ArmorEffect>,
-    pub resilience_effect: Option<ResilienceEffect>,
-    pub poison_effect: Option<PoisonEffect>,
-    pub initiative_effect: Option<InitiativeEffect>,
-    pub stun_effect: Option<StunEffect>,
+    pub effect: SpellEffectType, // Updated to use the SpellEffectType enum
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -75,142 +70,140 @@ pub struct MinionEffect {
     pub id: String,
     pub card_id: String,
     pub duration: i32,
-    pub taunt_effect: Option<TauntEffect>,
-    pub charge_effect: Option<ChargeEffect>,
-    pub lifesteal_effect: Option<LifestealEffect>,
-    pub pickup_effect: Option<PickupEffect>,
-    pub summon_effect: Option<SummonEffect>,
-    pub resilience_effect: Option<ResilienceEffect>,
+    pub effect: MinionEffectType, // Updated to use the MinionEffectType enum
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum MinionEffectType {
+    Taunt(TauntEffect),
+    Charge(ChargeEffect),
+    Lifesteal(LifestealEffect),
+    Pickup(PickupEffect),
+    Summon(SummonEffect),
+    Resilience(ResilienceEffect),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum SpellEffectType {
+    Damage(DamageEffect),
+    Heal(HealEffect),
+    Armor(ArmorEffect),
+    Resilience(ResilienceEffect),
+    Poison(PoisonEffect),
+    Initiative(InitiativeEffect),
+    Stun(StunEffect),
 }
 
 impl From<spell_effect::Data> for SpellEffect {
     fn from(data: spell_effect::Data) -> Self {
+        let effect_type = data
+            .effects
+            .unwrap_or_default()
+            .into_iter()
+            .map(|effect_data| {
+                effect_data
+                    .damage_effect
+                    .and_then(|inner| inner)
+                    .map(|e| SpellEffectType::Damage(DamageEffect::from(*e)))
+                    .or_else(|| {
+                        effect_data
+                            .heal_effect
+                            .and_then(|inner| inner)
+                            .map(|e| SpellEffectType::Heal(HealEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .armor_effect
+                            .and_then(|inner| inner)
+                            .map(|e| SpellEffectType::Armor(ArmorEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .resilience_effect
+                            .and_then(|inner| inner)
+                            .map(|e| SpellEffectType::Resilience(ResilienceEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .poison_effect
+                            .and_then(|inner| inner)
+                            .map(|e| SpellEffectType::Poison(PoisonEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .initiative_effect
+                            .and_then(|inner| inner)
+                            .map(|e| SpellEffectType::Initiative(InitiativeEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .stun_effect
+                            .and_then(|inner| inner)
+                            .map(|e| SpellEffectType::Stun(StunEffect::from(*e)))
+                    })
+                    .expect("Expected at least one effect type to be present in the effects vector")
+            })
+            .next()
+            .expect("Expected at least one effect type to be present in the effects vector");
         SpellEffect {
             id: data.id,
             card_id: data.card_id,
             duration: data.duration,
-            damage_effect: data.effects.as_ref().and_then(|effects| {
-                effects.iter().find_map(|effect| {
-                    effect
-                        .damage_effect
-                        .as_ref()?
-                        .as_ref()
-                        .map(|boxed_damage_effect| {
-                            DamageEffect::from((**boxed_damage_effect).clone())
-                        })
-                })
-            }),
-
-            heal_effect: data.effects.as_ref().and_then(|effects| {
-                effects.iter().find_map(|effect| {
-                    effect
-                        .heal_effect
-                        .as_ref()?
-                        .as_ref()
-                        .map(|boxed_heal_effect| HealEffect::from((**boxed_heal_effect).clone()))
-                })
-            }),
-            armor_effect: data.effects.as_ref().and_then(|effects| {
-                effects.iter().find_map(|effect| {
-                    effect
-                        .armor_effect
-                        .as_ref()?
-                        .as_ref()
-                        .map(|boxed_armor_effect| ArmorEffect::from((**boxed_armor_effect).clone()))
-                })
-            }),
-            resilience_effect: data.effects.as_ref().and_then(|effects| {
-                effects.iter().find_map(|effect| {
-                    effect
-                        .resilience_effect
-                        .as_ref()?
-                        .as_ref()
-                        .map(|boxed_resilience_effect| {
-                            ResilienceEffect::from((**boxed_resilience_effect).clone())
-                        })
-                })
-            }),
-            poison_effect: data.effects.as_ref().and_then(|effects| {
-                effects.iter().find_map(|effect| {
-                    effect
-                        .poison_effect
-                        .as_ref()?
-                        .as_ref()
-                        .map(|boxed_poison_effect| {
-                            PoisonEffect::from((**boxed_poison_effect).clone())
-                        })
-                })
-            }),
-            initiative_effect: data.effects.as_ref().and_then(|effects| {
-                effects.iter().find_map(|effect| {
-                    effect
-                        .initiative_effect
-                        .as_ref()?
-                        .as_ref()
-                        .map(|boxed_initiative_effect| {
-                            InitiativeEffect::from((**boxed_initiative_effect).clone())
-                        })
-                })
-            }),
-            stun_effect: data.effects.as_ref().and_then(|effects| {
-                effects.iter().find_map(|effect| {
-                    effect
-                        .stun_effect
-                        .as_ref()?
-                        .as_ref()
-                        .map(|boxed_stun_effect| StunEffect::from((**boxed_stun_effect).clone()))
-                })
-            }),
+            effect: effect_type,
         }
     }
 }
-
 impl From<minion_effect::Data> for MinionEffect {
     fn from(data: minion_effect::Data) -> Self {
+        let effect_type = data
+            .effects
+            .unwrap_or_default()
+            .into_iter()
+            .map(|effect_data| {
+                effect_data
+                    .taunt_effect
+                    .and_then(|inner| inner)
+                    .map(|e| MinionEffectType::Taunt(TauntEffect::from(*e)))
+                    .or_else(|| {
+                        effect_data
+                            .charge_effect
+                            .and_then(|inner| inner)
+                            .map(|e| MinionEffectType::Charge(ChargeEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .lifesteal_effect
+                            .and_then(|inner| inner)
+                            .map(|e| MinionEffectType::Lifesteal(LifestealEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .pickup_effect
+                            .and_then(|inner| inner)
+                            .map(|e| MinionEffectType::Pickup(PickupEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .summon_effect
+                            .and_then(|inner| inner)
+                            .map(|e| MinionEffectType::Summon(SummonEffect::from(*e)))
+                    })
+                    .or_else(|| {
+                        effect_data
+                            .resilience_effect
+                            .and_then(|inner| inner)
+                            .map(|e| MinionEffectType::Resilience(ResilienceEffect::from(*e)))
+                    })
+                    .expect("Expected at least one effect type to be present in the effects vector")
+            })
+            .next()
+            .expect("Expected at least one effect type to be present in the effects vector");
+
         MinionEffect {
             id: data.id,
             card_id: data.card_id,
             duration: data.duration,
-            taunt_effect: data.effects.as_ref().and_then(|effects| {
-                effects
-                    .iter()
-                    .find_map(|effect| effect.taunt_effect.as_ref()?.as_ref())
-                    .map(|boxed_taunt_effect| TauntEffect::from((**boxed_taunt_effect).clone()))
-            }),
-            charge_effect: data.effects.as_ref().and_then(|effects| {
-                effects
-                    .into_iter()
-                    .find_map(|effect| effect.charge_effect.as_ref()?.as_ref())
-                    .map(|boxed_charge_effect| ChargeEffect::from((**boxed_charge_effect).clone()))
-            }),
-            lifesteal_effect: data.effects.as_ref().and_then(|effects| {
-                effects
-                    .into_iter()
-                    .find_map(|effect| effect.lifesteal_effect.as_ref()?.as_ref())
-                    .map(|boxed_lifesteal_effect| {
-                        LifestealEffect::from((**boxed_lifesteal_effect).clone())
-                    })
-            }),
-            pickup_effect: data.effects.as_ref().and_then(|effects| {
-                effects
-                    .into_iter()
-                    .find_map(|effect| effect.pickup_effect.as_ref()?.as_ref())
-                    .map(|boxed_pickup_effect| PickupEffect::from((**boxed_pickup_effect).clone()))
-            }),
-            summon_effect: data.effects.as_ref().and_then(|effects| {
-                effects
-                    .into_iter()
-                    .find_map(|effect| effect.summon_effect.as_ref()?.as_ref())
-                    .map(|boxed_summon_effect| SummonEffect::from((**boxed_summon_effect).clone()))
-            }),
-            resilience_effect: data.effects.as_ref().and_then(|effects| {
-                effects
-                    .into_iter()
-                    .find_map(|effect| effect.resilience_effect.as_ref()?.as_ref())
-                    .map(|boxed_resilience_effect| {
-                        ResilienceEffect::from((**boxed_resilience_effect).clone())
-                    })
-            }),
+            effect: effect_type,
         }
     }
 }
@@ -442,6 +435,7 @@ pub enum EffectType {
 
 impl From<deck::Data> for Deck {
     fn from(data: deck::Data) -> Self {
+        // shouldnt be called anywhere right now
         Deck {
             id: data.id,
             hero_id: data.hero.unwrap().map(|hero| hero.id),

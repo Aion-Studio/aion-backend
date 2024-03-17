@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use tracing::{error, info, warn};
 
 use crate::{
+    _include_spell_effect_effect,
     events::game::ActionCompleted,
     models::{
         hero::Hero,
@@ -22,13 +23,15 @@ use crate::{
     },
     types::RepoFuture,
 };
-use crate::models::cards::Card;
+use crate::models::cards::{Card, Deck};
 use crate::models::hero::{Attributes, BaseStats, convert_to_fixed_offset};
 use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
 use crate::prisma::{
-    action, card, hero_actions, hero_quests, npc, quest, resource_type, ResourceEnum,
+    action, card, deck, deck_card, hero_actions, hero_quests, minion_effect, minion_effect_effect,
+    npc, quest, resource_type, ResourceEnum, spell_effect, spell_effect_effect,
 };
+use crate::prisma::hero::SelectParam::Id;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::services::tasks::explore::ExploreAction;
 use crate::utils::merge;
@@ -136,7 +139,8 @@ impl Repo {
                                         .exec()
                                         .await
                                         .unwrap();
-                                    self.update_hero(hero.clone()).await
+                                    let _ = self.update_hero(hero.clone()).await;
+                                    Ok(hero)
                                 }
                                 None => Ok(hero),
                             }
@@ -156,13 +160,14 @@ impl Repo {
     }
 
     async fn hero_by_id(&self, hero_id: String) -> Result<Hero, QueryError> {
-        let hero = self
+        let hero_data = self
             .prisma
             .hero()
             .find_unique(hero::id::equals(hero_id.clone()))
             .with(hero::base_stats::fetch())
             .with(hero::attributes::fetch())
             .with(hero::inventory::fetch())
+            .with(hero::deck::fetch())
             .with(hero::hero_region::fetch(vec![hero_id::equals(
                 hero_id.clone(),
             )]))
@@ -175,13 +180,72 @@ impl Repo {
             .exec()
             .await?;
 
-        match hero {
-            Some(hero) => Ok(hero.into()),
-            None => Err(QueryError::Serialize(format!(
-                "No hero found with id: {}",
-                hero_id
-            ))),
-        }
+        let deck_id = hero_data
+            .as_ref()
+            .unwrap()
+            .deck
+            .clone()
+            .unwrap()
+            .unwrap()
+            .id;
+
+        let deck_cards = self
+            .prisma
+            .deck_card()
+            .find_many(vec![deck_card::deck_id::equals(deck_id.clone())])
+            .with(
+                deck_card::card::fetch()
+                    .with(
+                        card::minion_effects::fetch(vec![]).with(
+                            minion_effect::effects::fetch(vec![])
+                                .with(minion_effect_effect::pickup_effect::fetch())
+                                .with(minion_effect_effect::resilience_effect::fetch())
+                                .with(minion_effect_effect::poison_effect::fetch())
+                                .with(minion_effect_effect::taunt_effect::fetch())
+                                .with(minion_effect_effect::lifesteal_effect::fetch())
+                                .with(minion_effect_effect::summon_effect::fetch())
+                                .with(minion_effect_effect::charge_effect::fetch()),
+                        ),
+                    )
+                    .with(
+                        card::spell_effects::fetch(vec![]).with(
+                            spell_effect::effects::fetch(vec![])
+                                .with(spell_effect_effect::damage_effect::fetch())
+                                .with(spell_effect_effect::heal_effect::fetch())
+                                .with(spell_effect_effect::armor_effect::fetch())
+                                .with(spell_effect_effect::resilience_effect::fetch())
+                                .with(spell_effect_effect::poison_effect::fetch())
+                                .with(spell_effect_effect::initiative_effect::fetch())
+                                .with(spell_effect_effect::stun_effect::fetch()),
+                        ),
+                    ),
+            )
+            .exec()
+            .await?;
+
+        let mut hero: Hero = match hero_data {
+            Some(hero) => hero.into(),
+            None => {
+                return Err(QueryError::Serialize(format!(
+                    "No hero found with id: {}",
+                    hero_id
+                )))
+            }
+        };
+
+        let cards: Vec<Card> = deck_cards
+            .into_iter()
+            .map(|deck_card| deck_card.card.unwrap())
+            .map(|card| (*card).into())
+            .collect();
+
+        hero.deck = Some(Deck {
+            id: deck_id,
+            hero_id: Some(hero_id.clone()),
+            cards_in_deck: cards,
+        });
+        Ok(hero)
+        // hero
     }
 
     pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
@@ -644,7 +708,7 @@ impl Repo {
             .action()
             .find_unique(action::UniqueWhereParam::IdEquals(String::from(action_id)))
             .with(action::quest::fetch())
-            .with(action::npc::fetch())
+            .with(action::npc::fetch().with(npc::deck::fetch()))
             .exec()
             .await?;
 
@@ -1062,6 +1126,7 @@ impl Repo {
             .find_first(vec![npc::WhereParam::ActionsSome(vec![
                 action::id::equals(action_id.to_string()),
             ])])
+            .with(npc::deck::fetch().with(deck::npc::fetch()))
             .exec()
             .await
             .unwrap();

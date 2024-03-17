@@ -41,8 +41,6 @@ impl QuestHandler {
                 }
             };
 
-            info!("action found {:?}", action);
-
             let region = action.region_name;
 
             Logger::log(json!({"name":ActionNames::Quest.to_string() ,"hero_id": hero_id}));
@@ -116,9 +114,8 @@ impl QuestHandler {
             //         errs.push(e);
             //     }
             // }
-            // resp.send(ResponderType::UnitResponse(())).unwrap();
-            let done_cmd = Command::QuestActionDone(hero_id, action_id);
-            MESSENGER.send(done_cmd);
+            // let done_cmd = Command::QuestActionDone(hero_id, action_id);
+            // MESSENGER.send(done_cmd);
         });
     }
 
