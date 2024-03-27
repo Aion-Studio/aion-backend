@@ -1,12 +1,15 @@
 use std::any::Any;
+use std::cmp::max;
 
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 use crate::events::combat::CombatError;
 use crate::models::cards::{Card, Deck};
 use crate::models::combatant::Combatant;
 use crate::models::hero::{Attributes, BaseStats, Inventory, Range};
 use crate::models::talent::Talent;
+use crate::prisma::DamageType;
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,16 +80,33 @@ impl Combatant for HeroCombatant {
     fn get_armor(&self) -> i32 {
         self.base_stats.armor
     }
+
     fn get_level(&self) -> i32 {
         self.base_stats.level
     }
-    fn attack(&self, other: &mut dyn Combatant) {
-        let damage = self.get_damage();
-        other.take_damage(damage);
+
+    fn take_damage(&mut self, damage: i32, damage_type: DamageType) {
+        match damage_type {
+            DamageType::Physical => {
+                let diff = damage - self.base_stats.armor;
+                self.base_stats.armor = max(0, self.base_stats.armor - damage);
+                if diff > 0 {
+                    self.base_stats.hit_points -= diff;
+                }
+            }
+            DamageType::Spell => {
+                let diff = damage - self.base_stats.resilience;
+                self.base_stats.resilience = max(0, self.base_stats.resilience - damage);
+                if diff > 0 {
+                    self.base_stats.hit_points -= diff;
+                }
+            }
+            DamageType::Chaos => {
+                self.base_stats.hit_points -= damage;
+            }
+        }
     }
-    fn take_damage(&mut self, damage: i32) {
-        self.base_stats.hit_points -= damage;
-    }
+
     fn shuffle_deck(&mut self) {
         let deck = &mut self.deck;
         if self.cards_in_discard.len() > 0 {
@@ -97,11 +117,16 @@ impl Combatant for HeroCombatant {
         use rand::thread_rng;
 
         let mut rng = thread_rng();
-        self.deck.cards_in_deck.shuffle(&mut rng);
+
+        deck.cards_in_deck.shuffle(&mut rng);
     }
+
     fn draw_cards(&mut self, num_cards: i32) {
         if self.deck.cards_in_deck.len() < num_cards as usize {
             self.shuffle_deck();
+        }
+        if self.deck.cards_in_deck.is_empty() {
+            return;
         }
         self.cards_in_hand.append(
             &mut self
@@ -115,8 +140,9 @@ impl Combatant for HeroCombatant {
     fn add_to_discard(&mut self, card: Card) {
         self.cards_in_discard.push(card);
     }
+    /// Sets the hero's mana to the amount
     fn add_mana(&mut self, mana: i32) {
-        self.mana += mana;
+        self.mana = mana;
     }
 
     fn spend_mana(&mut self, mana: i32) {
@@ -126,11 +152,14 @@ impl Combatant for HeroCombatant {
     fn get_hand(&self) -> &Vec<Card> {
         &self.cards_in_hand
     }
+    fn get_resilience(&self) -> i32 {
+        self.base_stats.resilience
+    }
 
     fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {
-        if let Some(idx) = self.cards_in_hand.iter().position(|c| c == card) {
+        if let Some(idx) = self.cards_in_hand.iter().position(|c| c.id == card.id) {
             self.cards_in_hand.remove(idx);
-            self.add_to_discard(card.clone());
+            // self.add_to_discard(card.clone());
             Ok(())
         } else {
             Err(CombatError::CardNotInHand)

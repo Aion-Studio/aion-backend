@@ -26,11 +26,6 @@ pub trait Task: Send + Sync {
     fn start_now(&self);
 }
 
-pub trait GameAction<'a> {
-    fn name(&self) -> String;
-    fn hero_id(&self) -> String;
-}
-
 #[derive(Clone, Debug)]
 pub struct BaseTask {
     id: Uuid,

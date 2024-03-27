@@ -75,7 +75,6 @@ impl Repo {
             .attributes()
             .create(
                 new_hero.attributes.strength,
-                new_hero.attributes.resilience,
                 new_hero.attributes.agility,
                 new_hero.attributes.intelligence,
                 new_hero.attributes.exploration,
@@ -189,6 +188,30 @@ impl Repo {
             .unwrap()
             .id;
 
+        let mut hero: Hero = match hero_data {
+            Some(hero) => hero.into(),
+            None => {
+                return Err(QueryError::Serialize(format!(
+                    "No hero found with id: {}",
+                    hero_id
+                )))
+            }
+        };
+
+        let cards: Vec<Card> = self.deck_cards_by_deck_id(deck_id.clone()).await;
+        info!("[repo] hero cards in deck {:?}", cards.len());
+
+        hero.deck = Some(Deck {
+            id: deck_id,
+            hero_id: Some(hero_id.clone()),
+            cards_in_deck: cards,
+        });
+        Ok(hero)
+        // hero
+    }
+
+    async fn deck_cards_by_deck_id(&self, deck_id: String) -> Vec<Card> {
+        info!("Getting deck cards for deck_id: {}", deck_id);
         let deck_cards = self
             .prisma
             .deck_card()
@@ -221,31 +244,18 @@ impl Repo {
                     ),
             )
             .exec()
-            .await?;
-
-        let mut hero: Hero = match hero_data {
-            Some(hero) => hero.into(),
-            None => {
-                return Err(QueryError::Serialize(format!(
-                    "No hero found with id: {}",
-                    hero_id
-                )))
+            .await;
+        match deck_cards {
+            Ok(cards) => cards
+                .into_iter()
+                .map(|deck_card| deck_card.card.unwrap())
+                .map(|card| (*card).into())
+                .collect(),
+            Err(e) => {
+                error!("Error getting deck cards: {}", e);
+                vec![]
             }
-        };
-
-        let cards: Vec<Card> = deck_cards
-            .into_iter()
-            .map(|deck_card| deck_card.card.unwrap())
-            .map(|card| (*card).into())
-            .collect();
-
-        hero.deck = Some(Deck {
-            id: deck_id,
-            hero_id: Some(hero_id.clone()),
-            cards_in_deck: cards,
-        });
-        Ok(hero)
-        // hero
+        }
     }
 
     pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
@@ -1130,17 +1140,24 @@ impl Repo {
             .exec()
             .await
             .unwrap();
-        match npc {
-            Some(npc) => Ok(npc.into()),
-            None => Err(QueryError::Serialize("No npc found".to_string())),
-        }
+        let deck_id = npc.as_ref().unwrap().deck_id.clone().unwrap();
+        let deck_cards = self.deck_cards_by_deck_id(deck_id.clone()).await;
+        let mut npc_obj: Monster = match npc {
+            Some(npc) => npc.into(),
+            None => return Err(QueryError::Serialize(format!("No npc found ",))),
+        };
+        npc_obj.deck = Some(Deck {
+            id: deck_id,
+            hero_id: None,
+            cards_in_deck: deck_cards,
+        });
+        Ok(npc_obj)
     }
 }
 
 fn attributes_update_params(attributes: &Attributes) -> Vec<attributes::SetParam> {
     vec![
         attributes::strength::set(attributes.strength),
-        attributes::resilience::set(attributes.resilience),
         attributes::agility::set(attributes.agility),
         attributes::intelligence::set(attributes.intelligence),
         attributes::exploration::set(attributes.exploration),
@@ -1152,6 +1169,7 @@ fn base_stats_update_params(base_stats: &BaseStats) -> Vec<base_stats::SetParam>
         base_stats::level::set(base_stats.level),
         base_stats::xp::set(base_stats.xp),
         base_stats::damage_min::set(base_stats.damage.min),
+        base_stats::resilience::set(base_stats.resilience),
         base_stats::damage_max::set(base_stats.damage.max),
         base_stats::hit_points::set(base_stats.hit_points),
         base_stats::armor::set(base_stats.armor),

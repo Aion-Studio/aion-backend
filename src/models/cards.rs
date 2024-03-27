@@ -6,7 +6,7 @@ use crate::prisma::{
     minion_effect, pickup_effect, poison_effect, resilience_effect, stun_effect, summon_effect,
     taunt_effect,
 };
-use crate::prisma::{card, DamageType, deck, deck_card, spell_effect, TargetType};
+use crate::prisma::{card, deck, deck_card, spell_effect, DamageType, TargetType};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Deck {
@@ -31,7 +31,19 @@ pub struct Card {
     pub card_type: CardType,
     pub spell_effects: Vec<SpellEffect>,
     pub minion_effects: Vec<MinionEffect>,
+    pub round_played: i32,
+    pub last_attack_round: Option<i32>,
 }
+
+impl Card {
+    pub fn attack(&self, target: &mut Card) {
+        target.health -= self.damage;
+    }
+    pub fn take_damage(&mut self, damage: i32) {
+        self.health -= damage;
+    }
+}
+
 impl From<card::Data> for Card {
     fn from(data: card::Data) -> Self {
         Card {
@@ -45,6 +57,8 @@ impl From<card::Data> for Card {
             health: data.health,
             damage: data.damage,
             card_type: data.card_type.into(),
+            round_played: 0,
+            last_attack_round: None,
             spell_effects: data
                 .spell_effects
                 .map(|effects| effects.into_iter().map(SpellEffect::from).collect())
@@ -57,6 +71,7 @@ impl From<card::Data> for Card {
         }
     }
 }
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct SpellEffect {
     pub id: String,
@@ -515,38 +530,3 @@ impl From<Rarity> for prisma::Rarity {
         }
     }
 }
-
-// impl From<effect_type::Data> for EffectType {
-//     fn from(effect_type: effect_type::Data) -> Self {
-//         match effect_type.name.as_str() {
-//             "PhysicalDamage" => EffectType::PhysicalDamage,
-//             "SpellDamage" => EffectType::SpellDamage,
-//             "ChaosDamage" => EffectType::ChaosDamage,
-//             "DamageOverTime" => EffectType::DamageOverTime,
-//             "Stun" => EffectType::Stun,
-//             "ReduceArmor" => EffectType::ReduceArmor,
-//             "ReduceResilience" => EffectType::ReduceResilience,
-//             "IncreaseArmor" => EffectType::IncreaseArmor,
-//             "IncreaseResilience" => EffectType::IncreaseResilience,
-//             "Heal" => EffectType::Heal,
-//             "HealOverTime" => EffectType::HealOverTime,
-//             "DrawCards" => EffectType::DrawCards,
-//             "ApplyPoison" => EffectType::ApplyPoison,
-//             "RemovePoison" => EffectType::RemovePoison,
-//             "ApplyInitiative" => EffectType::ApplyInitiative,
-//             "RemoveInitiative" => EffectType::RemoveInitiative,
-//             _ => panic!("Effect type not found"),
-//         }
-//     }
-// }
-// fn convert_deck_data(deck_data: deck::Data) -> Deck {
-//     Deck::from(deck_data)
-// }
-//
-// fn convert_card_data(card_data: card::Data) -> Card {
-//     Card::from(card_data)
-// }
-//
-// fn convert_card_effect_data(card_effect_data: card_effect::Data) -> CardEffect {
-//     CardEffect::from(card_effect_data)
-// }

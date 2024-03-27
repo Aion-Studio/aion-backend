@@ -4,10 +4,10 @@ datasource db {
 }
 
 generator client {
-  // provider = "cargo prisma"
+  provider = "cargo prisma"
   // The location to generate the client. Is relative to the position of the schemaschemour
-  // output   = "../src/prisma.rs"
-  provider = "prisma-client-js"
+  output   = "../src/prisma.rs"
+  // provider = "prisma-client-js"
 }
 
 model Hero {
@@ -123,19 +123,19 @@ model HeroRegion {
 }
 
 model BaseStats {
-  id        String @id @default(uuid())
-  level     Int
-  xp        Int
-  damageMin Int
-  damageMax Int
-  hitPoints Int    @map("hit_points")
-  armor     Int
-  hero      Hero?
+  id         String @id @default(uuid())
+  level      Int
+  xp         Int
+  resilience Int    @default(0)
+  damageMin  Int
+  damageMax  Int
+  hitPoints  Int    @map("hit_points")
+  armor      Int
+  hero       Hero?
 }
 
 model Attributes {
   id           String     @id @default(uuid())
-  resilience   Int
   strength     Int
   agility      Int
   intelligence Int
@@ -448,8 +448,6 @@ model HeroCard {
   cardId String
   hero   Hero   @relation(fields: [heroId], references: [id])
   card   Card   @relation(fields: [cardId], references: [id])
-
-  @@unique([heroId, cardId])
 }
 
 model NpcCard {

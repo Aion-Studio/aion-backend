@@ -1,14 +1,18 @@
-use std::any::Any;
 use std::sync::Arc;
+use std::{any::Any, cmp::max};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
-    Mutex, oneshot,
+    oneshot, Mutex,
 };
 use tracing::log::info;
 use tracing::warn;
 
+use crate::events::combat::{CombatError, CombatantIndex};
+use crate::models::cards::{Card, Deck};
+use crate::models::player_decision_maker::PlayerDecisionMaker;
+use crate::prisma::DamageType;
 use crate::{
     events::combat::CombatTurnMessage,
     prisma::npc,
@@ -16,9 +20,6 @@ use crate::{
         impls::combat_service::CombatCommand, traits::combat_decision_maker::DecisionMaker,
     },
 };
-use crate::events::combat::{CombatantIndex, CombatError};
-use crate::models::cards::{Card, Deck};
-use crate::models::player_decision_maker::PlayerDecisionMaker;
 
 use super::{combatant::Combatant, hero::Range, talent::Talent};
 
@@ -70,27 +71,49 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                     info!("Shutting down signal monster.");
                 },
                 _ = async {
-                    info!("npc starting to listen for commands");
                     while let Some(result) = result_receiver.recv().await {
                         match result {
                             CombatTurnMessage::PlayerTurn(turn_idx) => {
+                                info!("Npc Player Turn {:?}", turn_idx);
                                 // Do nothing
-                                info!("npc got turn message {:?}", turn_idx);
-                                if npc_player_idx == turn_idx {
-                                    info!("npc attacking...");
-                                    let command = CombatCommand::Attack; // Example decision
-                                    combat_sender
-                                        .clone()
-                                        .send(command)
-                                        .await
-                                        .expect("Failed to send command");
-                                }
                             }
                             CombatTurnMessage::Winner(idx) => {
                                 // Do nothing
                             }
-                            CombatTurnMessage::EncounterState(state)=>{
-                                info!("Npc got the encounter state since last moves{:?}",state);
+                            CombatTurnMessage::PlayerState{
+                                me,
+                                me_idx,
+                                opponent,
+                                opponent_battle_field,
+                                my_battle_field,
+                                active_effects,
+                                turn,
+                                opponent_hp
+                            }=>{
+                                if turn == idx.clone() {
+                                    info!("it npc turn to play , avail cards {:?}, avail mana: {:?}",me.get_hand().iter().map(|c|c.mana_cost).collect::<Vec<_>>(), me.get_mana());
+                                     let cards_i_can_play = me.get_hand().iter().filter(|c| c.mana_cost <= me.get_mana()).collect::<Vec<_>>();
+                                    if cards_i_can_play.is_empty(){
+                                        info!("NPC no cards to play");
+                                        let command = CombatCommand::EndTurn;
+                                        combat_sender
+                                            .clone()
+                                            .send(command)
+                                            .await
+                                            .expect("Failed to send command");
+                                    } else {
+                                         let card = *(cards_i_can_play.first().unwrap());
+
+                                        info!("NPC playing card of type {:?}", card.card_type);
+                                         let command = CombatCommand::PlayCard((*card).clone());
+                                         combat_sender
+                                              .clone()
+                                              .send(command)
+                                              .await
+                                              .expect("Failed to send command");
+
+                                    }
+                                }
                             }
                             x => {
                                 info!("npc got some other message {:?}", x);
@@ -132,6 +155,7 @@ pub struct Monster {
     pub damage: Range<i32>,
     pub hit_points: i32,
     pub armor: i32,
+    pub resilience: i32,
     pub level: i32,
     pub mana: i32,
     pub deck: Option<Deck>,
@@ -155,6 +179,10 @@ impl Combatant for Monster {
     fn get_damage(&self) -> i32 {
         self.damage.roll()
     }
+    fn get_mana(&self) -> i32 {
+        self.mana
+    }
+
     fn get_talents(&self) -> &Vec<Talent> {
         &self.talents
     }
@@ -167,30 +195,33 @@ impl Combatant for Monster {
         self.armor
     }
 
+    fn get_resilience(&self) -> i32 {
+        self.resilience
+    }
+
     fn get_level(&self) -> i32 {
         self.level
     }
 
-    fn attack(&self, other: &mut dyn Combatant) {
-        let damage = self.damage.roll();
-        other.take_damage(damage);
-    }
-
-    fn take_damage(&mut self, damage: i32) {
-        self.hit_points -= damage;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {
-        if self.cards_in_hand.contains(card) {
-            self.cards_in_hand.retain(|c| c != card);
-            self.add_to_discard(card.clone());
-            Ok(())
-        } else {
-            Err(CombatError::CardNotInHand)
+    fn take_damage(&mut self, damage: i32, damage_type: DamageType) {
+        match damage_type {
+            DamageType::Physical => {
+                let diff = damage - self.armor;
+                self.armor = max(0, self.armor - damage);
+                if diff > 0 {
+                    self.hit_points -= diff;
+                }
+            }
+            DamageType::Spell => {
+                let diff = damage - self.resilience;
+                self.resilience = max(0, self.resilience - damage);
+                if diff > 0 {
+                    self.hit_points -= diff;
+                }
+            }
+            DamageType::Chaos => {
+                self.hit_points -= damage;
+            }
         }
     }
 
@@ -208,19 +239,6 @@ impl Combatant for Monster {
         }
     }
 
-    fn add_mana(&mut self, mana: i32) {
-        self.mana += mana;
-    }
-    fn spend_mana(&mut self, mana: i32) {
-        self.mana -= mana;
-    }
-
-    fn get_mana(&self) -> i32 {
-        self.mana
-    }
-    fn add_to_discard(&mut self, card: Card) {
-        self.cards_in_discard.push(card);
-    }
     fn draw_cards(&mut self, num_cards: i32) {
         // Ensure the deck exists and determine if we need to shuffle
         let need_shuffle = if let Some(deck) = &self.deck {
@@ -244,8 +262,32 @@ impl Combatant for Monster {
             self.cards_in_hand.extend(drawn_cards);
         }
     }
+
+    fn add_to_discard(&mut self, card: Card) {
+        self.cards_in_discard.push(card);
+    }
+    fn add_mana(&mut self, mana: i32) {
+        info!("NPC getting mana {:?}", mana);
+        self.mana = mana;
+    }
+
+    fn spend_mana(&mut self, mana: i32) {
+        self.mana -= mana;
+    }
     fn get_hand(&self) -> &Vec<Card> {
         &self.cards_in_hand
+    }
+    fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {
+        if let Some(idx) = self.cards_in_hand.iter().position(|c| c.id == card.id) {
+            self.cards_in_hand.remove(idx);
+            // self.add_to_discard(card.clone());
+            Ok(())
+        } else {
+            Err(CombatError::CardNotInHand)
+        }
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -261,6 +303,7 @@ impl From<npc::Data> for Monster {
             level: data.level,
             hit_points: data.hp,
             armor: data.armor,
+            resilience: data.resilience,
             monster_type: None,
             mana: 0,
             deck: None,

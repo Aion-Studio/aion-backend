@@ -5,6 +5,7 @@ use std::fmt::Formatter;
 use crate::events::combat::CombatError;
 use crate::models::cards::Card;
 use crate::models::hero::Range;
+use crate::prisma::DamageType;
 
 use super::talent::Talent;
 
@@ -19,17 +20,21 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn get_damage_stats(&self) -> Range<i32>;
 
     fn get_armor(&self) -> i32;
+    fn get_resilience(&self) -> i32;
     fn get_level(&self) -> i32;
 
-    fn attack(&self, other: &mut dyn Combatant);
-    fn take_damage(&mut self, damage: i32);
+    // fn attack(&self, other: &mut dyn Combatant);
+    fn take_damage(&mut self, amount: i32, damage_type: DamageType);
     fn shuffle_deck(&mut self);
     fn draw_cards(&mut self, num_cards: i32); // goes from deck to hand
     fn add_to_discard(&mut self, card: Card);
+    /// Sets the hero's mana to the amount
     fn add_mana(&mut self, mana: i32);
     fn spend_mana(&mut self, mana: i32);
     fn get_hand(&self) -> &Vec<Card>;
-    fn play_card(&mut self, card: &Card) -> Result<(),CombatError>;
+    /// Removes a card from hand.
+    /// Caller is responsible for moving card to battlefield
+    fn play_card(&mut self, card: &Card) -> Result<(), CombatError>;
     fn as_any(&self) -> &dyn Any;
 }
 

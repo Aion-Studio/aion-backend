@@ -19,6 +19,7 @@ pub mod prisma;
 #[allow(dead_code)]
 #[allow(unused_variables)]
 mod models {
+    pub mod card_effect;
     pub mod combatant;
     pub mod date_times;
     pub mod game_engine;
@@ -57,9 +58,6 @@ mod events {
 mod services {
     pub mod impls {
 
-        #[cfg(test)]
-        mod region_service_test;
-
         pub mod combat_service;
         pub mod items_service;
         pub mod tasks;
@@ -68,7 +66,6 @@ mod services {
     pub mod traits {
         pub mod async_task;
         pub mod combat_decision_maker;
-        pub mod hero_service;
     }
     pub mod tasks {
         pub mod action_names;

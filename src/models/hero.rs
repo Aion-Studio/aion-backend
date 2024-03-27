@@ -3,24 +3,24 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use prisma_client_rust::chrono::{self, DateTime, Duration, FixedOffset, Utc};
-use rand::{Rng, thread_rng};
 use rand::seq::SliceRandom;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use tracing::log::error;
 
-use crate::{
-    events::game::ActionCompleted,
-    prisma::{
-        attributes, base_stats, follower, hero, hero_resource, inventory, item, retinue_slot,
-    },
-};
 use crate::events::game::ActionDurations;
 use crate::infra::Infra;
 use crate::models::cards::{Card, Deck};
 use crate::models::hero_combatant::HeroCombatant;
 use crate::prisma::ResourceEnum;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
+use crate::{
+    events::game::ActionCompleted,
+    prisma::{
+        attributes, base_stats, follower, hero, hero_resource, inventory, item, retinue_slot,
+    },
+};
 
 use super::region::RegionName;
 use super::resources::Resource;
@@ -365,12 +365,12 @@ pub struct BaseStats {
     pub damage: Range<i32>,
     pub hit_points: i32,
     pub armor: i32,
+    pub resilience: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
 pub struct Attributes {
     pub id: Option<String>,
-    pub resilience: i32,
     pub strength: i32,
     pub agility: i32,
     pub intelligence: i32,
@@ -513,6 +513,7 @@ impl From<base_stats::Data> for BaseStats {
             },
             hit_points: data.hit_points,
             armor: data.armor,
+            resilience: data.resilience,
         }
     }
 }
@@ -521,7 +522,6 @@ impl From<attributes::Data> for Attributes {
     fn from(data: attributes::Data) -> Self {
         Self {
             id: Some(data.id),
-            resilience: data.resilience,
             strength: data.strength,
             agility: data.agility,
             intelligence: data.intelligence,

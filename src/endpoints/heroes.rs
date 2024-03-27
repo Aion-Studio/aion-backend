@@ -76,13 +76,13 @@ async fn create_hero_endpoint() -> impl Responder {
                 min: damage_min,
                 max: damage_max,
             },
+            resilience: 1,
             hit_points: hp,
             armor,
         },
         Attributes {
             id: None,
             strength,
-            resilience: rng.gen_range(1..20), // Unspecified, so left as is
             agility,
             intelligence,
             exploration,
@@ -340,10 +340,7 @@ pub async fn get_hero_status(
                 }
             }
             let is_in_combat = match rx.await {
-                Ok(res) => {
-                    info!("is in combat hero {:?} yes? {:?}", hero.get_id(), res);
-                    res.0.is_some()
-                }
+                Ok(res) => res.0.is_some(),
                 Err(e) => {
                     info!("Error getting combat state: {}", e);
                     false

@@ -1,29 +1,26 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use actix::prelude::*;
-use actix_web::{Error, get, HttpRequest, HttpResponse, web};
 use actix_web::web::{Data, Query};
+use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, Mutex, Notify, oneshot};
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{error, info};
 
-use crate::{
-    events::combat::CombatTurnMessage,
-    services::{
-        impls::combat_service::CombatCommand, traits::combat_decision_maker::DecisionMaker,
-    },
-    // ... Other imports relevant to your combat system
-    webserver::AppState,
-};
-use crate::events::combat::{CombatantIndex, CombatEncounter, CombatError};
+use crate::events::combat::CombatantIndex;
 use crate::jsontoken::decode_token;
 use crate::models::cards::Card;
 use crate::models::combatant::Combatant;
 use crate::models::player_decision_maker::PlayerDecisionMaker;
 use crate::services::impls::combat_service::{ControllerMessage, EnterBattleData};
+use crate::{
+    events::combat::CombatTurnMessage,
+    services::impls::combat_service::CombatCommand,
+    // ... Other imports relevant to your combat system
+    webserver::AppState,
+};
 
 #[derive(Deserialize)]
 pub struct WsQueryParams {
@@ -94,17 +91,6 @@ enum CombatSocketMessage {
     Update(CombatTurnMessage), // From Server --> Client
 }
 
-#[derive(Clone)]
-enum EncounterState {
-    Combat {
-        me: Arc<std::sync::Mutex<dyn Combatant>>,
-        turn: CombatantIndex,
-        my_battle_field: Vec<Card>,
-        opponent_battle_field: Vec<Card>,
-        opponent_hp: i32,
-        action_id: Option<String>, // Option if its a quest action
-    },
-}
 #[derive(Clone)]
 pub struct CombatSocket {
     combatant_id: String,
@@ -233,7 +219,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for CombatSocket {
                         _ => error!("Unexpected message type from client {:?}", message),
                     },
                     Err(e) => {
-                        error!("Received invalid message from client: {} and the msg: {:?}", e, text);
+                        error!(
+                            "Received invalid message from client: {} and the msg: {:?}",
+                            e, text
+                        );
                     }
                 };
             }

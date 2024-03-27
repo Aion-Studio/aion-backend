@@ -108,7 +108,6 @@ impl MessageManager {
                         run_parallel!((hero_id.to_owned(), quest.to_owned()); QuestHandler::quest_completed, LootBoxHandler::create_lootbox_quest_complete);
                         Some(TaskAction::QuestComplete(hero_id.clone(), quest.clone()))
                     }
-                    _ => None,
                 };
                 if let Some(task_action) = task_action {
                     CostHandler::deduct_action_costs(task_action)

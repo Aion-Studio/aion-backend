@@ -3,27 +3,27 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use prisma_client_rust::chrono;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
 use serde::ser::SerializeMap;
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use tokio::join;
-use tokio::sync::{mpsc, Mutex, Notify, oneshot};
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tokio::time::timeout;
 use tracing::error;
 use tracing::log::info;
 
+use crate::events::combat::CombatTurnMessage::PlayerState;
+use crate::events::combat::CombatantIndex::{Combatant1, Combatant2};
+use crate::events::combat::EncounterState;
+use crate::models::cards::{Card, CardType};
+use crate::models::hero::Hero;
+use crate::models::npc::{CpuCombatantDecisionMaker, Monster};
 use crate::{
     events::combat::{CombatEncounter, CombatTurnMessage},
     models::talent::Talent,
     services::{tasks::action_names::Responder, traits::combat_decision_maker::DecisionMaker},
 };
-use crate::events::combat::CombatantIndex::{Combatant1, Combatant2};
-use crate::events::combat::CombatTurnMessage::PlayerState;
-use crate::events::combat::EncounterState;
-use crate::models::cards::Card;
-use crate::models::hero::Hero;
-use crate::models::npc::{CpuCombatantDecisionMaker, Monster};
 
 #[derive(Debug)]
 pub enum ControllerMessage {
@@ -60,6 +60,11 @@ pub enum ControllerMessage {
     },
     RemoveSingleDecisionMaker {
         combatant_id: String,
+    },
+    SendMsgsToPlayer {
+        encounter_state: EncounterState,
+        combatant_id: String,
+        result: CombatTurnMessage,
     },
 }
 
@@ -137,21 +142,30 @@ impl CombatController {
                     },
                     _ = async {
                        use CombatTurnMessage::*;
+                            use ControllerMessage::*;
 
                         while let Some(command) = command_receiver.recv().await {
                            let sender = result_sender.clone();
 
                             let mut encounter = encounter_clone.lock().await;
-                            info!("Executing turn for combatant: {:?}", encounter.whos_turn());
                             match encounter.process_combat_turn(command, &combatant_id) {
                                 Ok(result) => {
-                                    controller_sender.send(ControllerMessage::NotifyPlayers { message: result.clone(), sender: (combatant_id.to_string(), sender.clone()) }).await.unwrap();
+                                    info!("result of combat turn: {:?}", result);
+                                    controller_sender.send(
+                                            ControllerMessage::NotifyPlayers {
+                                                message: result.clone(),
+                                                sender: (combatant_id.to_string(), sender.clone()) }
+                                    ).await.unwrap();
 
-                                    if !matches!(result, Winner(_)) {
-                                        info!("Notifying players of next turn, combatant {:?} is up next", encounter.whos_turn());
-                                        controller_sender.clone().send(ControllerMessage::NotifyPlayers {
-                                            message: EncounterState(encounter.request_state()), sender: (combatant_id.to_string(), sender)
-                                        }).await.unwrap();
+                                     if !matches!(result, Winner(_)) {
+                                        info!("Encounter State being sent to players...");
+
+                                        controller_sender.send(SendMsgsToPlayer{
+                                            encounter_state: encounter.request_state(),
+                                            combatant_id: combatant_id.to_string(),
+                                            result: result.clone()
+                                            }).await.unwrap();
+
                                     } else {
                                         info!("Battle is over, we got a winner");
                                         let encounter_id = encounter.get_id().clone();
@@ -159,7 +173,6 @@ impl CombatController {
                                             controller_sender.clone()
                                                 .try_send(ControllerMessage::CleanupEncounter { encounter_id })
                                                 .expect("Failed to send cleanup message");
-
                                     }
                                 }
                                 Err(e) => {
@@ -172,6 +185,15 @@ impl CombatController {
             });
         }
     }
+
+    async fn update_players_with_msgs(
+        &self,
+        encounter_state: EncounterState,
+        combatant_id: &str,
+        result: &CombatTurnMessage,
+    ) {
+    }
+
     async fn construct_player_state(
         &self,
         combatant_id: &str,
@@ -205,6 +227,7 @@ impl CombatController {
             opponent_hp,
             opponent,
             turn,
+            active_effects: encounter_state.active_effects.clone(),
             my_battle_field: encounter_state.battle_fields.get(&me_idx).unwrap().clone(),
             opponent_battle_field: encounter_state
                 .battle_fields
@@ -263,9 +286,6 @@ impl CombatController {
                         }
                     }
 
-                    CombatCommand::Attack => {
-                        info!("Attacking");
-                    }
                     CombatCommand::UseTalent(opponent_id, talent) => {}
                     _ => {}
                 },
@@ -422,6 +442,33 @@ impl CombatController {
                         sender.send(player_message)
                     );
                 }
+                // Use this to construct as many msgs to send to client based on the result of a combat turn
+                ControllerMessage::SendMsgsToPlayer {
+                    encounter_state,
+                    combatant_id,
+                    result,
+                } => {
+                    use CombatTurnMessage::*;
+
+                    let sender = self.result_senders.get(&combatant_id).unwrap();
+                    let controller_sender = self.message_sender.clone();
+
+                    if let CombatTurnMessage::CommandPlayed(CombatCommand::PlayCard(card)) = &result
+                    {
+                        if card.card_type == CardType::Spell {
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                    }
+
+                    controller_sender
+                        .clone()
+                        .send(ControllerMessage::NotifyPlayers {
+                            message: EncounterState(encounter_state),
+                            sender: (combatant_id.to_string(), sender.clone()),
+                        })
+                        .await
+                        .unwrap();
+                }
             }
         }
     }
@@ -438,12 +485,23 @@ impl CombatController {
         self.decision_makers.insert(participant_id, decision_maker);
     }
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CombatCommand {
     EnterBattle(EnterBattleData),
-    Attack,
+    AttackMinion {
+        attacker: Card,
+        #[serde(rename = "defenderId")]
+        defender_id: String,
+    },
+    AttackHero(Card),
+    AttackExchange {
+        attacker: Card,
+        defender: Card,
+    },
     UseTalent(String, Talent), // Use a talent: (Talent)
     PlayCard(Card),
+    EndTurn,
 }
 
 #[derive(Debug, Clone)]
