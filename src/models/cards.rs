@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
-use crate::prisma;
+use crate::prisma::{self, hero_card};
 use crate::prisma::{
     armor_effect, charge_effect, damage_effect, heal_effect, initiative_effect, lifesteal_effect,
     minion_effect, pickup_effect, poison_effect, resilience_effect, stun_effect, summon_effect,
@@ -44,6 +45,27 @@ impl Card {
     }
 }
 
+impl Default for Card {
+    fn default() -> Self {
+        Card {
+            id: "".to_string(),
+            name: "".to_string(),
+            nation: Nation::Dusane,
+            rarity: Rarity::Common,
+            tier: 0,
+            img_url: "".to_string(),
+            mana_cost: 0,
+            health: 0,
+            damage: 0,
+            card_type: CardType::Minion,
+            spell_effects: Vec::new(),
+            minion_effects: Vec::new(),
+            round_played: 0,
+            last_attack_round: None,
+        }
+    }
+}
+
 impl From<card::Data> for Card {
     fn from(data: card::Data) -> Self {
         Card {
@@ -72,6 +94,14 @@ impl From<card::Data> for Card {
     }
 }
 
+impl From<hero_card::Data> for Card {
+    fn from(data: hero_card::Data) -> Self {
+        //
+        let card = data.card.unwrap();
+        (*card).into()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct SpellEffect {
     pub id: String,
@@ -96,6 +126,7 @@ pub enum MinionEffectType {
     Pickup(PickupEffect),
     Summon(SummonEffect),
     Resilience(ResilienceEffect),
+    Poison(PoisonEffect),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -156,10 +187,11 @@ impl From<spell_effect::Data> for SpellEffect {
                             .and_then(|inner| inner)
                             .map(|e| SpellEffectType::Stun(StunEffect::from(*e)))
                     })
-                    .expect("Expected at least one effect type to be present in the effects vector")
+                    .expect("Expected  one effect type to be present in the effects vector")
             })
             .next()
             .expect("Expected at least one effect type to be present in the effects vector");
+
         SpellEffect {
             id: data.id,
             card_id: data.card_id,
@@ -209,7 +241,14 @@ impl From<minion_effect::Data> for MinionEffect {
                             .and_then(|inner| inner)
                             .map(|e| MinionEffectType::Resilience(ResilienceEffect::from(*e)))
                     })
-                    .expect("Expected at least one effect type to be present in the effects vector")
+                    .or_else(|| {
+                        effect_data
+                            .poison_effect
+                            .and_then(|inner| inner)
+                            .map(|e| MinionEffectType::Poison(PoisonEffect::from(*e)))
+                    })
+                    // return empty array
+                    .expect("inner failure onn the effects vector")
             })
             .next()
             .expect("Expected at least one effect type to be present in the effects vector");
@@ -226,9 +265,9 @@ impl From<minion_effect::Data> for MinionEffect {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct DamageEffect {
     pub id: String,
-    pub amount: i32,
-    pub damage_type: DamageType,
-    pub target_type: TargetType,
+    // pub amount: i32,
+    pub damage: Vec<(DamageType, TargetType, i32)>, // pub damage_type: DamageType,
+                                                    // pub target_type: TargetType,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -297,9 +336,12 @@ impl From<damage_effect::Data> for DamageEffect {
     fn from(data: damage_effect::Data) -> Self {
         DamageEffect {
             id: data.id,
-            amount: data.amount,
-            damage_type: data.damage_type.into(),
-            target_type: data.target_type.into(),
+            damage: data
+                .damage
+                .unwrap()
+                .into_iter()
+                .map(|d| (d.damage_type.into(), d.target_type.into(), d.amount))
+                .collect(),
         }
     }
 }

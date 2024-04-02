@@ -292,51 +292,53 @@ impl CombatEncounter {
         for effect in &card.spell_effects {
             match &effect.effect {
                 SpellEffectType::Damage(damage_effect) => {
-                    match damage_effect.target_type {
-                        TargetType::Hero => {
-                            let target = self.get_combatant(idx, Some(true));
-                            let mut target = target.lock().unwrap();
-                            target.take_damage(damage_effect.amount, damage_effect.damage_type);
-                            drop(target);
-                        }
-                        TargetType::Both => {
-                            let oppo_idx = match idx {
-                                Combatant1 => CombatantIndex::Combatant2,
-                                CombatantIndex::Combatant2 => Combatant1,
-                            };
-                            let opponent_minions = self
-                                .battle_fields
-                                .get_mut(&oppo_idx)
-                                .unwrap()
-                                .iter_mut()
-                                .filter(|card| card.card_type == CardType::Minion)
-                                .collect::<Vec<_>>();
-                            for card in opponent_minions {
-                                card.take_damage(damage_effect.amount);
+                    for (damage_type, target_type, amount) in &damage_effect.damage {
+                        match target_type {
+                            TargetType::Hero => {
+                                let target = self.get_combatant(idx, Some(true));
+                                let mut target = target.lock().unwrap();
+                                target.take_damage(*amount, *damage_type);
+                                drop(target);
                             }
+                            TargetType::Both => {
+                                let oppo_idx = match idx {
+                                    Combatant1 => CombatantIndex::Combatant2,
+                                    CombatantIndex::Combatant2 => Combatant1,
+                                };
+                                let opponent_minions = self
+                                    .battle_fields
+                                    .get_mut(&oppo_idx)
+                                    .unwrap()
+                                    .iter_mut()
+                                    .filter(|card| card.card_type == CardType::Minion)
+                                    .collect::<Vec<_>>();
+                                for card in opponent_minions {
+                                    card.take_damage(*amount);
+                                }
 
-                            let target = self.get_combatant(idx, Some(true));
-                            let mut target = target.lock().unwrap();
-                            target.take_damage(damage_effect.amount, damage_effect.damage_type);
-                            drop(target);
-                        }
-                        TargetType::Minion => {
-                            let oppo_idx = match idx {
-                                Combatant1 => CombatantIndex::Combatant2,
-                                CombatantIndex::Combatant2 => Combatant1,
-                            };
-                            let opponent_minions = self
-                                .battle_fields
-                                .get_mut(&oppo_idx)
-                                .unwrap()
-                                .iter_mut()
-                                .filter(|card| card.card_type == CardType::Minion)
-                                .collect::<Vec<_>>();
-                            for card in opponent_minions {
-                                card.take_damage(damage_effect.amount);
+                                let target = self.get_combatant(idx, Some(true));
+                                let mut target = target.lock().unwrap();
+                                target.take_damage(*amount, *damage_type);
+                                drop(target);
                             }
-                        }
-                    };
+                            TargetType::Minion => {
+                                let oppo_idx = match idx {
+                                    Combatant1 => CombatantIndex::Combatant2,
+                                    CombatantIndex::Combatant2 => Combatant1,
+                                };
+                                let opponent_minions = self
+                                    .battle_fields
+                                    .get_mut(&oppo_idx)
+                                    .unwrap()
+                                    .iter_mut()
+                                    .filter(|card| card.card_type == CardType::Minion)
+                                    .collect::<Vec<_>>();
+                                for card in opponent_minions {
+                                    card.take_damage(*amount);
+                                }
+                            }
+                        };
+                    }
                 }
                 SpellEffectType::Poison(poison_effect) => {
                     if let Some(existing_effect) = self.active_effects.iter_mut().find(|eff| {

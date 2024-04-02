@@ -331,7 +331,7 @@ model SpellEffectEffect {
   id                 String            @id @default(uuid())
   spellEffect        SpellEffect       @relation(fields: [spellEffectId], references: [id])
   spellEffectId      String
-  damageEffect       DamageEffect?     @relation(fields: [damageEffectId], references: [id])
+  damageEffect       DamageEffect?     @relation(fields: [damageEffectId], references: [id]) // damageEffectId     String?
   damageEffectId     String?
   healEffect         HealEffect?       @relation(fields: [healEffectId], references: [id])
   healEffectId       String?
@@ -370,11 +370,18 @@ model MinionEffectEffect {
 }
 
 model DamageEffect {
-  id           String              @id @default(uuid())
+  id           String                @id @default(uuid())
   spellEffects SpellEffectEffect[]
-  amount       Int
-  damageType   DamageType
-  targetType   TargetType
+  damage       DamageEffectDetails[]
+}
+
+model DamageEffectDetails {
+  id             String        @id @default(uuid())
+  amount         Int
+  damageType     DamageType
+  targetType     TargetType
+  DamageEffect   DamageEffect? @relation(fields: [damageEffectId], references: [id])
+  damageEffectId String?
 }
 
 model HealEffect {

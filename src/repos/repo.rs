@@ -1,13 +1,25 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::future::{join_all, try_join_all};
-use prisma_client_rust::{chrono, Direction, QueryError, raw};
+use prisma_client_rust::{chrono, Direction, QueryError};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{error, info, warn};
 
+use crate::models::cards::{Card, Deck};
+use crate::models::hero::{convert_to_fixed_offset, Attributes, BaseStats};
+use crate::models::npc::Monster;
+use crate::models::quest::{Action, HeroQuest, Quest};
+use crate::prisma::{
+    action, card, deck, deck_card, hero_actions, hero_quests, minion_effect, minion_effect_effect,
+    npc, quest, resource_type, spell_effect, spell_effect_effect, ResourceEnum,
+};
+use crate::repos::cards::CardRepo;
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
+use crate::services::tasks::explore::ExploreAction;
+use crate::utils::merge;
+use crate::webserver::get_prisma_client;
 use crate::{
-    _include_spell_effect_effect,
     events::game::ActionCompleted,
     models::{
         hero::Hero,
@@ -18,24 +30,11 @@ use crate::{
         action_completed, attributes, base_stats, hero,
         hero_region::{self, current_location, hero_id},
         hero_resource, inventory, leyline,
-        PrismaClient,
         region::{self, adjacent_regions},
+        PrismaClient,
     },
     types::RepoFuture,
 };
-use crate::models::cards::{Card, Deck};
-use crate::models::hero::{Attributes, BaseStats, convert_to_fixed_offset};
-use crate::models::npc::Monster;
-use crate::models::quest::{Action, HeroQuest, Quest};
-use crate::prisma::{
-    action, card, deck, deck_card, hero_actions, hero_quests, minion_effect, minion_effect_effect,
-    npc, quest, resource_type, ResourceEnum, spell_effect, spell_effect_effect,
-};
-use crate::prisma::hero::SelectParam::Id;
-use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
-use crate::services::tasks::explore::ExploreAction;
-use crate::utils::merge;
-use crate::webserver::get_prisma_client;
 
 #[derive(Clone, Debug)]
 pub struct Repo {
@@ -210,7 +209,7 @@ impl Repo {
         // hero
     }
 
-    async fn deck_cards_by_deck_id(&self, deck_id: String) -> Vec<Card> {
+    pub async fn deck_cards_by_deck_id(&self, deck_id: String) -> Vec<Card> {
         info!("Getting deck cards for deck_id: {}", deck_id);
         let deck_cards = self
             .prisma
@@ -218,30 +217,8 @@ impl Repo {
             .find_many(vec![deck_card::deck_id::equals(deck_id.clone())])
             .with(
                 deck_card::card::fetch()
-                    .with(
-                        card::minion_effects::fetch(vec![]).with(
-                            minion_effect::effects::fetch(vec![])
-                                .with(minion_effect_effect::pickup_effect::fetch())
-                                .with(minion_effect_effect::resilience_effect::fetch())
-                                .with(minion_effect_effect::poison_effect::fetch())
-                                .with(minion_effect_effect::taunt_effect::fetch())
-                                .with(minion_effect_effect::lifesteal_effect::fetch())
-                                .with(minion_effect_effect::summon_effect::fetch())
-                                .with(minion_effect_effect::charge_effect::fetch()),
-                        ),
-                    )
-                    .with(
-                        card::spell_effects::fetch(vec![]).with(
-                            spell_effect::effects::fetch(vec![])
-                                .with(spell_effect_effect::damage_effect::fetch())
-                                .with(spell_effect_effect::heal_effect::fetch())
-                                .with(spell_effect_effect::armor_effect::fetch())
-                                .with(spell_effect_effect::resilience_effect::fetch())
-                                .with(spell_effect_effect::poison_effect::fetch())
-                                .with(spell_effect_effect::initiative_effect::fetch())
-                                .with(spell_effect_effect::stun_effect::fetch()),
-                        ),
-                    ),
+                    .with(CardRepo::fetch_minion_effects())
+                    .with(CardRepo::fetch_spell_effects()),
             )
             .exec()
             .await;

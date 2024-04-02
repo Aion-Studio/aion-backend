@@ -4,14 +4,14 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 
 use actix_cors::Cors;
-use actix_web::{App, get, HttpResponse, HttpServer, Responder};
 use actix_web::dev::Server;
-use actix_web::web::{Data, Path};
+use actix_web::web::{self, Data, Path};
+use actix_web::{get, post, App, HttpResponse, HttpServer, Responder};
 use once_cell::sync::OnceCell;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 use tracing::info;
 
-use crate::configuration::{DurationType, get_durations, Settings};
+use crate::configuration::{get_durations, DurationType, Settings};
 use crate::endpoints::combat_socket::combat_ws;
 use crate::endpoints::heroes::{
     completed_actions, create_hero_endpoint, hero_state, latest_action_handler,
@@ -19,13 +19,12 @@ use crate::endpoints::heroes::{
 use crate::endpoints::quest::{accept_quest, add_quest, do_quest_action, get_hero_quests};
 use crate::endpoints::regions::{channel_leyline, explore_region};
 use crate::endpoints::tasks::{active_actions, active_actions_ws};
-use crate::events::combat::CombatTurnMessage;
 use crate::infra::Infra;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
 use crate::prisma::PrismaClient;
-use crate::services::impls::combat_service::{CombatCommand, CombatController, ControllerMessage};
-use crate::services::tasks::action_names::Responder as Sender;
+use crate::repos::cards::CardRepo;
+use crate::services::impls::combat_service::{CombatController, ControllerMessage};
 use crate::storable::MemoryStore;
 
 pub struct Application {
@@ -172,6 +171,9 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
             .service(latest_action_handler)
             .service(hero_state)
             .service(add_quest)
+            .service(get_cards)
+            .service(add_card)
+            .service(get_hero_cards)
             .service(get_hero_quests)
             .service(do_quest_action)
             .service(accept_quest)
@@ -203,6 +205,34 @@ async fn npc(path: Path<String>) -> impl Responder {
 async fn get_heroes() -> impl Responder {
     let heroes = Infra::repo().get_all_heroes().await.unwrap();
     HttpResponse::Ok().json(heroes)
+}
+
+#[get("/all-cards")]
+async fn get_cards() -> impl Responder {
+    let cards = CardRepo::get_all_cards().await;
+    HttpResponse::Ok().json(cards)
+}
+
+// grab the request body hero_id and card_id
+#[derive(serde::Deserialize)]
+pub struct AddCardRequest {
+    hero_id: String,
+    card_id: String,
+}
+
+#[post("/add-card")]
+async fn add_card(action: web::Json<AddCardRequest>) -> impl Responder {
+    let hero_id = action.hero_id.clone();
+    let card_id = action.card_id.clone();
+    let card = CardRepo::add_card(hero_id, card_id).await;
+    HttpResponse::Ok().json(card)
+}
+
+#[get("/hero-cards/{hero_id}")]
+async fn get_hero_cards(path: Path<String>) -> impl Responder {
+    let hero_id = path.into_inner();
+    let cards = CardRepo::get_all_hero_cards(hero_id).await;
+    HttpResponse::Ok().json(cards)
 }
 
 #[get("/visible-leylines/{id}")]

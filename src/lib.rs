@@ -39,6 +39,7 @@ mod models {
 mod repos {
     // pub mod game_engine_repo;
     // pub mod hero_repo;
+    pub mod cards;
     pub mod helpers;
     pub mod repo;
     // pub mod action_repo;
