@@ -495,6 +495,7 @@ pub fn convert_to_utc(dt: Option<DateTime<FixedOffset>>) -> Option<DateTime<Utc>
     dt.map(|datetime| datetime.with_timezone(&Utc))
 }
 
+#[allow(deprecated)]
 pub fn convert_to_fixed_offset(dt: Option<DateTime<Utc>>) -> Option<DateTime<FixedOffset>> {
     dt.map(|datetime| datetime.with_timezone(&FixedOffset::east(0)))
 }

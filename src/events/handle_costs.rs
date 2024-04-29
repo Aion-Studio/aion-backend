@@ -1,5 +1,5 @@
 use serde_json::json;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::{
     infra::Infra,
@@ -16,7 +16,7 @@ impl CostHandler {
         match action {
             TaskAction::Explore(action) => {
                 let mut hero = action.hero;
-               
+
                 hero.deduct_stamina(action.stamina_cost);
                 info!("hero should now have {:?} stamina", hero.stamina);
 

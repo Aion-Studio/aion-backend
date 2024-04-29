@@ -2,7 +2,6 @@ use std::any::Any;
 use std::cmp::max;
 
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
 use crate::events::combat::CombatError;
 use crate::models::cards::{Card, Deck};

@@ -1,6 +1,6 @@
 // pub mod authentication;
 #![recursion_limit = "256"]
-
+#![allow(deprecated)]
 pub mod configuration;
 // pub mod idempotency;
 // pub mod routes;
@@ -10,7 +10,7 @@ pub mod utils;
 pub mod webserver;
 
 pub mod fp_macros;
-pub mod storable;
+// pub mod storable;
 pub mod telemetry;
 
 #[allow(warnings, unused)]

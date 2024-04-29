@@ -115,6 +115,8 @@ impl TryFrom<String> for Environment {
 // region name to duration
 #[derive(Clone, Debug)]
 pub struct ExploreDurations(pub HashMap<RegionName, Duration>);
+
+#[allow(deprecated)]
 impl ExploreDurations {
     pub fn get_durations() -> Self {
         let mut durations = HashMap::new();
@@ -126,6 +128,7 @@ impl ExploreDurations {
 // leyline to duration
 #[derive(Clone, Debug)]
 pub struct ChannelDurations(pub HashMap<String, Duration>);
+#[allow(deprecated)]
 impl ChannelDurations {
     pub fn get_durations() -> Self {
         let mut durations = HashMap::new();

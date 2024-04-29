@@ -39,6 +39,10 @@ pub struct Card {
 impl Card {
     pub fn attack(&self, target: &mut Card) {
         target.health -= self.damage;
+        info!(
+            "{:?} attacks {:?} for {:?} damage",
+            self.name, target.name, self.damage
+        );
     }
     pub fn take_damage(&mut self, damage: i32) {
         self.health -= damage;

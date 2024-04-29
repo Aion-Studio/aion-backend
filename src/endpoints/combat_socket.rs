@@ -9,10 +9,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{error, info};
 
-use crate::events::combat::CombatantIndex;
 use crate::jsontoken::decode_token;
-use crate::models::cards::Card;
-use crate::models::combatant::Combatant;
 use crate::models::player_decision_maker::PlayerDecisionMaker;
 use crate::services::impls::combat_service::{ControllerMessage, EnterBattleData};
 use crate::{

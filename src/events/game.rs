@@ -2,20 +2,17 @@ use std::collections::HashMap;
 
 use prisma_client_rust::chrono::{self, Duration, Local, Utc};
 use prisma_client_rust::chrono::{DateTime, FixedOffset};
-use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::SerializeSeq;
+use serde::{Deserialize, Serialize, Serializer};
 use tracing::info;
 use tracing::log::warn;
 
 use crate::infra::Infra;
 use crate::models::hero::Hero;
-use crate::models::quest::Quest;
 use crate::models::region::Leyline;
 use crate::models::resources::Resource;
 use crate::prisma::action_completed;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
-use crate::services::tasks::channel::ChannelingAction;
-use crate::services::tasks::explore::ExploreAction;
 
 use super::handle_lootbox::from_json_to_loot_box;
 
@@ -145,6 +142,7 @@ struct ResourceMapEntry {
     amount: i32,
 }
 
+#[allow(deprecated)]
 impl ActionCompleted {
     pub fn new(action_name: ActionNames, hero_id: String, loot_box: TaskLootBox) -> Self {
         let date = chrono::offset::Utc::now().into();
@@ -231,6 +229,7 @@ impl From<action_completed::Data> for ActionCompleted {
 
 pub struct ActionDurations {}
 
+#[allow(deprecated)]
 impl ActionDurations {
     pub fn timeouts(action_name: &ActionNames) -> Duration {
         match action_name {

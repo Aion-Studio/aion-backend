@@ -9,11 +9,6 @@ use tracing::{error, info};
 
 use TaskLootBox::*;
 
-use crate::{
-    infra::Infra,
-    models::resources::Resource,
-    services::tasks::{channel::ChannelingAction, explore::ExploreAction},
-};
 use crate::events::game::{ActionCompleted, RaidResult};
 use crate::logger::Logger;
 use crate::models::quest::{Action, Quest};
@@ -21,9 +16,14 @@ use crate::repos::helpers::update_hero_db;
 use crate::services::tasks::action_names::{ActionNames, TaskAction, TaskLootBox};
 use crate::services::tasks::explore::round;
 use crate::services::traits::async_task::Task;
+use crate::{
+    infra::Infra,
+    models::resources::Resource,
+    services::tasks::{channel::ChannelingAction, explore::ExploreAction},
+};
 
-use super::game::{ChannelResult, ExploreResult};
 use super::game::QuestResult;
+use super::game::{ChannelResult, ExploreResult};
 
 #[derive(Clone, Debug)]
 pub struct LootBoxHandler {}
@@ -266,7 +266,7 @@ impl GeneratesResources<()> for Action {
             res.insert(Resource::Valor, valor);
             return res;
         }
-        let mut res = HashMap::new();
+        let res = HashMap::new();
         res
     }
 }

@@ -1,13 +1,10 @@
-use std::sync::Arc;
-
 use futures::TryFutureExt;
 use serde_json::json;
-use tokio::sync::{oneshot, RwLock};
 use tokio::sync::mpsc::Sender;
-use tracing::{info, log::error};
+use tokio::sync::oneshot;
 use tracing::warn;
+use tracing::{info, log::error};
 
-use crate::{infra::Infra, models::quest::Quest};
 use crate::jsontoken::create_token;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
@@ -15,6 +12,7 @@ use crate::services::impls::combat_service::ControllerMessage;
 use crate::services::tasks::action_names::{
     ActionNames, CmdResponder, Command, Responder, ResponderType,
 };
+use crate::{infra::Infra, models::quest::Quest};
 
 #[derive(Clone, Debug)]
 pub struct QuestHandler {}
@@ -97,8 +95,7 @@ impl QuestHandler {
                     }
                 }
                 ActionNames::Channel => {}
-                ActionNames::Raid => {}
-                ActionNames::Unique(off_beat) => {}
+                ActionNames::Unique(_) => {}
                 _ => {
                     error!("Action name not found");
                     return;

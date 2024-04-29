@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use actix_cors::Cors;
 use actix_web::dev::Server;
@@ -25,7 +25,7 @@ use crate::messenger::MESSENGER;
 use crate::prisma::PrismaClient;
 use crate::repos::cards::CardRepo;
 use crate::services::impls::combat_service::{CombatController, ControllerMessage};
-use crate::storable::MemoryStore;
+// use crate::storable::MemoryStore;
 
 pub struct Application {
     port: u16,
@@ -125,7 +125,7 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
 
     // Subscribe the task management service to the HeroExplored event
 
-    let store = Arc::new(Mutex::new(MemoryStore::new()));
+    // let store = Arc::new(Mutex::new(MemoryStore::new()));
 
     let (tx, rx) = mpsc::channel(1000);
     info!("___created new combat_tx____");
@@ -157,7 +157,7 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
 
         let app = App::new()
             .app_data(app_state.clone())
-            .app_data(store.clone())
+            // .app_data(store.clone())
             .wrap(cors)
             .service(health_check)
             .service(create_hero_endpoint)

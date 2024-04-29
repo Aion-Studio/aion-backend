@@ -10,6 +10,7 @@ pub struct Claims {
     exp: usize, // Expiration time (optional)
 }
 
+#[allow(deprecated)]
 pub fn create_token(combatant_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = chrono::Utc::now()
         .checked_add_signed(chrono::Duration::hours(194))

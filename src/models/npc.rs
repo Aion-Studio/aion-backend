@@ -1,17 +1,15 @@
-use std::sync::Arc;
 use std::{any::Any, cmp::max};
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::sync::{
-    mpsc::{self, Receiver, Sender},
-    oneshot, Mutex,
+    mpsc::{self, Sender},
+    oneshot,
 };
-use tracing::log::info;
-use tracing::warn;
+use tracing::{log::info, warn};
 
 use crate::events::combat::{CombatError, CombatantIndex};
 use crate::models::cards::{Card, Deck};
-use crate::models::player_decision_maker::PlayerDecisionMaker;
 use crate::prisma::DamageType;
 use crate::{
     events::combat::CombatTurnMessage,
@@ -32,10 +30,11 @@ pub struct CpuCombatantDecisionMaker {
     combat_controller_tx: Option<Sender<CombatCommand>>,
     shutdown_signal: Option<oneshot::Receiver<()>>,
     shutdown_trigger: Option<oneshot::Sender<()>>,
+    encounter_id: String,
 }
 
 impl CpuCombatantDecisionMaker {
-    pub(crate) fn new(monster: Monster) -> Self {
+    pub(crate) fn new(monster: Monster, encounter_id: String) -> Self {
         let (shutdown_trigger, shutdown_signal) = oneshot::channel();
 
         Self {
@@ -44,6 +43,7 @@ impl CpuCombatantDecisionMaker {
             combat_controller_tx: None,
             shutdown_signal: Some(shutdown_signal),
             shutdown_trigger: Some(shutdown_trigger),
+            encounter_id,
         }
     }
 }
@@ -63,6 +63,8 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
             .take()
             .expect("Shutdown signal must be present when starting.");
 
+        let id = self.encounter_id.clone();
+
         tokio::spawn(async move {
             let mut result_receiver = result_receiver;
             let npc_player_idx = idx.clone();
@@ -71,10 +73,11 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                     info!("Shutting down signal monster.");
                 },
                 _ = async {
+                    let mut llm_decisions: Vec<CombatCommand> = vec![]; // Initialize a local decisions vector.
+
                     while let Some(result) = result_receiver.recv().await {
                         match result {
                             CombatTurnMessage::PlayerTurn(turn_idx) => {
-                                info!("Npc Player Turn {:?}", turn_idx);
                                 // Do nothing
                             }
                             CombatTurnMessage::Winner(idx) => {
@@ -91,32 +94,119 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                                 opponent_hp
                             }=>{
                                 if turn == idx.clone() {
-                                    info!("it npc turn to play , avail cards {:?}, avail mana: {:?}",me.get_hand().iter().map(|c|c.mana_cost).collect::<Vec<_>>(), me.get_mana());
                                      let cards_i_can_play = me.get_hand().iter().filter(|c| c.mana_cost <= me.get_mana()).collect::<Vec<_>>();
-                                    if cards_i_can_play.is_empty(){
-                                        info!("NPC no cards to play");
-                                        let command = CombatCommand::EndTurn;
-                                        combat_sender
-                                            .clone()
-                                            .send(command)
-                                            .await
-                                            .expect("Failed to send command");
-                                    } else {
-                                         let card = *(cards_i_can_play.first().unwrap());
+                                    if llm_decisions.is_empty() {
+                                        let client = reqwest::Client::new();
 
-                                        info!("NPC playing card of type {:?}", card.card_type);
-                                         let command = CombatCommand::PlayCard((*card).clone());
-                                         combat_sender
-                                              .clone()
-                                              .send(command)
-                                              .await
-                                              .expect("Failed to send command");
+                                        let my_hero_json = json!({
+                                                "hp": me.get_hp(),
+                                                "mana": me.get_mana(),
+                                                "armor": me.get_armor(),
+                                                "resilience": me.get_resilience(),
+                                            });
+
+                                        let opponent_json = json!({
+                                                "hp": opponent_hp,
+                                                "armor": opponent.get_armor(),
+                                                "resilience": opponent.get_resilience(),
+                                            });
+
+                                        let payload = json!({
+                                                "id": id,
+                                                "payload": {
+                                                    "my_battle_field": my_battle_field,
+                                                    "opponent_battle_field": opponent_battle_field,
+                                                    "cards_in_hand": cards_i_can_play,
+                                                    "opponent_hero": opponent_json,
+                                                    "my_hero": my_hero_json,
+                                                }
+                                        });
+
+
+                                        info!("sending llm Cards in hand {:?}", cards_i_can_play);
+                                        let res = client.post("http://127.0.0.1:5000/message").json(&payload).send().await;
+                                        let body = match res {
+                                            Ok(res) => {
+                                                match res.status() {
+                                                    reqwest::StatusCode::OK => {
+                                                        res.text().await.unwrap()
+                                                    }
+                                                    _ => {
+                                                        println!("Error sending request: {:?}", res.status());
+                                                        "".to_string()
+                                                    }
+                                                }
+
+                                            }
+                                            Err(e) => {
+                                                println!("Error sending request {:?}", e);
+                                                "".to_string()
+                                            }
+                                        };
+
+                                        let json_body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+
+                                        let actions_list = json_body["actions"].as_array().unwrap();
+                                        for action in actions_list {
+                                            let action_type = action["type"].as_str().unwrap();
+                                            let action_data = action["data"].as_object();
+
+                                            match action_type {
+                                                "EndTurn" => {
+                                                    llm_decisions.push(CombatCommand::EndTurn);
+                                                }
+                                                "PlayCard" => {
+                                                    let data = action_data.unwrap();
+                                                    let card_id = data["card_id"].as_str().unwrap();
+                                                    let card = cards_i_can_play.iter().find(|c| c.id == card_id).unwrap();
+                                                    llm_decisions.push(CombatCommand::PlayCard((*card).clone()));
+                                                }
+                                                "Attack" => {
+                                                    let data = action_data.unwrap();
+                                                    let target_type = data["target_type"].as_str().unwrap();
+                                                    let card_id = data["card_id"].as_str().unwrap();
+                                                    let card = match my_battle_field.iter().find(|c| c.id == card_id) {
+                                                        Some(card) => card,
+                                                        None => {
+                                                           cards_i_can_play.iter().find(|c| c.id == card_id).unwrap()
+                                                        }
+                                                    };
+
+                                                    let card_owned: Card = (*card).clone();
+
+                                                    if data["target_type"] == "Hero" {
+                                                        llm_decisions.push(CombatCommand::AttackHero(card_owned));
+                                                    } else {
+                                                        let target_id = data["target_id"].as_str().unwrap();
+                                                        llm_decisions.push(CombatCommand::AttackMinion{attacker: card_owned, defender_id: target_id.to_string()});
+                                                    }
+                                                }
+                                                _ => {
+                                                    warn!("Unknown action type: {:?}", action_type);
+                                                    llm_decisions.push(CombatCommand::EndTurn);
+                                                }
+                                            }
+                                        }
+                                        if actions_list.is_empty() {
+                                            llm_decisions.push(CombatCommand::EndTurn);
+                                        }
+
 
                                     }
+                                    // take first decision from the local decisions vector and send it to the combat controller
+                                    let command = llm_decisions.remove(0);
+                                    info!("NPC sending command {:?}", command);
+                                    combat_sender
+                                        .clone()
+                                        .send(command)
+                                        .await
+                                        .expect("Failed to send command");
+
                                 }
                             }
                             x => {
-                                info!("npc got some other message {:?}", x);
+                                // info!("npc got some other message {:?}", x);
                             }
                         };
                         // --------------------CPU logic to decide next move based on the received result

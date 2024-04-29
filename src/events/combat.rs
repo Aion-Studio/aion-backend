@@ -4,10 +4,9 @@ use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
 use actix::Message;
-use prisma_client_rust::chrono::{DateTime, Local};
 use serde::ser::SerializeMap;
 use serde::{
-    de::{EnumAccess, VariantAccess, Visitor},
+    de::{EnumAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::json;
@@ -18,21 +17,12 @@ use crate::events::combat::CombatantIndex::Combatant1;
 use crate::models::card_effect::{ActiveEffect, EffectType};
 use crate::models::cards::{Card, CardType, SpellEffectType};
 use crate::models::hero_combatant::HeroCombatant;
-use crate::models::talent::{Effect, Talent};
+use crate::models::talent::Effect;
 use crate::prisma::{DamageType, TargetType};
 use crate::{
     models::{combatant::Combatant, npc::Monster},
     services::impls::combat_service::CombatCommand,
 };
-
-// Damage over time
-#[derive(Debug, Clone)]
-pub struct Dot {
-    name: String,
-    damage_per_tick: i32,
-    ticks_remaining: i32,
-    target: CombatantIndex, // Our enhancement
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub enum CombatantIndex {
@@ -48,7 +38,6 @@ pub struct CombatEncounter {
     pub battle_fields: HashMap<CombatantIndex, Vec<Card>>,
     pub round: i32,
     pub action_id: Option<String>,
-    active_dots: Vec<Dot>,
     active_effects: Vec<ActiveEffect>,
     current_turn: CombatantIndex,
     status_effects: HashMap<CombatantId, Vec<Effect>>,
@@ -70,7 +59,6 @@ impl CombatEncounter {
             combatant1,
             combatant2, // Box the generic monster
             battle_fields: HashMap::new(),
-            active_dots: Vec::new(),
             active_effects: Vec::new(),
             status_effects: HashMap::new(),
             current_turn: Combatant1,
@@ -191,7 +179,7 @@ impl CombatEncounter {
         attacker_idx: CombatantIndex,
         attacker_id: &str,
         target_minion_id: &str,
-    ) -> Result<(), CombatError> {
+    ) -> Result<(i32, i32), CombatError> {
         let defender_idx = match attacker_idx {
             Combatant1 => CombatantIndex::Combatant2,
             CombatantIndex::Combatant2 => Combatant1,
@@ -209,9 +197,15 @@ impl CombatEncounter {
             (attacker_card, defender_card)
         };
 
+        // saving the numbers before actual attack
+        let defender_damage_taken = (attacker_card.damage).max(0);
+        let attacker_damage_taken = (defender_card.damage).max(0);
+
         // Step 3: Perform the attack logic on the cloned cards
-        // Assume attack modifies the cards in place; implement according to your game logic
+        // Assume attack modifies the cards in place;
         attacker_card.attack(&mut defender_card);
+        // max of 0 and the difference between the health and the damage
+
         if defender_card.health <= 0 {
             self.remove_card(&defender_idx, target_minion_id);
         } else {
@@ -224,7 +218,7 @@ impl CombatEncounter {
             }
         }
 
-        Ok(())
+        Ok((attacker_damage_taken, defender_damage_taken))
     }
 
     // Utility function to find a card by ID and clone it
@@ -416,7 +410,7 @@ impl CombatEncounter {
                 attacker,
                 defender_id,
             } => {
-                let bf_card = self
+                let attacker_card = self
                     .battle_fields
                     .get_mut(&idx)
                     .unwrap()
@@ -424,34 +418,38 @@ impl CombatEncounter {
                     .find(|c| c.id == attacker.id)
                     .unwrap();
 
-                if attacker.round_played == self.round
-                    || bf_card.last_attack_round == Some(self.round)
+                info!(
+                    "Round played check: curr round {:?} attacker played : {:?}",
+                    self.round, attacker_card.round_played
+                );
+                if attacker_card.round_played == self.round
+                    || attacker_card.last_attack_round == Some(self.round)
                 {
                     warn!("cant attack with just played card");
                     return Err(CombatError::JustPlayedCardError);
                 }
-                bf_card.last_attack_round = Some(self.round);
-                self.handle_attack(idx, &attacker.id, &defender_id)
-                    .map(|_| {
+                attacker_card.last_attack_round = Some(self.round);
+                self.handle_attack(idx, &attacker.id, &defender_id).map(
+                    |(attacker_damage_taken, defender_damage_taken)| {
                         CombatTurnMessage::CommandPlayed(AttackExchange {
-                            attacker, // You might need to clone or otherwise retrieve these cards if needed for the message
-                            defender: self
-                                .find_card_mut(&opponent_idx, &defender_id)
-                                .unwrap()
-                                .clone(), // Simplified; handle potential errors appropriately
+                            attacker_damage_taken,
+                            defender_damage_taken,
+                            attacker_id: attacker.id,
+                            defender_id,
                         })
-                    })
+                    },
+                )
             }
             AttackHero(card) => {
                 let can_play = {
-                    let bf_card = self
+                    let attacker_card = self
                         .battle_fields
                         .get_mut(&idx)
                         .unwrap()
                         .iter_mut()
                         .find(|c| c.id == card.id)
                         .unwrap();
-                    if bf_card.round_played == self.round {
+                    if attacker_card.round_played == self.round {
                         false
                     } else {
                         true
@@ -466,7 +464,7 @@ impl CombatEncounter {
                 info!("attacking with card damanage {:?}", card.damage);
                 let mut opponent = opponent.lock().unwrap();
                 opponent.take_damage(card.damage, DamageType::Physical);
-                let bf_card = self
+                let attacker_card = self
                     .battle_fields
                     .get_mut(&idx)
                     .unwrap()
@@ -474,7 +472,7 @@ impl CombatEncounter {
                     .find(|c| c.id == card.id)
                     .unwrap();
 
-                bf_card.last_attack_round = Some(self.round);
+                attacker_card.last_attack_round = Some(self.round);
                 Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
             }
             PlayCard(mut card) => {
@@ -512,12 +510,16 @@ impl CombatEncounter {
                     CombatantIndex::Combatant2 => Combatant1,
                 };
 
+                // increment round draws cards for combatant 1, else statement draws for combatant 2
                 if self.current_turn == Combatant1 {
-                    info!("Ending Round");
                     self.increment_round();
                 } else {
                     let mutex = self.get_combatant(&CombatantIndex::Combatant2, None);
                     let mut combatant = mutex.lock().unwrap();
+                    info!(
+                        "----drawing 1 card for combatant {:?}",
+                        combatant.get_name()
+                    );
                     combatant.draw_cards(1);
                 }
 
@@ -596,6 +598,7 @@ impl CombatEncounter {
     }
 
     fn increment_round(&mut self) {
+        info!("Ending Round");
         self.round += 1;
         {
             let mut combatant1 = self.combatant1.lock().unwrap();
@@ -646,7 +649,6 @@ impl Clone for CombatEncounter {
             id: self.id.clone(),
             combatant1: self.combatant1.clone(),
             combatant2: self.combatant2.clone(),
-            active_dots: self.active_dots.clone(),
             active_effects: self.active_effects.clone(),
             current_turn: self.current_turn.clone(),
             started: self.started,
@@ -827,7 +829,7 @@ impl<'de> Deserialize<'de> for CombatTurnMessage {
                 A: EnumAccess<'de>,
             {
                 match data.variant()? {
-                    (Field::CommandPlayed, variant) => Ok(CombatTurnMessage::Winner(Combatant1)),
+                    (Field::CommandPlayed, _) => Ok(CombatTurnMessage::Winner(Combatant1)),
                     (Field::Winner, _) => Ok(CombatTurnMessage::Winner(Combatant1)),
                 }
             }

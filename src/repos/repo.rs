@@ -11,8 +11,8 @@ use crate::models::hero::{convert_to_fixed_offset, Attributes, BaseStats};
 use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
 use crate::prisma::{
-    action, card, deck, deck_card, hero_actions, hero_quests, minion_effect, minion_effect_effect,
-    npc, quest, resource_type, spell_effect, spell_effect_effect, ResourceEnum,
+    action, card, deck, deck_card, hero_actions, hero_quests, npc, quest, resource_type,
+    ResourceEnum,
 };
 use crate::repos::cards::CardRepo;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
@@ -675,17 +675,17 @@ impl Repo {
             .exec()
             .await?;
         //now check
-        let is_accepted = self
-            .prisma
-            .hero_quests()
-            .find_first(vec![
-                hero_quests::hero_id::equals(hero_id.clone()),
-                hero_quests::quest_id::equals(quest_id.clone()),
-            ])
-            .exec()
-            .await?
-            .unwrap()
-            .accepted;
+        // let is_accepted = self
+        //     .prisma
+        //     .hero_quests()
+        //     .find_first(vec![
+        //         hero_quests::hero_id::equals(hero_id.clone()),
+        //         hero_quests::quest_id::equals(quest_id.clone()),
+        //     ])
+        //     .exec()
+        //     .await?
+        //     .unwrap()
+        //     .accepted;
         Ok(())
     }
 
@@ -940,7 +940,7 @@ impl Repo {
             .await;
 
         match result {
-            Ok(d) => Ok(()),
+            Ok(_) => Ok(()),
             Err(e) => {
                 warn!("Error updating hero region discovery level: {}", e);
                 Err(e)

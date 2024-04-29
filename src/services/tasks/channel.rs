@@ -5,12 +5,12 @@ use serde::{ser::SerializeStruct, Serialize, Serializer};
 use uuid::Uuid;
 
 use crate::configuration::ChannelDurations;
+
+use crate::services::tasks::action_names::ActionNames;
 use crate::{
     models::hero::Hero,
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
 };
-
-use super::action_names::ActionNames;
 
 #[derive(Debug, Clone)]
 pub struct ChannelingAction {
@@ -37,8 +37,13 @@ impl Serialize for ChannelingAction {
     }
 }
 
+#[allow(deprecated)]
 impl ChannelingAction {
     pub fn new(hero: Hero, leyline_name: &str, durations: &ChannelDurations) -> Option<Self> {
+        println!(
+            "channeling in leyline {:?} and durations get {:?}",
+            leyline_name, durations
+        );
         let duration = *durations
             .0
             .get(leyline_name)

@@ -3,13 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use prisma_client_rust::chrono;
-use serde::de::Visitor;
-use serde::ser::SerializeMap;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::join;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot, Mutex, Notify};
-use tokio::time::timeout;
 use tracing::error;
 use tracing::log::info;
 
@@ -150,7 +147,6 @@ impl CombatController {
                             let mut encounter = encounter_clone.lock().await;
                             match encounter.process_combat_turn(command, &combatant_id) {
                                 Ok(result) => {
-                                    info!("result of combat turn: {:?}", result);
                                     controller_sender.send(
                                             ControllerMessage::NotifyPlayers {
                                                 message: result.clone(),
@@ -186,12 +182,17 @@ impl CombatController {
         }
     }
 
+    #[allow(dead_code)]
     async fn update_players_with_msgs(
         &self,
         encounter_state: EncounterState,
         combatant_id: &str,
         result: &CombatTurnMessage,
     ) {
+        println!(
+            "Updating players with messages {:?} {:?} {:?}",
+            encounter_state, combatant_id, result
+        );
     }
 
     async fn construct_player_state(
@@ -246,7 +247,7 @@ impl CombatController {
                 ControllerMessage::RemoveEncounter { encounter_id } => {
                     self.encounters.remove(&encounter_id);
                 }
-                ControllerMessage::Combat((command, from_id, resp)) => match command {
+                ControllerMessage::Combat((command, from_id, _)) => match command {
                     CombatCommand::EnterBattle(battle_data) => {
                         if let Some(decision_maker) = battle_data.0 {
                             self.add_decision_maker(from_id.clone(), decision_maker);
@@ -266,9 +267,11 @@ impl CombatController {
                                         self.decision_makers.get(&opponent_id).is_none();
                                     if needs_decision_maker {
                                         // Construct the decision maker outside of the async block
-                                        let npc_decision_maker = Arc::new(Mutex::new(
-                                            CpuCombatantDecisionMaker::new(npc.clone()),
-                                        ));
+                                        let npc_decision_maker =
+                                            Arc::new(Mutex::new(CpuCombatantDecisionMaker::new(
+                                                npc.clone(),
+                                                encounter_guard.get_id(),
+                                            )));
                                         // Add the decision maker here
                                         self.add_decision_maker(
                                             opponent_id.clone(),
@@ -286,7 +289,9 @@ impl CombatController {
                         }
                     }
 
-                    CombatCommand::UseTalent(opponent_id, talent) => {}
+                    CombatCommand::UseTalent(opponent_id, talent) => {
+                        println!("UseTalent: {} {:?}", opponent_id, talent);
+                    }
                     _ => {}
                 },
 
@@ -496,8 +501,10 @@ pub enum CombatCommand {
     },
     AttackHero(Card),
     AttackExchange {
-        attacker: Card,
-        defender: Card,
+        attacker_id: String,
+        attacker_damage_taken: i32,
+        defender_damage_taken: i32,
+        defender_id: String,
     },
     UseTalent(String, Talent), // Use a talent: (Talent)
     PlayCard(Card),
@@ -519,7 +526,7 @@ impl Serialize for EnterBattleData {
 
 // Implement custom deserialization for the complex struct
 impl<'de> Deserialize<'de> for EnterBattleData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {

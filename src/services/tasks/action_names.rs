@@ -1,18 +1,16 @@
-use std::convert::TryFrom;
-
 use anyhow::Result;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 
+use crate::events::game::RaidResult;
+use crate::services::impls::combat_service::ControllerMessage;
 use crate::{
     configuration::ChannelDurations,
     events::game::{ChannelResult, ExploreResult, QuestResult},
     models::{quest::Quest, region::RegionName},
 };
-use crate::events::game::RaidResult;
-use crate::services::impls::combat_service::ControllerMessage;
 
 use super::{channel::ChannelingAction, explore::ExploreAction, off_beat_actions::OffBeatActions};
 
