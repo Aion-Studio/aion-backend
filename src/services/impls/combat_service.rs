@@ -154,7 +154,6 @@ impl CombatController {
                                     ).await.unwrap();
 
                                      if !matches!(result, Winner(_)) {
-                                        info!("Encounter State being sent to players...");
 
                                         controller_sender.send(SendMsgsToPlayer{
                                             encounter_state: encounter.request_state(),
@@ -410,7 +409,6 @@ impl CombatController {
                             tx.send((Some(player_state), action_id)).unwrap();
                         }
                         None => {
-                            info!("Could not find encounter for combatant: {:?}", combatant_id);
                             tx.send((None, None)).unwrap();
                         }
                     }

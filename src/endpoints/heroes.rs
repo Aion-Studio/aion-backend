@@ -6,7 +6,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::events::game::ActionCompleted;
 use crate::infra::Infra;
@@ -96,19 +96,12 @@ async fn hero_state(path: Path<String>, app_state: Data<AppState>) -> impl Respo
     let hero_id = path.into_inner();
     let hero = Infra::repo().get_hero(hero_id.clone()).await;
 
-    info!("hero state requested for hero {:?}....", hero_id);
     let app_state = app_state.get_ref().clone();
     let combat_tx = app_state.combat_tx.clone();
 
     match hero {
         Ok(hero) => match get_hero_status(hero, combat_tx).await {
-            Ok(hero_state) => {
-                info!(
-                    "returning hero state.... for hero {:?}",
-                    hero_state.hero.get_id()
-                );
-                HttpResponse::Ok().json(hero_state)
-            }
+            Ok(hero_state) => HttpResponse::Ok().json(hero_state),
             Err(e) => {
                 let error_response = json!({
                     "error": "Error grabbing hero state",
@@ -135,7 +128,6 @@ struct PaginationQuery {
 
 #[get("/completed-actions")]
 async fn completed_actions(pagination: Query<PaginationQuery>) -> impl Responder {
-    info!("completed actions requested....");
     let take = pagination.take.unwrap_or(10) as i64; // Default to 10 if not provided
     let skip = pagination.skip.unwrap_or(0) as i64;
     let actions = Infra::repo().completed_actions(take, skip).await;
@@ -314,10 +306,7 @@ pub async fn get_hero_status(
             }
             let is_in_combat = match rx.await {
                 Ok(res) => res.0.is_some(),
-                Err(e) => {
-                    info!("Error getting combat state: {}", e);
-                    false
-                }
+                Err(e) => false,
             };
 
             Ok(HeroStateResponse {

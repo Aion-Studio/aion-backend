@@ -71,6 +71,7 @@ impl LootBoxHandler {
         };
 
         hero.equip_loot(loot.clone());
+
         update_hero_db(hero.clone()).await;
 
         // update hero_region discovery level
@@ -230,6 +231,7 @@ impl GeneratesResources<f64> for ExploreAction {
     fn generate_resources(&self, _: Option<f64>) -> HashMap<Resource, i32> {
         let mut loot = HashMap::new();
         loot.insert(Resource::StormShard, rand::thread_rng().gen_range(5..20));
+        info!("generated loot {:?}", loot);
         loot
     }
 }

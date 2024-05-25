@@ -1,14 +1,15 @@
 -- -------------------------------------------------------------
--- TablePlus 5.5.2(512)
+-- TablePlus 6.0.0(550)
 --
 -- https://tableplus.com/
 --
 -- Database: defaultdb
--- Generation Time: 2024-02-06 10:08:47.5980 AM
+-- Generation Time: 2024-05-16 8:26:13.3640 AM
 -- -------------------------------------------------------------
 
 
--- This script only contains the table creation statements and does not fully represent the table in the database. It's still missing: indices, triggers. Do not use it as a backup.
+DROP TABLE IF EXISTS "public"."ResourceType";
+-- This script only contains the table creation statements and does not fully represent the table in the database. Do not use it as a backup.
 
 DROP TYPE IF EXISTS "public"."ResourceEnum";
 CREATE TYPE "public"."ResourceEnum" AS ENUM ('Aion', 'Valor', 'NexusOrb', 'StormShard');
@@ -19,6 +20,9 @@ CREATE TABLE "public"."ResourceType" (
     "type" "public"."ResourceEnum" NOT NULL,
     PRIMARY KEY ("id")
 );
+
+-- Indices
+CREATE UNIQUE INDEX "ResourceType_type_key" ON public."ResourceType" USING btree (type);
 
 INSERT INTO "public"."ResourceType" ("id", "type") VALUES
 ('105d5452-bfe0-44c6-893d-18cad6192eee', 'NexusOrb'),

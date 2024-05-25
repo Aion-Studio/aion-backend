@@ -11,8 +11,8 @@ use crate::models::hero::{convert_to_fixed_offset, Attributes, BaseStats};
 use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
 use crate::prisma::{
-    action, card, deck, deck_card, hero_actions, hero_quests, npc, quest, resource_type,
-    ResourceEnum,
+    action, deck, deck_card, hero_actions, hero_card, hero_quests, npc, npc_card, quest,
+    resource_type, ResourceEnum,
 };
 use crate::repos::cards::CardRepo;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
@@ -100,6 +100,12 @@ impl Repo {
             .exec()
             .await?;
         let hero: Hero = result.into();
+
+        self.prisma
+            .deck()
+            .create(vec![deck::hero_id::set(Some(hero.get_id()))])
+            .exec()
+            .await?;
         let region_name = RegionName::Dusane;
         self.prisma
             .hero_region()
@@ -165,7 +171,9 @@ impl Repo {
             .with(hero::base_stats::fetch())
             .with(hero::attributes::fetch())
             .with(hero::inventory::fetch())
-            .with(hero::deck::fetch())
+            .with(hero::decks::fetch(vec![deck::hero_id::equals(Some(
+                hero_id.clone(),
+            ))]))
             .with(hero::hero_region::fetch(vec![hero_id::equals(
                 hero_id.clone(),
             )]))
@@ -178,14 +186,7 @@ impl Repo {
             .exec()
             .await?;
 
-        let deck_id = hero_data
-            .as_ref()
-            .unwrap()
-            .deck
-            .clone()
-            .unwrap()
-            .unwrap()
-            .id;
+        let decks = hero_data.as_ref().unwrap().decks.clone().unwrap();
 
         let mut hero: Hero = match hero_data {
             Some(hero) => hero.into(),
@@ -197,37 +198,52 @@ impl Repo {
             }
         };
 
-        let cards: Vec<Card> = self.deck_cards_by_deck_id(deck_id.clone()).await;
-        info!("[repo] hero cards in deck {:?}", cards.len());
+        let hero_id = hero.get_id();
+        let all_decks_futures = decks
+            .into_iter()
+            .map(|deck| {
+                let hero_id_ref = &hero_id;
+                async move {
+                    let cards: Vec<Card> = self.deck_cards_by_deck_id(deck.id).await;
+                    Deck {
+                        hero_id: Some(hero_id_ref.clone()),
+                        cards_in_deck: cards,
+                        active: deck.active,
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+        let decks = join_all(all_decks_futures).await;
+        hero.decks = Some(decks);
 
-        hero.deck = Some(Deck {
-            id: deck_id,
-            hero_id: Some(hero_id.clone()),
-            cards_in_deck: cards,
-        });
         Ok(hero)
         // hero
     }
-
     pub async fn deck_cards_by_deck_id(&self, deck_id: String) -> Vec<Card> {
-        info!("Getting deck cards for deck_id: {}", deck_id);
         let deck_cards = self
             .prisma
             .deck_card()
             .find_many(vec![deck_card::deck_id::equals(deck_id.clone())])
-            .with(
-                deck_card::card::fetch()
-                    .with(CardRepo::fetch_minion_effects())
-                    .with(CardRepo::fetch_spell_effects()),
-            )
+            .with(deck_card::hero_card::fetch().with(hero_card::card::fetch()))
             .exec()
             .await;
+
         match deck_cards {
-            Ok(cards) => cards
-                .into_iter()
-                .map(|deck_card| deck_card.card.unwrap())
-                .map(|card| (*card).into())
-                .collect(),
+            Ok(cards) => {
+                let cards_with_effects = cards
+                    .into_iter()
+                    .map(|deck_card| async move {
+                        let card_data = deck_card.hero_card.unwrap().unwrap().card.unwrap();
+                        CardRepo::fetch_card_with_effects(*card_data).await
+                    })
+                    .collect::<Vec<_>>();
+
+                futures::future::join_all(cards_with_effects)
+                    .await
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>() // Collect the Results
+                    .unwrap_or(vec![]) // Handle potential errors
+            }
             Err(e) => {
                 error!("Error getting deck cards: {}", e);
                 vec![]
@@ -298,11 +314,14 @@ impl Repo {
 
                     match hero_resource_id_result {
                         Ok(Some(hero_resource)) => {
-                            // If found, use the existing ID for upsert
+                            info!(
+                                " hero {:?} resource {:?} and amount {:?} and wherecaluse",
+                                hero_id_clone, resource_enum, amount,
+                            );
                             prisma
                                 .hero_resource()
                                 .upsert(
-                                    hero_resource::id::equals(hero_resource.id), // Assuming the ID is directly accessible
+                                    hero_resource::id::equals(hero_resource.id),
                                     hero_resource::create(
                                         hero::id::equals(hero_id_clone),
                                         resource_type::r#type::equals(resource_enum),
@@ -335,6 +354,7 @@ impl Repo {
         let res = join_all(resource_creation_tasks).await;
         // iterate through and check if all have no errors
         for result in res {
+            info!("[repo] upsert result  {:?}", result);
             match result {
                 Ok(_) => {}
                 Err(e) => {
@@ -481,6 +501,7 @@ impl Repo {
             .exec()
             .await?;
 
+        // if hero has a quest but not completed, return it
         let hero_quest: HeroQuest = match hero_quest.clone() {
             Some(hq) => hq.into(),
             None => {
@@ -1083,27 +1104,27 @@ impl Repo {
         result.map_err(|e| QueryError::Serialize(e.to_string()))
     }
 
-    pub async fn add_card_to_game(&self, card: Card) -> Result<Card, QueryError> {
-        let card = self
+    pub async fn get_npc_cards(&self, npc_id: &str) -> Result<Vec<Card>, QueryError> {
+        let deck_cards = self
             .prisma
-            .card()
-            .create(
-                card.name,
-                card.nation.into(),
-                card.rarity.into(),
-                card.mana_cost,
-                card.health,
-                card.tier,
-                card.damage,
-                card.card_type.into(),
-                vec![card::img_url::set(card.img_url)],
-            )
+            .npc_card()
+            .find_many(vec![npc_card::npc_id::equals(String::from(npc_id))])
+            .with(npc_card::card::fetch())
             .exec()
-            .await;
-        match card {
-            Ok(card) => Ok(card.into()),
-            Err(e) => Err(QueryError::Serialize(e.to_string())),
-        }
+            .await?;
+
+        let cards_with_effects = deck_cards
+            .into_iter()
+            .map(|card| async move {
+                let card_with_effects = CardRepo::fetch_card_with_effects(*(card.card.unwrap()))
+                    .await
+                    .unwrap();
+                card_with_effects
+            }) // Unwrap the card data
+            .collect::<Vec<_>>();
+
+        let cards = join_all(cards_with_effects).await;
+        Ok(cards)
     }
 
     pub async fn get_npc_by_action_id(&self, action_id: &str) -> Result<Monster, QueryError> {
@@ -1116,15 +1137,15 @@ impl Repo {
             .with(npc::deck::fetch().with(deck::npc::fetch()))
             .exec()
             .await
+            .unwrap()
             .unwrap();
-        let deck_id = npc.as_ref().unwrap().deck_id.clone().unwrap();
-        let deck_cards = self.deck_cards_by_deck_id(deck_id.clone()).await;
-        let mut npc_obj: Monster = match npc {
-            Some(npc) => npc.into(),
-            None => return Err(QueryError::Serialize(format!("No npc found ",))),
-        };
+
+        //we assume npc has a deck and cards when created
+        let deck_cards = self.get_npc_cards(&npc.id).await.unwrap();
+
+        let mut npc_obj: Monster = npc.into();
         npc_obj.deck = Some(Deck {
-            id: deck_id,
+            active: true,
             hero_id: None,
             cards_in_deck: deck_cards,
         });

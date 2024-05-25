@@ -1,13 +1,14 @@
+use futures::future::join_all;
 use prisma_client_rust::QueryError;
 use tracing::error;
+use tracing::info;
 
+use crate::models::cards::Deck;
+use crate::prisma::deck;
+use crate::prisma::deck_card;
 use crate::{
-    models::cards::Card,
-    prisma::{
-        card::{self, minion_effects, spell_effects},
-        damage_effect, hero, hero_card, minion_effect, minion_effect_effect, spell_effect,
-        spell_effect_effect,
-    },
+    models::cards::{Card, CardEffect, HeroCard},
+    prisma::{card, card_effect, damage_effect, hero, hero_card, minion_effect, spell_effect},
     webserver::get_prisma_client,
 };
 
@@ -16,53 +17,107 @@ pub struct CardRepo {}
 impl CardRepo {
     pub async fn get_all_cards() -> Vec<Card> {
         let prisma = get_prisma_client();
+
         let cards = prisma
             .card()
             .find_many(vec![])
-            .with(CardRepo::fetch_minion_effects())
-            .with(CardRepo::fetch_spell_effects())
             .exec()
-            .await;
-        match cards {
-            Ok(cards) => cards.into_iter().map(|card| card.into()).collect(),
-            Err(e) => {
-                error!("Failed to get all cards: {:?}", e);
-                vec![]
-            }
-        }
+            .await
+            .unwrap_or(vec![]);
+
+        let cards_with_effects = cards
+            .into_iter()
+            .map(|card_data| CardRepo::fetch_card_with_effects(card_data))
+            .collect::<Vec<_>>();
+
+        let cards_fetched = futures::future::join_all(cards_with_effects)
+            .await
+            .into_iter()
+            .map(|card| card.unwrap())
+            .collect();
+        cards_fetched
     }
 
-    pub async fn get_all_hero_cards(hero_id: String) -> Vec<Card> {
+    // pub async fn get_hero_decks(hero_id: String) -> Vec<Deck> {
+    //     let prisma = get_prisma_client();
+    //
+    //     let decks = prisma
+    //         .deck()
+    //         .find_many(vec![deck::hero_id::equals(Some(hero_id))])
+    //         .with(
+    //             deck::deck_card::fetch()
+    //                 .with(deck_card::hero_card::fetch().with(hero_card::card::fetch())),
+    //         )
+    //         .exec()
+    //         .await
+    //         .unwrap_or(vec![]);
+    //
+    //     decks
+    //         .into_iter()
+    //         .map(|deck| {
+    //             let deck_cards = deck
+    //                 .deck_card
+    //                 .unwrap()
+    //                 .into_iter()
+    //                 .map(|deck_card| {
+    //                     let hero_card = deck_card.hero_card.unwrap();
+    //                     let card = hero_card.card.unwrap();
+    //                     HeroCard {
+    //                         id: hero_card.id,
+    //                         card: Card::from((card, vec![])),
+    //                     }
+    //                 })
+    //                 .collect();
+    //             Deck {
+    //                 hero_id: deck.hero_id,
+    //                 cards_in_deck: deck_cards,
+    //                 active: deck.active,
+    //             }
+    //         })
+    //         .collect()
+    // }
+
+    pub async fn get_all_hero_cards(hero_id: String) -> Vec<HeroCard> {
         let prisma = get_prisma_client();
-        // let _where = vec![deck::hero::is(vec![hero::id::equals(hero_id)])];
-        // let hero_deck = prisma.deck().find_first(_where).exec().await;
-        // let id = match hero_deck {
-        //     Ok(hero_deck) => {
-        //         let hero_deck = hero_deck.unwrap();
-        //         hero_deck.id
-        //     }
-        //     Err(e) => {
-        //         error!("Failed to get all hero cards: {:?}", e);
-        //         return vec![];
-        //     }
-        // };
+
         let hero_cards = prisma
             .hero_card()
             .find_many(vec![hero_card::hero_id::equals(hero_id)])
-            .with(
-                hero_card::card::fetch()
-                    .with(CardRepo::fetch_minion_effects())
-                    .with(CardRepo::fetch_spell_effects()),
-            )
+            .with(hero_card::card::fetch()) // Only fetch the card data initially
             .exec()
             .await;
+
         match hero_cards {
-            Ok(cards) => cards.into_iter().map(|card| card.into()).collect(),
+            Ok(cards) => {
+                let cards_with_effects = cards
+                    .into_iter()
+                    .map(|card| async move {
+                        let card_with_effects =
+                            CardRepo::fetch_card_with_effects(*(card.card.unwrap())).await;
+                        HeroCard {
+                            id: card.id,
+                            card: card_with_effects.unwrap(), // Assign the fetched card
+                        }
+                    }) // Unwrap the card data
+                    .collect::<Vec<_>>();
+
+                join_all(cards_with_effects)
+                    .await
+                    .into_iter()
+                    .filter_map(|result| Some(result)) // Extract Ok values, discarding errors
+                    .collect::<Vec<HeroCard>>()
+            }
             Err(e) => {
                 error!("Failed to get all hero cards: {:?}", e);
                 vec![]
             }
         }
+    }
+
+    pub async fn fetch_card_with_effects(card_data: card::Data) -> anyhow::Result<Card> {
+        let card_effects = CardRepo::fetch_card_effects(card_data.id.clone()).await?;
+        let card = Card::from((card_data, card_effects));
+        Ok(card)
     }
 
     pub async fn add_card(hero_id: String, card_id: String) -> Result<String, QueryError> {
@@ -81,32 +136,95 @@ impl CardRepo {
         }
     }
 
-    pub fn fetch_minion_effects() -> minion_effects::Fetch {
-        card::minion_effects::fetch(vec![]).with(
-            minion_effect::effects::fetch(vec![])
-                .with(minion_effect_effect::pickup_effect::fetch())
-                .with(minion_effect_effect::resilience_effect::fetch())
-                .with(minion_effect_effect::poison_effect::fetch())
-                .with(minion_effect_effect::taunt_effect::fetch())
-                .with(minion_effect_effect::lifesteal_effect::fetch())
-                .with(minion_effect_effect::summon_effect::fetch())
-                .with(minion_effect_effect::charge_effect::fetch()),
-        )
+    // toggles a card to be in a deck or not
+    pub async fn toggle_deck_status(
+        deck_id: String,
+        hero_card_id: String,
+        in_deck: bool,
+    ) -> Result<(), QueryError> {
+        let prisma = get_prisma_client();
+
+        if in_deck {
+            prisma
+                .deck_card()
+                .create(
+                    deck_id,
+                    vec![deck_card::hero_card::connect(hero_card::id::equals(
+                        hero_card_id.clone(),
+                    ))],
+                )
+                .exec()
+                .await?;
+        } else {
+            prisma
+                .deck_card()
+                .delete(deck_card::id::equals(hero_card_id))
+                .exec()
+                .await?;
+        }
+
+        Ok(())
     }
 
-    pub fn fetch_spell_effects() -> spell_effects::Fetch {
-        card::spell_effects::fetch(vec![]).with(
-            spell_effect::effects::fetch(vec![])
-                .with(spell_effect_effect::heal_effect::fetch())
-                .with(spell_effect_effect::armor_effect::fetch())
-                .with(
-                    spell_effect_effect::damage_effect::fetch()
-                        .with(damage_effect::damage::fetch(vec![])),
-                )
-                .with(spell_effect_effect::resilience_effect::fetch())
-                .with(spell_effect_effect::poison_effect::fetch())
-                .with(spell_effect_effect::initiative_effect::fetch())
-                .with(spell_effect_effect::stun_effect::fetch()),
-        )
+    pub async fn remove_hero_card_by_id(deck_card_id: String) -> Result<String, QueryError> {
+        let prisma = get_prisma_client();
+        let hero_card = prisma
+            .hero_card()
+            .delete(hero_card::id::equals(deck_card_id))
+            .exec()
+            .await;
+        match hero_card {
+            Ok(hero_card) => Ok(hero_card.id),
+            Err(e) => {
+                error!("Failed to remove card: {:?}", e);
+                Err(e)
+            }
+        }
+    }
+
+    pub async fn fetch_card_effects(card_id: String) -> Result<Vec<CardEffect>, QueryError> {
+        let prisma = get_prisma_client();
+        let card_effects = prisma
+            .card_effect()
+            .find_many(vec![card_effect::card_id::equals(card_id)])
+            .with(
+                card_effect::minion_effect::fetch()
+                    .with(minion_effect::ethereal_effect::fetch())
+                    .with(minion_effect::cleanse_effect::fetch())
+                    .with(minion_effect::block_effect::fetch())
+                    .with(minion_effect::roar_aura_effect::fetch())
+                    .with(minion_effect::dying_wish_heal_effect::fetch())
+                    .with(minion_effect::dying_wish_damage_effect::fetch())
+                    .with(minion_effect::taunt_effect::fetch())
+                    .with(minion_effect::charge_effect::fetch())
+                    .with(minion_effect::lifesteal_effect::fetch())
+                    .with(minion_effect::pickup_effect::fetch())
+                    .with(minion_effect::twin_effect::fetch()),
+            )
+            .with(
+                card_effect::spell_effect::fetch()
+                    .with(spell_effect::stun_effect::fetch())
+                    .with(spell_effect::heal_effect::fetch())
+                    .with(spell_effect::armor_effect::fetch())
+                    .with(spell_effect::resilience_effect::fetch())
+                    .with(spell_effect::poison_effect::fetch())
+                    .with(spell_effect::initiative_effect::fetch())
+                    .with(spell_effect::battle_cry_effect::fetch())
+                    .with(spell_effect::cowardice_curse_effect::fetch())
+                    .with(spell_effect::phantom_touch_effect::fetch())
+                    .with(spell_effect::spray_of_knives_effect::fetch())
+                    .with(spell_effect::daze_effect::fetch())
+                    .with(
+                        spell_effect::damage_effect::fetch()
+                            .with(damage_effect::damage::fetch(vec![])),
+                    ),
+            )
+            .exec()
+            .await?
+            .into_iter()
+            .map(CardEffect::from)
+            .collect();
+
+        Ok(card_effects)
     }
 }

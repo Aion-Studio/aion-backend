@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@googleapis/sheets": "^7.0.0",
     "@prisma/client": "^5.10.2",
     "dotenv": "^16.4.5",
     "prisma": "^5.10.2"

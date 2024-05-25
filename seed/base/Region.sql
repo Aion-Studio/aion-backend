@@ -1,14 +1,15 @@
 -- -------------------------------------------------------------
--- TablePlus 5.5.2(512)
+-- TablePlus 6.0.0(550)
 --
 -- https://tableplus.com/
 --
 -- Database: defaultdb
--- Generation Time: 2023-10-25 6:08:04.2380 PM
+-- Generation Time: 2024-05-16 8:28:12.7350 AM
 -- -------------------------------------------------------------
 
 
--- This script only contains the table creation statements and does not fully represent the table in the database. It's still missing: indices, triggers. Do not use it as a backup.
+DROP TABLE IF EXISTS "public"."Region";
+-- This script only contains the table creation statements and does not fully represent the table in the database. Do not use it as a backup.
 
 -- Table Definition
 CREATE TABLE "public"."Region" (

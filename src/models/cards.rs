@@ -1,22 +1,30 @@
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::prisma::{self, hero_card};
+use crate::prisma::{self, daze_effect};
 use crate::prisma::{
-    armor_effect, charge_effect, damage_effect, heal_effect, initiative_effect, lifesteal_effect,
-    minion_effect, pickup_effect, poison_effect, resilience_effect, stun_effect, summon_effect,
-    taunt_effect,
+    armor_effect, battle_cry_effect, block_effect, charge_effect, cleanse_effect,
+    cowardice_curse_effect, damage_effect, dying_wish_heal_effect, ethereal_effect, heal_effect,
+    initiative_effect, lifesteal_effect, phantom_touch_effect, pickup_effect, poison_effect,
+    resilience_effect, roar_aura_effect, spray_of_knives_effect, stun_effect, taunt_effect,
+    twin_effect, DamageType, TargetType,
 };
-use crate::prisma::{card, deck, deck_card, spell_effect, DamageType, TargetType};
+use crate::prisma::{card, deck};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Deck {
-    pub id: String,
     pub hero_id: Option<String>,
     pub cards_in_deck: Vec<Card>,
+    pub active: bool,
 }
 
 impl Deck {}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct HeroCard {
+    pub id: String,
+    pub card: Card,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Card {
@@ -24,14 +32,12 @@ pub struct Card {
     pub name: String,
     pub nation: Nation,
     pub rarity: Rarity,
-    pub tier: i32,
     pub img_url: String,
     pub mana_cost: i32,
     pub health: i32,
     pub damage: i32,
     pub card_type: CardType,
-    pub spell_effects: Vec<SpellEffect>,
-    pub minion_effects: Vec<MinionEffect>,
+    pub card_effects: Vec<CardEffect>, // Updated to use card_effects
     pub round_played: i32,
     pub last_attack_round: Option<i32>,
 }
@@ -56,83 +62,86 @@ impl Default for Card {
             name: "".to_string(),
             nation: Nation::Dusane,
             rarity: Rarity::Common,
-            tier: 0,
             img_url: "".to_string(),
             mana_cost: 0,
             health: 0,
             damage: 0,
+            card_effects: Vec::new(),
             card_type: CardType::Minion,
-            spell_effects: Vec::new(),
-            minion_effects: Vec::new(),
             round_played: 0,
             last_attack_round: None,
         }
     }
 }
 
-impl From<card::Data> for Card {
-    fn from(data: card::Data) -> Self {
+impl From<(card::Data, Vec<CardEffect>)> for Card {
+    fn from((data, card_effects): (card::Data, Vec<CardEffect>)) -> Self {
         Card {
             id: data.id,
             name: data.name,
             nation: data.nation.into(),
             rarity: data.rarity.into(),
-            tier: data.tier,
             img_url: data.img_url,
             mana_cost: data.mana_cost,
             health: data.health,
             damage: data.damage,
             card_type: data.card_type.into(),
+            card_effects,
             round_played: 0,
             last_attack_round: None,
-            spell_effects: data
-                .spell_effects
-                .map(|effects| effects.into_iter().map(SpellEffect::from).collect())
-                .unwrap_or_default(),
-
-            minion_effects: data
-                .minion_effects
-                .map(|effects| effects.into_iter().map(MinionEffect::from).collect())
-                .unwrap_or_default(),
         }
     }
 }
 
-impl From<hero_card::Data> for Card {
-    fn from(data: hero_card::Data) -> Self {
-        //
-        let card = data.card.unwrap();
-        (*card).into()
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct CardEffect {
+    pub id: String,
+    pub card_id: String,
+    pub effect: EffectType, // Updated to use the EffectType enum
+}
+
+impl From<prisma::card_effect::Data> for CardEffect {
+    fn from(data: prisma::card_effect::Data) -> Self {
+        let effect = if let Some(Some(spell_effect)) = data.spell_effect {
+            EffectType::SpellEffect(SpellEffectType::from(*spell_effect))
+        } else if let Some(Some(minion_effect)) = data.minion_effect {
+            EffectType::MinionEffect(MinionEffectType::from(*minion_effect))
+        } else {
+            EffectType::None
+        };
+
+        CardEffect {
+            id: data.id,
+            card_id: data.card_id,
+            effect,
+        }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct SpellEffect {
-    pub id: String,
-    pub card_id: String,
-    pub duration: i32,
-    pub effect: SpellEffectType, // Updated to use the SpellEffectType enum
+pub enum EffectType {
+    SpellEffect(SpellEffectType),
+    MinionEffect(MinionEffectType),
+    None,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct MinionEffect {
-    pub id: String,
-    pub card_id: String,
-    pub duration: i32,
-    pub effect: MinionEffectType, // Updated to use the MinionEffectType enum
-}
-
+// --------------------------              MINION EFFECT TYPES                ---------------------------
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum MinionEffectType {
     Taunt(TauntEffect),
     Charge(ChargeEffect),
     Lifesteal(LifestealEffect),
     Pickup(PickupEffect),
-    Summon(SummonEffect),
-    Resilience(ResilienceEffect),
-    Poison(PoisonEffect),
+    // Summon(SummonEffect),  -- Summoning is a Spell Effect
+    Ethereal(EtherealEffect),
+    Twin(TwinEffect),
+    Cleanse(CleanseEffect),
+    Block(BlockEffect),
+    RoarAura(RoarAuraEffect),
+    DyingWishHeal(DyingWishHealEffect),
+    None,
 }
-
+// --------------------------              SPELL EFFECT TYPES                ---------------------------
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum SpellEffectType {
     Damage(DamageEffect),
@@ -142,136 +151,105 @@ pub enum SpellEffectType {
     Poison(PoisonEffect),
     Initiative(InitiativeEffect),
     Stun(StunEffect),
+    BattleCry(BattleCryEffect),
+    CowardiceCurse(CowardiceCurseEffect),
+    PhantomTouch(PhantomTouchEffect),
+    SprayOfKnives(SprayOfKnivesEffect),
+    Daze(DazeEffect),
+    None,
 }
 
-impl From<spell_effect::Data> for SpellEffect {
-    fn from(data: spell_effect::Data) -> Self {
-        let effect_type = data
-            .effects
-            .unwrap_or_default()
-            .into_iter()
-            .map(|effect_data| {
-                effect_data
-                    .damage_effect
-                    .and_then(|inner| inner)
-                    .map(|e| SpellEffectType::Damage(DamageEffect::from(*e)))
-                    .or_else(|| {
-                        effect_data
-                            .heal_effect
-                            .and_then(|inner| inner)
-                            .map(|e| SpellEffectType::Heal(HealEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .armor_effect
-                            .and_then(|inner| inner)
-                            .map(|e| SpellEffectType::Armor(ArmorEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .resilience_effect
-                            .and_then(|inner| inner)
-                            .map(|e| SpellEffectType::Resilience(ResilienceEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .poison_effect
-                            .and_then(|inner| inner)
-                            .map(|e| SpellEffectType::Poison(PoisonEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .initiative_effect
-                            .and_then(|inner| inner)
-                            .map(|e| SpellEffectType::Initiative(InitiativeEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .stun_effect
-                            .and_then(|inner| inner)
-                            .map(|e| SpellEffectType::Stun(StunEffect::from(*e)))
-                    })
-                    .expect("Expected  one effect type to be present in the effects vector")
-            })
-            .next()
-            .expect("Expected at least one effect type to be present in the effects vector");
-
-        SpellEffect {
-            id: data.id,
-            card_id: data.card_id,
-            duration: data.duration,
-            effect: effect_type,
-        }
-    }
-}
-impl From<minion_effect::Data> for MinionEffect {
-    fn from(data: minion_effect::Data) -> Self {
-        let effect_type = data
-            .effects
-            .unwrap_or_default()
-            .into_iter()
-            .map(|effect_data| {
-                effect_data
-                    .taunt_effect
-                    .and_then(|inner| inner)
-                    .map(|e| MinionEffectType::Taunt(TauntEffect::from(*e)))
-                    .or_else(|| {
-                        effect_data
-                            .charge_effect
-                            .and_then(|inner| inner)
-                            .map(|e| MinionEffectType::Charge(ChargeEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .lifesteal_effect
-                            .and_then(|inner| inner)
-                            .map(|e| MinionEffectType::Lifesteal(LifestealEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .pickup_effect
-                            .and_then(|inner| inner)
-                            .map(|e| MinionEffectType::Pickup(PickupEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .summon_effect
-                            .and_then(|inner| inner)
-                            .map(|e| MinionEffectType::Summon(SummonEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .resilience_effect
-                            .and_then(|inner| inner)
-                            .map(|e| MinionEffectType::Resilience(ResilienceEffect::from(*e)))
-                    })
-                    .or_else(|| {
-                        effect_data
-                            .poison_effect
-                            .and_then(|inner| inner)
-                            .map(|e| MinionEffectType::Poison(PoisonEffect::from(*e)))
-                    })
-                    // return empty array
-                    .expect("inner failure onn the effects vector")
-            })
-            .next()
-            .expect("Expected at least one effect type to be present in the effects vector");
-
-        MinionEffect {
-            id: data.id,
-            card_id: data.card_id,
-            duration: data.duration,
-            effect: effect_type,
+impl From<prisma::spell_effect::Data> for SpellEffectType {
+    fn from(data: prisma::spell_effect::Data) -> Self {
+        // Map the inner specific effect data to the corresponding enum variant
+        if let Some(Some(damage_effect)) = data.damage_effect {
+            SpellEffectType::Damage(DamageEffect::from(*damage_effect))
+        } else if let Some(Some(heal_effect)) = data.heal_effect {
+            SpellEffectType::Heal(HealEffect::from(*heal_effect))
+        } else if let Some(Some(armor_effect)) = data.armor_effect {
+            SpellEffectType::Armor(ArmorEffect::from(*armor_effect))
+        } else if let Some(Some(resilience_effect)) = data.resilience_effect {
+            SpellEffectType::Resilience(ResilienceEffect::from(*resilience_effect))
+        } else if let Some(Some(poison_effect)) = data.poison_effect {
+            SpellEffectType::Poison(PoisonEffect::from(*poison_effect))
+        } else if let Some(Some(initiative_effect)) = data.initiative_effect {
+            SpellEffectType::Initiative(InitiativeEffect::from(*initiative_effect))
+        } else if let Some(Some(stun_effect)) = data.stun_effect {
+            SpellEffectType::Stun(StunEffect::from(*stun_effect))
+        } else if let Some(Some(battle_cry_effect)) = data.battle_cry_effect {
+            SpellEffectType::BattleCry(BattleCryEffect::from(*battle_cry_effect))
+        } else if let Some(Some(cowardice_curse_effect)) = data.cowardice_curse_effect {
+            SpellEffectType::CowardiceCurse(CowardiceCurseEffect::from(*cowardice_curse_effect))
+        } else if let Some(Some(phantom_touch_effect)) = data.phantom_touch_effect {
+            SpellEffectType::PhantomTouch(PhantomTouchEffect::from(*phantom_touch_effect))
+        } else if let Some(Some(spray_of_knives_effect)) = data.spray_of_knives_effect {
+            SpellEffectType::SprayOfKnives(SprayOfKnivesEffect::from(*spray_of_knives_effect))
+        } else if let Some(Some(daze_effect)) = data.daze_effect {
+            SpellEffectType::Daze(DazeEffect::from(*daze_effect))
+        } else {
+            SpellEffectType::None
         }
     }
 }
 
+impl From<prisma::minion_effect::Data> for MinionEffectType {
+    fn from(data: prisma::minion_effect::Data) -> Self {
+        // Map the inner specific effect data to the corresponding enum variant
+        if let Some(Some(taunt_effect)) = data.taunt_effect {
+            MinionEffectType::Taunt(TauntEffect::from(*taunt_effect))
+        } else if let Some(Some(charge_effect)) = data.charge_effect {
+            MinionEffectType::Charge(ChargeEffect::from(*charge_effect))
+        } else if let Some(Some(lifesteal_effect)) = data.lifesteal_effect {
+            MinionEffectType::Lifesteal(LifestealEffect::from(*lifesteal_effect))
+        } else if let Some(Some(pickup_effect)) = data.pickup_effect {
+            MinionEffectType::Pickup(PickupEffect::from(*pickup_effect))
+        } else if let Some(Some(ethereal_effect)) = data.ethereal_effect {
+            MinionEffectType::Ethereal(EtherealEffect::from(*ethereal_effect))
+        } else if let Some(Some(twin_effect)) = data.twin_effect {
+            MinionEffectType::Twin(TwinEffect::from(*twin_effect))
+        } else if let Some(Some(cleanse_effect)) = data.cleanse_effect {
+            MinionEffectType::Cleanse(CleanseEffect::from(*cleanse_effect))
+        } else if let Some(Some(block_effect)) = data.block_effect {
+            MinionEffectType::Block(BlockEffect::from(*block_effect))
+        } else if let Some(Some(roar_aura_effect)) = data.roar_aura_effect {
+            MinionEffectType::RoarAura(RoarAuraEffect::from(*roar_aura_effect))
+        } else if let Some(Some(dying_wish_heal_effect)) = data.dying_wish_heal_effect {
+            MinionEffectType::DyingWishHeal(DyingWishHealEffect::from(*dying_wish_heal_effect))
+        } else {
+            MinionEffectType::None
+        }
+    }
+}
+
+// --------------------------              SPELL EFFECTS                ---------------------------
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct DamageEffect {
     pub id: String,
     // pub amount: i32,
     pub damage: Vec<(DamageType, TargetType, i32)>, // pub damage_type: DamageType,
                                                     // pub target_type: TargetType,
+}
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct BattleCryEffect {
+    pub id: String,
+    pub amount: i32,
+}
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct CowardiceCurseEffect {
+    pub id: String,
+    pub amount: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct PhantomTouchEffect {
+    pub id: String,
+    pub amount: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct SprayOfKnivesEffect {
+    pub id: String,
+    pub amount: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -309,6 +287,16 @@ pub struct InitiativeEffect {
 pub struct StunEffect {
     pub id: String,
 }
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct SummonEffect {
+    pub id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct DazeEffect {
+    pub id: String,
+}
+// --------------------------              MINION EFFECTS                ---------------------------
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct TauntEffect {
@@ -323,6 +311,7 @@ pub struct ChargeEffect {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct LifestealEffect {
     pub id: String,
+    pub percentage: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -332,9 +321,39 @@ pub struct PickupEffect {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct SummonEffect {
+pub struct EtherealEffect {
     pub id: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct TwinEffect {
+    pub id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct CleanseEffect {
+    pub id: String,
+    pub amount: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct BlockEffect {
+    pub id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct RoarAuraEffect {
+    pub id: String,
+    pub amount: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct DyingWishHealEffect {
+    pub id: String,
+    pub amount: i32,
+}
+
+// --------------------------              FROM IMPLS                ---------------------------
 
 impl From<damage_effect::Data> for DamageEffect {
     fn from(data: damage_effect::Data) -> Self {
@@ -357,6 +376,12 @@ impl From<heal_effect::Data> for HealEffect {
             amount: data.amount,
             target_type: data.target_type.into(),
         }
+    }
+}
+
+impl From<daze_effect::Data> for DazeEffect {
+    fn from(data: daze_effect::Data) -> Self {
+        DazeEffect { id: data.id }
     }
 }
 
@@ -401,6 +426,38 @@ impl From<stun_effect::Data> for StunEffect {
         StunEffect { id: data.id }
     }
 }
+impl From<battle_cry_effect::Data> for BattleCryEffect {
+    fn from(data: battle_cry_effect::Data) -> Self {
+        BattleCryEffect {
+            id: data.id,
+            amount: data.amount,
+        }
+    }
+}
+impl From<cowardice_curse_effect::Data> for CowardiceCurseEffect {
+    fn from(data: cowardice_curse_effect::Data) -> Self {
+        CowardiceCurseEffect {
+            id: data.id,
+            amount: data.amount,
+        }
+    }
+}
+impl From<phantom_touch_effect::Data> for PhantomTouchEffect {
+    fn from(data: phantom_touch_effect::Data) -> Self {
+        PhantomTouchEffect {
+            id: data.id,
+            amount: data.amount,
+        }
+    }
+}
+impl From<spray_of_knives_effect::Data> for SprayOfKnivesEffect {
+    fn from(data: spray_of_knives_effect::Data) -> Self {
+        SprayOfKnivesEffect {
+            id: data.id,
+            amount: data.amount,
+        }
+    }
+}
 
 impl From<taunt_effect::Data> for TauntEffect {
     fn from(data: taunt_effect::Data) -> Self {
@@ -416,7 +473,10 @@ impl From<charge_effect::Data> for ChargeEffect {
 
 impl From<lifesteal_effect::Data> for LifestealEffect {
     fn from(data: lifesteal_effect::Data) -> Self {
-        LifestealEffect { id: data.id }
+        LifestealEffect {
+            id: data.id,
+            percentage: data.percentage,
+        }
     }
 }
 
@@ -429,9 +489,43 @@ impl From<pickup_effect::Data> for PickupEffect {
     }
 }
 
-impl From<summon_effect::Data> for SummonEffect {
-    fn from(data: summon_effect::Data) -> Self {
-        SummonEffect { id: data.id }
+impl From<ethereal_effect::Data> for EtherealEffect {
+    fn from(data: ethereal_effect::Data) -> Self {
+        EtherealEffect { id: data.id }
+    }
+}
+impl From<twin_effect::Data> for TwinEffect {
+    fn from(data: twin_effect::Data) -> Self {
+        TwinEffect { id: data.id }
+    }
+}
+impl From<cleanse_effect::Data> for CleanseEffect {
+    fn from(data: cleanse_effect::Data) -> Self {
+        CleanseEffect {
+            id: data.id,
+            amount: data.amount,
+        }
+    }
+}
+impl From<block_effect::Data> for BlockEffect {
+    fn from(data: block_effect::Data) -> Self {
+        BlockEffect { id: data.id }
+    }
+}
+impl From<roar_aura_effect::Data> for RoarAuraEffect {
+    fn from(data: roar_aura_effect::Data) -> Self {
+        RoarAuraEffect {
+            id: data.id,
+            amount: data.amount,
+        }
+    }
+}
+impl From<dying_wish_heal_effect::Data> for DyingWishHealEffect {
+    fn from(data: dying_wish_heal_effect::Data) -> Self {
+        DyingWishHealEffect {
+            id: data.id,
+            amount: data.amount,
+        }
     }
 }
 
@@ -449,15 +543,6 @@ pub struct DeckCard {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct CardEffect {
-    id: String,
-    card_id: String,
-    effect: EffectType,
-    value: Option<i32>,
-    duration: Option<i32>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Nation {
     Dusane,
     Aylen,
@@ -469,48 +554,17 @@ pub enum Nation {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Rarity {
     Common,
-    Magic,
+    Rare,
     Epic,
     Legendary,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum EffectType {
-    PhysicalDamage,
-    SpellDamage,
-    ChaosDamage,
-    DamageOverTime,
-    Stun,
-    ReduceArmor,
-    ReduceResilience,
-    IncreaseArmor,
-    IncreaseResilience,
-    Heal,
-    HealOverTime,
-    DrawCards,
-    ApplyPoison,
-    RemovePoison,
-    ApplyInitiative,
-    RemoveInitiative,
-}
-
 impl From<deck::Data> for Deck {
     fn from(data: deck::Data) -> Self {
-        // shouldnt be called anywhere right now
         Deck {
-            id: data.id,
             hero_id: data.hero.unwrap().map(|hero| hero.id),
             cards_in_deck: Vec::new(), // Initialize an empty vector for now
-        }
-    }
-}
-
-impl From<deck_card::Data> for DeckCard {
-    fn from(data: deck_card::Data) -> Self {
-        DeckCard {
-            deck_id: data.deck_id,
-            card: (*data.card.unwrap()).into(),
-            quantity: data.quantity,
+            active: data.active,
         }
     }
 }
@@ -559,7 +613,7 @@ impl From<prisma::Rarity> for Rarity {
     fn from(rarity: prisma::Rarity) -> Self {
         match rarity {
             prisma::Rarity::Common => Rarity::Common,
-            prisma::Rarity::Magic => Rarity::Magic,
+            prisma::Rarity::Rare => Rarity::Rare,
             prisma::Rarity::Epic => Rarity::Epic,
             prisma::Rarity::Legendary => Rarity::Legendary,
         }
@@ -570,7 +624,7 @@ impl From<Rarity> for prisma::Rarity {
     fn from(rarity: Rarity) -> Self {
         match rarity {
             Rarity::Common => prisma::Rarity::Common,
-            Rarity::Magic => prisma::Rarity::Magic,
+            Rarity::Rare => prisma::Rarity::Rare,
             Rarity::Epic => prisma::Rarity::Epic,
             Rarity::Legendary => prisma::Rarity::Legendary,
         }

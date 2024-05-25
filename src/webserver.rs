@@ -173,6 +173,9 @@ async fn run(listener: TcpListener) -> Result<Server, anyhow::Error> {
             .service(add_quest)
             .service(get_cards)
             .service(add_card)
+            .service(add_to_deck)
+            .service(remove_from_deck)
+            .service(remove_card)
             .service(get_hero_cards)
             .service(get_hero_quests)
             .service(do_quest_action)
@@ -220,6 +223,11 @@ pub struct AddCardRequest {
     card_id: String,
 }
 
+#[derive(serde::Deserialize)]
+pub struct CardRequest {
+    card_id: String,
+}
+
 #[post("/add-card")]
 async fn add_card(action: web::Json<AddCardRequest>) -> impl Responder {
     let hero_id = action.hero_id.clone();
@@ -228,11 +236,32 @@ async fn add_card(action: web::Json<AddCardRequest>) -> impl Responder {
     HttpResponse::Ok().json(card)
 }
 
+#[post("/remove-card")]
+async fn remove_card(action: web::Json<CardRequest>) -> impl Responder {
+    let card_id = action.card_id.clone();
+    let card = CardRepo::remove_hero_card_by_id(card_id).await;
+    HttpResponse::Ok().json(card)
+}
+
 #[get("/hero-cards/{hero_id}")]
 async fn get_hero_cards(path: Path<String>) -> impl Responder {
     let hero_id = path.into_inner();
     let cards = CardRepo::get_all_hero_cards(hero_id).await;
     HttpResponse::Ok().json(cards)
+}
+
+#[post("hero-cards/add-to-deck/{deck_id}/{hero_card_id}")]
+async fn add_to_deck(path: Path<(String, String)>) -> impl Responder {
+    let (deck_id, hero_card_id) = path.into_inner();
+    let card_id = CardRepo::toggle_deck_status(deck_id, hero_card_id, true).await;
+    HttpResponse::Ok().json(card_id)
+}
+
+#[post("hero-cards/remove-from-deck/{deck_id}/{card_id}")]
+async fn remove_from_deck(path: Path<(String, String)>) -> impl Responder {
+    let (deck_id, card_id) = path.into_inner();
+    let card_id = CardRepo::toggle_deck_status(deck_id, card_id, false).await;
+    HttpResponse::Ok().json(card_id)
 }
 
 #[get("/visible-leylines/{id}")]

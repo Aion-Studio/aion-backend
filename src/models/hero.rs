@@ -42,7 +42,7 @@ pub struct Hero {
     pub stamina_regen_rate: i32,
     pub last_stamina_regeneration_time: Option<DateTime<Utc>>, // Add this
     pub talents: Vec<Talent>,
-    pub deck: Option<Deck>,
+    pub decks: Option<Vec<Deck>>,
 }
 
 // methods to only update the model struct based on some calculation
@@ -67,7 +67,7 @@ impl Hero {
             stamina_regen_rate: 1,
             last_stamina_regeneration_time: None,
             talents: vec![],
-            deck: None,
+            decks: None,
         }
     }
 
@@ -78,7 +78,13 @@ impl Hero {
             self.base_stats.clone(),
             self.attributes.clone(),
             self.inventory.clone().unwrap(),
-            self.deck.clone().unwrap(),
+            self.decks
+                .as_ref()
+                .unwrap()
+                .into_iter()
+                .find(|deck| deck.active)
+                .unwrap()
+                .clone(),
             0,
         )
     }
@@ -486,7 +492,7 @@ impl From<hero::Data> for Hero {
                 Some(talents) => talents.into_iter().map(Talent::from).collect(),
                 None => vec![],
             },
-            deck: None, // we fill in the deck manually
+            decks: None, // we fill in the deck manually
         }
     }
 }

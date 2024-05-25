@@ -1,18 +1,18 @@
 -- -------------------------------------------------------------
--- TablePlus 5.5.2(512)
+-- TablePlus 6.0.0(550)
 --
 -- https://tableplus.com/
 --
 -- Database: defaultdb
--- Generation Time: 2024-02-07 9:45:37.0640 AM
+-- Generation Time: 2024-05-16 8:27:46.8600 AM
 -- -------------------------------------------------------------
 
 
--- This script only contains the table creation statements and does not fully represent the table in the database. It's still missing: indices, triggers. Do not use it as a backup.
+DROP TABLE IF EXISTS "public"."Quest";
+-- This script only contains the table creation statements and does not fully represent the table in the database. Do not use it as a backup.
 
 -- Table Definition
--- add only if it doesnt exist
-CREATE TABLE IF NOT EXISTS "public"."Quest" (
+CREATE TABLE "public"."Quest" (
     "id" text NOT NULL,
     "title" text NOT NULL,
     "region_name" text NOT NULL,

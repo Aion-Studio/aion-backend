@@ -8,9 +8,8 @@
 
 [:heavy_check_mark] show lootbox once each of those is clicked
 
-today:
-    [] implement pickup ability on minions
-    [] implement lifesteal
+priority list:
+    [] 
 
 
 log:

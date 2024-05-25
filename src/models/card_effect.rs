@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct ActiveEffect {
     pub combatant_id: String, // Unique identifier for the combatant
-    pub effect: EffectType,
+    pub effect: ActiveEffectType,
     pub remaining_turns: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum EffectType {
+pub enum ActiveEffectType {
     SkipTurn,
     Stun,
     Initiative { amount: i32 },
