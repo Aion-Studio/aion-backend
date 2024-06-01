@@ -544,6 +544,7 @@ model DeckCard {
 
 model Deck {
   id     String  @id @default(uuid())
+  name   String  @default("my deck")
   Hero   Hero?   @relation(fields: [heroId], references: [id])
   heroId String?
   Npc    Npc?

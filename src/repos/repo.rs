@@ -11,8 +11,8 @@ use crate::models::hero::{convert_to_fixed_offset, Attributes, BaseStats};
 use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
 use crate::prisma::{
-    action, deck, deck_card, hero_actions, hero_card, hero_quests, npc, npc_card, quest,
-    resource_type, ResourceEnum,
+    action, deck, deck_card, hero_actions, hero_quests, npc, npc_card, quest, resource_type,
+    ResourceEnum,
 };
 use crate::repos::cards::CardRepo;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
@@ -204,8 +204,10 @@ impl Repo {
             .map(|deck| {
                 let hero_id_ref = &hero_id;
                 async move {
-                    let cards: Vec<Card> = self.deck_cards_by_deck_id(deck.id).await;
+                    let cards: Vec<Card> = CardRepo::deck_cards_by_deck_id(deck.id.clone()).await;
                     Deck {
+                        id: deck.id,
+                        name: deck.name,
                         hero_id: Some(hero_id_ref.clone()),
                         cards_in_deck: cards,
                         active: deck.active,
@@ -218,37 +220,6 @@ impl Repo {
 
         Ok(hero)
         // hero
-    }
-    pub async fn deck_cards_by_deck_id(&self, deck_id: String) -> Vec<Card> {
-        let deck_cards = self
-            .prisma
-            .deck_card()
-            .find_many(vec![deck_card::deck_id::equals(deck_id.clone())])
-            .with(deck_card::hero_card::fetch().with(hero_card::card::fetch()))
-            .exec()
-            .await;
-
-        match deck_cards {
-            Ok(cards) => {
-                let cards_with_effects = cards
-                    .into_iter()
-                    .map(|deck_card| async move {
-                        let card_data = deck_card.hero_card.unwrap().unwrap().card.unwrap();
-                        CardRepo::fetch_card_with_effects(*card_data).await
-                    })
-                    .collect::<Vec<_>>();
-
-                futures::future::join_all(cards_with_effects)
-                    .await
-                    .into_iter()
-                    .collect::<Result<Vec<_>, _>>() // Collect the Results
-                    .unwrap_or(vec![]) // Handle potential errors
-            }
-            Err(e) => {
-                error!("Error getting deck cards: {}", e);
-                vec![]
-            }
-        }
     }
 
     pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
@@ -1145,6 +1116,8 @@ impl Repo {
 
         let mut npc_obj: Monster = npc.into();
         npc_obj.deck = Some(Deck {
+            id: "doesnt matter".to_string(),
+            name: "npc deck".to_string(),
             active: true,
             hero_id: None,
             cards_in_deck: deck_cards,

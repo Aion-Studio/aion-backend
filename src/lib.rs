@@ -77,6 +77,7 @@ mod services {
 }
 
 pub mod endpoints {
+    pub mod cards;
     pub mod combat_socket;
     pub mod heroes;
     pub mod quest;

@@ -12,7 +12,10 @@ use crate::prisma::{
 use crate::prisma::{card, deck};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Deck {
+    pub id: String,
+    pub name: String,
     pub hero_id: Option<String>,
     pub cards_in_deck: Vec<Card>,
     pub active: bool,
@@ -27,6 +30,7 @@ pub struct HeroCard {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Card {
     pub id: String,
     pub name: String,
@@ -93,11 +97,21 @@ impl From<(card::Data, Vec<CardEffect>)> for Card {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct CardEffect {
     pub id: String,
     pub card_id: String,
     pub effect: EffectType, // Updated to use the EffectType enum
+}
+
+impl Serialize for CardEffect {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // serialize self.effect and just return that
+        self.effect.serialize(serializer)
+    }
 }
 
 impl From<prisma::card_effect::Data> for CardEffect {
@@ -562,6 +576,8 @@ pub enum Rarity {
 impl From<deck::Data> for Deck {
     fn from(data: deck::Data) -> Self {
         Deck {
+            id: data.id,
+            name: data.name,
             hero_id: data.hero.unwrap().map(|hero| hero.id),
             cards_in_deck: Vec::new(), // Initialize an empty vector for now
             active: data.active,
