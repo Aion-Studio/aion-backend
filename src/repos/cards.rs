@@ -109,6 +109,18 @@ impl CardRepo {
         }
     }
 
+    pub async fn get_hero_card_by_card_id(card_id: String) -> Result<hero_card::Data, QueryError> {
+        let prisma = get_prisma_client();
+        let hero_card = prisma
+            .hero_card()
+            .find_first(vec![hero_card::card_id::equals(card_id)])
+            .with(hero_card::card::fetch())
+            .exec()
+            .await?;
+
+        Ok(hero_card.unwrap())
+    }
+
     pub async fn fetch_card_with_effects(card_data: card::Data) -> anyhow::Result<Card> {
         let card_effects = CardRepo::fetch_card_effects(card_data.id.clone()).await?;
         let card = Card::from((card_data, card_effects));
@@ -135,11 +147,11 @@ impl CardRepo {
     pub async fn toggle_deck_status(
         deck_id: String,
         hero_card_id: String,
-        in_deck: bool,
+        to_deck: bool,
     ) -> Result<(), QueryError> {
         let prisma = get_prisma_client();
 
-        if in_deck {
+        if to_deck {
             prisma
                 .deck_card()
                 .create(

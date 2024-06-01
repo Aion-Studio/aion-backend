@@ -70,6 +70,8 @@ pub async fn create_deck(path: Path<(String, String)>) -> impl Responder {
 #[post("hero-cards/remove-from-deck/{deck_id}/{card_id}")]
 pub async fn remove_from_deck(path: Path<(String, String)>) -> impl Responder {
     let (deck_id, card_id) = path.into_inner();
-    let card_id = CardRepo::toggle_deck_status(deck_id, card_id, false).await;
+    let hero_card = CardRepo::get_hero_card_by_card_id(card_id).await;
+    let hero_card_id = hero_card.unwrap().id;
+    let card_id = CardRepo::toggle_deck_status(deck_id, hero_card_id, false).await;
     HttpResponse::Ok().json(card_id)
 }
