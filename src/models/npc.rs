@@ -123,7 +123,6 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                                         });
 
 
-                                        info!("sending llm Cards in hand {:?}", cards_i_can_play);
                                         let res = client.post("http://127.0.0.1:5000/message").json(&payload).send().await;
                                         let body = match res {
                                             Ok(res) => {

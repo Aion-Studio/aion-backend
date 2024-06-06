@@ -9,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{error, info};
 
-use crate::jsontoken::decode_token;
+use crate::jsontoken::decode_combat_token;
 use crate::models::player_decision_maker::PlayerDecisionMaker;
 use crate::services::impls::combat_service::{ControllerMessage, EnterBattleData};
 use crate::{
@@ -31,7 +31,7 @@ pub async fn combat_ws(
     query: Query<WsQueryParams>,
     app_state: Data<AppState>,
 ) -> Result<HttpResponse, Error> {
-    let claims = decode_token(&query.token);
+    let claims = decode_combat_token(&query.token);
 
     let combatant_id = match claims {
         Ok(claims) => claims.combatant_id,

@@ -6,4 +6,5 @@ database:
   name: "defaultdb"
   params: ""
   require_ssl: false
-redis_uri: "redis://redis:6379"
+redis_uri: "redis://127.0.0.1:6379"
+hmac_secret_key: "00676df4f8afa36018e9949bcad8b47f9c950e7a5845559fb3499d15b69fc18c"

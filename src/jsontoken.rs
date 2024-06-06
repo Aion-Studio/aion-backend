@@ -5,19 +5,19 @@ use prisma_client_rust::chrono;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
+pub struct CombatClaims {
     pub combatant_id: String,
     exp: usize, // Expiration time (optional)
 }
 
 #[allow(deprecated)]
-pub fn create_token(combatant_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn create_combat_token(combatant_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = chrono::Utc::now()
-        .checked_add_signed(chrono::Duration::hours(194))
+        .checked_add_signed(chrono::Duration::hours(1))
         .expect("valid timestamp")
         .timestamp() as usize;
 
-    let claims = Claims {
+    let claims = CombatClaims {
         combatant_id: combatant_id.to_owned(),
         exp: expiration,
     };
@@ -30,9 +30,9 @@ pub fn create_token(combatant_id: &str) -> Result<String, jsonwebtoken::errors::
     )
 }
 
-pub fn decode_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+pub fn decode_combat_token(token: &str) -> Result<CombatClaims, jsonwebtoken::errors::Error> {
     let secret = env::var("TOKEN_SECRET").expect("TOKEN_SECRET must be set");
-    decode::<Claims>(
+    decode::<CombatClaims>(
         token,
         &DecodingKey::from_secret(secret.as_ref()),
         &Validation::default(),

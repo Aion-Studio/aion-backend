@@ -5,7 +5,7 @@ use tokio::sync::oneshot;
 use tracing::warn;
 use tracing::{info, log::error};
 
-use crate::jsontoken::create_token;
+use crate::jsontoken::create_combat_token;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
 use crate::services::impls::combat_service::ControllerMessage;
@@ -82,7 +82,7 @@ impl QuestHandler {
 
                     info!("created encounter in controller");
 
-                    let token = create_token(hero_id.as_ref());
+                    let token = create_combat_token(hero_id.as_ref());
                     match token {
                         Ok(token) => {
                             info!("Fight created, heres your token {}", token);

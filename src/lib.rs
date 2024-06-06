@@ -77,6 +77,7 @@ mod services {
 }
 
 pub mod endpoints {
+    pub mod auth;
     pub mod cards;
     pub mod combat_socket;
     pub mod heroes;
@@ -86,9 +87,11 @@ pub mod endpoints {
     pub mod tasks;
 }
 
+pub mod authentication;
 pub mod infra;
 pub mod jsontoken;
 pub mod messenger;
+pub mod session_state;
 
 mod logger;
 #[cfg(test)]

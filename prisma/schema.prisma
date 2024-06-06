@@ -10,6 +10,14 @@ generator client {
   // provider = "prisma-client-js"
 }
 
+model Account {
+  id             String   @id @default(uuid())
+  supabaseUserId String   @unique @map("supabase_user_id") // Reference to the user data on Supabase
+  heroes         Hero[]
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+}
+
 model Hero {
   id                          String            @id @default(uuid())
   name                        String            @default("Default name")
@@ -33,6 +41,9 @@ model Hero {
   heroTalents                 HeroTalent[]
   decks                       Deck[]
   Cards                       HeroCard[]
+  // New field and relationship
+  accountId                   String            @map("account_id")
+  account                     Account           @relation(fields: [accountId], references: [id])
 }
 
 model HeroResource {
