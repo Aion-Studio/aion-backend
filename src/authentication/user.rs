@@ -21,13 +21,13 @@ pub struct User {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct AppMetadata {
+pub struct AppMetadata {
     pub provider: String,
     pub providers: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct UserMetadata {
+pub struct UserMetadata {
     pub email: String,
     pub email_verified: bool,
     pub phone_verified: bool,

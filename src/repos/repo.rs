@@ -11,8 +11,8 @@ use crate::models::hero::{convert_to_fixed_offset, Attributes, BaseStats};
 use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
 use crate::prisma::{
-    action, deck, deck_card, hero_actions, hero_quests, npc, npc_card, quest, resource_type,
-    ResourceEnum,
+    account, action, deck, deck_card, hero_actions, hero_quests, npc, npc_card, quest,
+    resource_type, ResourceEnum,
 };
 use crate::repos::cards::CardRepo;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
@@ -84,6 +84,14 @@ impl Repo {
             .await
             .unwrap();
 
+        let account = self
+            .prisma
+            .account()
+            .create("tempId123".to_string(), vec![])
+            .exec()
+            .await
+            .unwrap();
+
         let result = self
             .prisma
             .hero()
@@ -92,6 +100,7 @@ impl Repo {
                 base_stats::id::equals(base_stats.clone().id),
                 attributes::id::equals(base_attributes.clone().id),
                 inventory::id::equals(base_inventory.clone().id),
+                account::id::equals(account.clone().id),
                 vec![hero::name::set(new_hero.name)],
             )
             .with(hero::base_stats::fetch())
