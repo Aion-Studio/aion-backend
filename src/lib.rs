@@ -1,4 +1,6 @@
 // pub mod authentication;
+#![recursion_limit = "256"]
+#![allow(deprecated)]
 pub mod configuration;
 // pub mod idempotency;
 // pub mod routes;
@@ -8,7 +10,7 @@ pub mod utils;
 pub mod webserver;
 
 pub mod fp_macros;
-pub mod storable;
+// pub mod storable;
 pub mod telemetry;
 
 #[allow(warnings, unused)]
@@ -17,10 +19,12 @@ pub mod prisma;
 #[allow(dead_code)]
 #[allow(unused_variables)]
 mod models {
+    pub mod card_effect;
     pub mod combatant;
     pub mod date_times;
     pub mod game_engine;
     pub mod hero;
+    pub mod hero_combatant;
     pub mod npc;
     pub mod quest;
 
@@ -28,11 +32,14 @@ mod models {
     pub mod region;
     pub mod resources;
     pub mod talent;
+
+    pub mod cards;
 }
 
 mod repos {
     // pub mod game_engine_repo;
     // pub mod hero_repo;
+    pub mod cards;
     pub mod helpers;
     pub mod repo;
     // pub mod action_repo;
@@ -52,9 +59,6 @@ mod events {
 mod services {
     pub mod impls {
 
-        #[cfg(test)]
-        mod region_service_test;
-
         pub mod combat_service;
         pub mod items_service;
         pub mod tasks;
@@ -63,7 +67,6 @@ mod services {
     pub mod traits {
         pub mod async_task;
         pub mod combat_decision_maker;
-        pub mod hero_service;
     }
     pub mod tasks {
         pub mod action_names;
@@ -74,6 +77,8 @@ mod services {
 }
 
 pub mod endpoints {
+    pub mod auth;
+    pub mod cards;
     pub mod combat_socket;
     pub mod heroes;
     pub mod quest;
@@ -82,9 +87,11 @@ pub mod endpoints {
     pub mod tasks;
 }
 
+pub mod authentication;
 pub mod infra;
 pub mod jsontoken;
 pub mod messenger;
+pub mod session_state;
 
 mod logger;
 #[cfg(test)]
@@ -96,7 +103,7 @@ pub fn tracing_subscribe() -> bool {
     use std::env::{set_var, var};
 
     use tracing::info;
-    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
     if var("INDEXER_LOG").is_err() {
         set_var("INDEXER_LOG", "debug,tokio=warn,prisma=info,quaint=info");

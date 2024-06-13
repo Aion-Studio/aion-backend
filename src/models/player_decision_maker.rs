@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-use tokio::sync::{mpsc, Mutex, Notify, oneshot};
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{mpsc, oneshot, Notify};
 use tracing::info;
 
-use crate::events::combat::{CombatantIndex, CombatTurnMessage};
+use crate::events::combat::{CombatTurnMessage, CombatantIndex};
 use crate::messenger::MESSENGER;
 use crate::services::impls::combat_service::CombatCommand;
 use crate::services::tasks::action_names::Command;

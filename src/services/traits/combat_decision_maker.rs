@@ -1,7 +1,6 @@
 use crate::events::combat::{CombatTurnMessage, CombatantIndex};
 use crate::services::impls::combat_service::CombatCommand;
-use tokio::sync::mpsc::{ Sender};
-
+use tokio::sync::mpsc::Sender;
 
 pub trait DecisionMaker: Send + Sync + std::fmt::Debug {
     fn start(

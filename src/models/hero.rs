@@ -1,29 +1,28 @@
-use std::any::Any;
 use std::collections::HashMap;
 
 use anyhow::Result;
-use prisma_client_rust::chrono::{self, DateTime, Duration, FixedOffset, Utc};
-use rand::{Rng, thread_rng};
+use prisma_client_rust::chrono::{DateTime, Duration, FixedOffset, Utc};
 use rand::seq::SliceRandom;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use tracing::log::error;
 
+use crate::events::game::ActionDurations;
+use crate::infra::Infra;
+use crate::models::cards::Deck;
+use crate::models::hero_combatant::HeroCombatant;
+use crate::prisma::ResourceEnum;
+use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::{
     events::game::ActionCompleted,
     prisma::{
         attributes, base_stats, follower, hero, hero_resource, inventory, item, retinue_slot,
     },
 };
-use crate::events::game::ActionDurations;
-use crate::infra::Infra;
-use crate::prisma::ResourceEnum;
-use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 
-use super::combatant::Combatant;
 use super::region::RegionName;
 use super::resources::Resource;
-use super::talent::{Effect, Talent};
+use super::talent::Talent;
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -43,6 +42,7 @@ pub struct Hero {
     pub stamina_regen_rate: i32,
     pub last_stamina_regeneration_time: Option<DateTime<Utc>>, // Add this
     pub talents: Vec<Talent>,
+    pub decks: Option<Vec<Deck>>,
 }
 
 // methods to only update the model struct based on some calculation
@@ -67,7 +67,26 @@ impl Hero {
             stamina_regen_rate: 1,
             last_stamina_regeneration_time: None,
             talents: vec![],
+            decks: None,
         }
+    }
+
+    pub fn to_combatant(&self) -> HeroCombatant {
+        HeroCombatant::new(
+            self.id.clone().unwrap(),
+            self.name.clone(),
+            self.base_stats.clone(),
+            self.attributes.clone(),
+            self.inventory.clone().unwrap(),
+            self.decks
+                .as_ref()
+                .unwrap()
+                .into_iter()
+                .find(|deck| deck.active)
+                .unwrap()
+                .clone(),
+            0,
+        )
     }
 
     pub fn level(&self) -> i32 {
@@ -342,47 +361,6 @@ impl Hero {
     }
 }
 
-impl Combatant for Hero {
-    fn get_id(&self) -> String {
-        self.id.clone().unwrap()
-    }
-
-    fn get_name(&self) -> &str {
-        &self.name
-    }
-    fn get_hp(&self) -> i32 {
-        self.base_stats.hit_points
-    }
-
-    fn get_damage(&self) -> i32 {
-        self.base_stats.damage.roll()
-    }
-    fn get_talents(&self) -> &Vec<Talent> {
-        &self.talents
-    }
-
-    fn get_damage_stats(&self) -> Range<i32> {
-        self.base_stats.damage.clone()
-    }
-
-    fn get_armor(&self) -> i32 {
-        self.base_stats.armor
-    }
-    fn get_level(&self) -> i32 {
-        self.base_stats.level
-    }
-    fn attack(&self, other: &mut dyn Combatant) {
-        let damage = self.get_damage();
-        other.take_damage(damage);
-    }
-    fn take_damage(&mut self, damage: i32) {
-        self.base_stats.hit_points -= damage;
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct BaseStats {
     pub id: Option<String>,
@@ -391,12 +369,12 @@ pub struct BaseStats {
     pub damage: Range<i32>,
     pub hit_points: i32,
     pub armor: i32,
+    pub resilience: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
 pub struct Attributes {
     pub id: Option<String>,
-    pub resilience: i32,
     pub strength: i32,
     pub agility: i32,
     pub intelligence: i32,
@@ -495,6 +473,8 @@ impl From<hero::Data> for Hero {
             HashMap::new()
         };
 
+        // let deck = data.deck.and_then(|data| data).map(|boxed| (*boxed).into());
+
         Self {
             id: Some(data.id),
             name: data.name,
@@ -512,6 +492,7 @@ impl From<hero::Data> for Hero {
                 Some(talents) => talents.into_iter().map(Talent::from).collect(),
                 None => vec![],
             },
+            decks: None, // we fill in the deck manually
         }
     }
 }
@@ -520,6 +501,7 @@ pub fn convert_to_utc(dt: Option<DateTime<FixedOffset>>) -> Option<DateTime<Utc>
     dt.map(|datetime| datetime.with_timezone(&Utc))
 }
 
+#[allow(deprecated)]
 pub fn convert_to_fixed_offset(dt: Option<DateTime<Utc>>) -> Option<DateTime<FixedOffset>> {
     dt.map(|datetime| datetime.with_timezone(&FixedOffset::east(0)))
 }
@@ -536,6 +518,7 @@ impl From<base_stats::Data> for BaseStats {
             },
             hit_points: data.hit_points,
             armor: data.armor,
+            resilience: data.resilience,
         }
     }
 }
@@ -544,7 +527,6 @@ impl From<attributes::Data> for Attributes {
     fn from(data: attributes::Data) -> Self {
         Self {
             id: Some(data.id),
-            resilience: data.resilience,
             strength: data.strength,
             agility: data.agility,
             intelligence: data.intelligence,

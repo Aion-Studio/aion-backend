@@ -6,7 +6,7 @@ use std::env;
 use prisma_client_rust::chrono::Duration;
 use secrecy::Secret;
 use serde::Deserialize;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::models::region::{leyline_map, RegionName};
 
@@ -15,6 +15,7 @@ pub struct Settings {
     pub application: ApplicationSettings,
     pub database: DatabaseSettings,
     pub redis_uri: String,
+    pub hmac_secret_key: Secret<String>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -36,6 +37,8 @@ pub struct RedisSettings {
 }
 
 pub fn get_configuration() -> Result<Settings, ConfigError> {
+    check_environment();
+
     if env::var("APP_ENVIRONMENT").eq(&Ok("local".to_string())) {
         let base_path = std::env::current_dir().expect("Failed to determine the current directory");
         let configuration_directory = base_path.join("configuration");
@@ -115,6 +118,8 @@ impl TryFrom<String> for Environment {
 // region name to duration
 #[derive(Clone, Debug)]
 pub struct ExploreDurations(pub HashMap<RegionName, Duration>);
+
+#[allow(deprecated)]
 impl ExploreDurations {
     pub fn get_durations() -> Self {
         let mut durations = HashMap::new();
@@ -126,6 +131,7 @@ impl ExploreDurations {
 // leyline to duration
 #[derive(Clone, Debug)]
 pub struct ChannelDurations(pub HashMap<String, Duration>);
+#[allow(deprecated)]
 impl ChannelDurations {
     pub fn get_durations() -> Self {
         let mut durations = HashMap::new();
@@ -162,5 +168,31 @@ pub fn get_explore_durations() -> ExploreDurations {
     match durations.get("Explore") {
         Some(DurationType::Explore(durations)) => durations.clone(),
         _ => panic!("No explore durations found"),
+    }
+}
+
+pub fn check_environment() {
+    let required_vars = vec![
+        "SUPABASE_API_KEY",
+        "SUPABASE_PROJECT_ID",
+        "APP_ENVIRONMENT",
+        // Add other environment variable names here
+    ];
+
+    let mut all_vars_present = true;
+
+    for var in required_vars {
+        match env::var(var) {
+            Ok(_) => {}
+            Err(_) => {
+                error!("Error: {} is not set", var);
+                all_vars_present = false;
+            }
+        }
+    }
+
+    if !all_vars_present {
+        eprintln!("One or more required environment variables are missing.");
+        std::process::exit(1);
     }
 }

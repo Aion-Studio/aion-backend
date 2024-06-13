@@ -2,7 +2,7 @@
 service: aion-rising
 
 # Name of the container image.
-image: marko911/aionserverr
+image: marko911/aionserver
 
 # Deploy to these servers.
 servers:
@@ -63,22 +63,20 @@ builder:
 #       - db/production.sql:/docker-entrypoint-initdb.d/setup.sql
 #     directories:
 #       - data:/var/lib/mysql
-#   redis:
-#     image: redis:7.0
-#     host: 192.168.0.2
-#     port: 6379
-#     directories:
-#       - data:/data
+  redis:
+    image: redis:7.0
+    host: 192.168.0.2
+    port: 6379
+    directories:
+      - data:/data
 
 # Configure custom arguments for Traefik
 traefik:
-  host_port: 8080
-  # labels:
+  host_port: 8080  # labels:
   #   traefik.http.routers.aion-rising-web.rule: Host(`api.aionrising.com`)
   #   traefik.http.routers.aion-rising-web.entrypoints: web
   #   traefik.http.middlewares.aion-rising-web-https-redirect.redirectscheme.scheme: https
   #   traefik.http.routers.aion-rising-web.middlewares: aion-rising-web-https-redirect
-
 
 
 

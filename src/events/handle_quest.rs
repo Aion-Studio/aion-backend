@@ -1,18 +1,14 @@
-use std::sync::Arc;
-
 use futures::TryFutureExt;
 use serde_json::json;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::oneshot;
 use tracing::warn;
 use tracing::{info, log::error};
 
-use crate::events::combat::CombatEncounter;
-use crate::jsontoken::create_token;
+use crate::jsontoken::create_combat_token;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
-use crate::models::npc::CpuCombatantDecisionMaker;
-use crate::services::impls::combat_service::{CombatController, ControllerMessage};
+use crate::services::impls::combat_service::ControllerMessage;
 use crate::services::tasks::action_names::{
     ActionNames, CmdResponder, Command, Responder, ResponderType,
 };
@@ -42,8 +38,6 @@ impl QuestHandler {
                     return;
                 }
             };
-
-            info!("action found {:?}", action);
 
             let region = action.region_name;
 
@@ -88,7 +82,7 @@ impl QuestHandler {
 
                     info!("created encounter in controller");
 
-                    let token = create_token(hero_id.as_ref());
+                    let token = create_combat_token(hero_id.as_ref());
                     match token {
                         Ok(token) => {
                             info!("Fight created, heres your token {}", token);
@@ -101,8 +95,7 @@ impl QuestHandler {
                     }
                 }
                 ActionNames::Channel => {}
-                ActionNames::Raid => {}
-                ActionNames::Unique(off_beat) => {}
+                ActionNames::Unique(_) => {}
                 _ => {
                     error!("Action name not found");
                     return;
@@ -118,9 +111,8 @@ impl QuestHandler {
             //         errs.push(e);
             //     }
             // }
-            // resp.send(ResponderType::UnitResponse(())).unwrap();
-            let done_cmd = Command::QuestActionDone(hero_id, action_id);
-            MESSENGER.send(done_cmd);
+            // let done_cmd = Command::QuestActionDone(hero_id, action_id);
+            // MESSENGER.send(done_cmd);
         });
     }
 

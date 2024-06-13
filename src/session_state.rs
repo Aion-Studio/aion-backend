@@ -1,0 +1,52 @@
+use actix_session::SessionExt;
+use actix_session::{Session, SessionGetError, SessionInsertError};
+use actix_web::dev::Payload;
+use actix_web::{FromRequest, HttpRequest};
+use std::future::{ready, Ready};
+
+use crate::authentication::user::User;
+
+pub struct TypedSession(Session);
+
+impl TypedSession {
+    const USER_ID_KEY: &'static str = "user_id";
+
+    pub fn renew(&self) {
+        self.0.renew();
+    }
+
+    pub fn insert_user_id(&self, user_id: String) -> Result<(), SessionInsertError> {
+        self.0.insert(Self::USER_ID_KEY, user_id)
+    }
+
+    pub fn get_user_id(&self) -> Result<Option<String>, SessionGetError> {
+        self.0.get(Self::USER_ID_KEY)
+    }
+
+    pub fn insert_user(&self, user: User) -> Result<(), SessionInsertError> {
+        self.0.insert("user", user)
+    }
+
+    pub fn get_user(&self) -> Result<Option<User>, SessionGetError> {
+        self.0.get("user")
+    }
+
+    pub fn log_out(self) {
+        self.0.purge()
+    }
+    pub fn is_active(&self) -> anyhow::Result<bool> {
+        Ok(self.get_user_id()?.is_some())
+    }
+    pub fn clear(&self) {
+        self.0.clear()
+    }
+}
+
+impl FromRequest for TypedSession {
+    type Error = <Session as FromRequest>::Error;
+    type Future = Ready<Result<TypedSession, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        ready(Ok(TypedSession(req.get_session())))
+    }
+}

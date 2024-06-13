@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 use std::sync::Mutex;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tracing::{info, warn};
+use tracing::warn;
 
 pub struct Logger;
 
@@ -22,7 +22,6 @@ struct LogMessage<T> {
 lazy_static! {
     static ref VECTOR_ADDRESS: Mutex<Option<SocketAddr>> = Mutex::new(None);
 }
-
 
 pub fn log<T: Serialize + Send>(value: T)
 where

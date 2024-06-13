@@ -1,5 +1,5 @@
 use serde_json::json;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::{
     infra::Infra,
@@ -15,21 +15,23 @@ impl CostHandler {
     pub fn deduct_action_costs(action: TaskAction) {
         match action {
             TaskAction::Explore(action) => {
-                let mut hero = action.hero;
-               
-                hero.deduct_stamina(action.stamina_cost);
-                info!("hero should now have {:?} stamina", hero.stamina);
-
-                let hero_id = hero.get_id();
-                log(json!({"name":ActionNames::Explore.to_string(),"hero_id": hero_id.clone()}));
-
-                log(
-                    json!({"name": "Cost", "hero_id": hero_id.clone(), "resource_used": {
-                        "stamina": action.stamina_cost
-                    }}),
-                );
-
                 tokio::spawn(async move {
+                    let mut hero = Infra::repo().get_hero(action.hero.get_id()).await.unwrap();
+
+                    hero.deduct_stamina(action.stamina_cost);
+                    info!("hero should now have {:?} stamina", hero.stamina);
+
+                    let hero_id = hero.get_id();
+                    log(
+                        json!({"name":ActionNames::Explore.to_string(),"hero_id": hero_id.clone()}),
+                    );
+
+                    log(
+                        json!({"name": "Cost", "hero_id": hero_id.clone(), "resource_used": {
+                            "stamina": action.stamina_cost
+                        }}),
+                    );
+
                     update_hero_db(hero).await;
                 });
             }

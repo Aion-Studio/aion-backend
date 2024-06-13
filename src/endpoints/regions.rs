@@ -4,6 +4,7 @@ use actix_web::{
     HttpResponse, Responder,
 };
 use tokio::sync::oneshot;
+use tracing::info;
 
 use crate::models::hero::Hero;
 use crate::{
@@ -35,6 +36,7 @@ pub async fn explore_region(path: Path<String>) -> impl Responder {
         .await
         .unwrap();
 
+    info!("inside handler before do_exploore");
     match do_explore(hero, current_region.region_name).await {
         Ok(_) => HttpResponse::Ok().json(ApiResponse {
             message: "Exploration started".to_string(),

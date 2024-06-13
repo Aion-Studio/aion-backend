@@ -1,17 +1,17 @@
-use actix_web::{get, HttpResponse, post, Responder};
 use actix_web::web::{Data, Path, Query};
+use actix_web::{get, post, HttpResponse, Responder};
 use prisma_client_rust::chrono::{self, Local};
 use prisma_client_rust::serde_json::json;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::events::game::ActionCompleted;
 use crate::infra::Infra;
 use crate::models::hero::{Attributes, BaseStats, Hero, Range};
-use crate::models::quest::{HeroQuest, Quest};
+use crate::models::quest::Quest;
 use crate::models::region::{HeroRegion, Leyline};
 use crate::services::impls::combat_service::ControllerMessage;
 use crate::services::tasks::action_names::{ActionNames, TaskAction};
@@ -26,6 +26,8 @@ struct HeroResponse {
 }
 
 #[post("/heroes")]
+// Suppress unused_assignments warning for this function
+#[allow(unused_assignments, unused_mut)]
 async fn create_hero_endpoint() -> impl Responder {
     let mut rng = rand::thread_rng();
     let mut hp = rng.gen_range(475..725);
@@ -38,35 +40,6 @@ async fn create_hero_endpoint() -> impl Responder {
     let mut exploration = rng.gen_range(1..20);
     let mut crafting = rng.gen_range(1..20);
     // Determine category based on HP
-    let category = if hp >= 650 {
-        // High HP
-        agility = rng.gen_range(10..15); // Lower agility for high HP
-        intelligence = rng.gen_range(15..17); // Low-medium intelligence
-        strength = rng.gen_range(20..26); // High strength
-        "High HP"
-    } else if hp < 500 {
-        // Low HP
-        intelligence = rng.gen_range(17..20); // High intelligence
-        exploration = rng.gen_range(15..20); // High exploration
-        crafting = rng.gen_range(15..20); // High crafting
-        agility = rng.gen_range(15..25); // High agility
-        armor = rng.gen_range(3..6); // Medium armor
-        "Low HP"
-    } else if agility > 21 {
-        // High agility
-        hp = rng.gen_range(475..550); // Medium-low HP
-        armor = rng.gen_range(4..6); // High armor
-        intelligence = rng.gen_range(15..18); // Medium intelligence
-        "High Agility"
-    } else {
-        // Medium agility and low HP
-        // Adjusting attributes to top 90% of given ranges
-        strength = rng.gen_range(22..26);
-        intelligence = rng.gen_range(17..20);
-        exploration = rng.gen_range(18..20);
-        crafting = rng.gen_range(18..20);
-        "Medium Agility & Low HP"
-    };
     let hero = Hero::new(
         BaseStats {
             id: None,
@@ -76,13 +49,13 @@ async fn create_hero_endpoint() -> impl Responder {
                 min: damage_min,
                 max: damage_max,
             },
+            resilience: 1,
             hit_points: hp,
             armor,
         },
         Attributes {
             id: None,
             strength,
-            resilience: rng.gen_range(1..20), // Unspecified, so left as is
             agility,
             intelligence,
             exploration,
@@ -123,16 +96,12 @@ async fn hero_state(path: Path<String>, app_state: Data<AppState>) -> impl Respo
     let hero_id = path.into_inner();
     let hero = Infra::repo().get_hero(hero_id.clone()).await;
 
-    info!("hero state requested....");
     let app_state = app_state.get_ref().clone();
     let combat_tx = app_state.combat_tx.clone();
 
     match hero {
         Ok(hero) => match get_hero_status(hero, combat_tx).await {
-            Ok(hero_state) => {
-                info!("returning hero state....");
-                HttpResponse::Ok().json(hero_state)
-            }
+            Ok(hero_state) => HttpResponse::Ok().json(hero_state),
             Err(e) => {
                 let error_response = json!({
                     "error": "Error grabbing hero state",
@@ -159,7 +128,6 @@ struct PaginationQuery {
 
 #[get("/completed-actions")]
 async fn completed_actions(pagination: Query<PaginationQuery>) -> impl Responder {
-    info!("completed actions requested....");
     let take = pagination.take.unwrap_or(10) as i64; // Default to 10 if not provided
     let skip = pagination.skip.unwrap_or(0) as i64;
     let actions = Infra::repo().completed_actions(take, skip).await;
@@ -309,7 +277,7 @@ pub async fn get_hero_status(
                                 }
                                 None => (leylines, chrono::Utc::now().into()),
                             },
-                            Err(e) => (vec![], chrono::Utc::now().with_timezone(&Local)),
+                            Err(_) => (vec![], chrono::Utc::now().with_timezone(&Local)),
                         }
                     }
                 }
@@ -337,14 +305,8 @@ pub async fn get_hero_status(
                 }
             }
             let is_in_combat = match rx.await {
-                Ok(res) => {
-                    info!("is in combat yes");
-                    res.is_some()
-                }
-                Err(e) => {
-                    info!("Error getting combat state: {}", e);
-                    false
-                }
+                Ok(res) => res.0.is_some(),
+                Err(e) => false,
             };
 
             Ok(HeroStateResponse {

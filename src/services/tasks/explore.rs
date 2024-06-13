@@ -43,13 +43,13 @@ impl Default for ExploreAction {
                     min: rng.gen_range(1..5),
                     max: rng.gen_range(5..10),
                 },
-                hit_points: rng.gen_range(90..110),
-                armor: rng.gen_range(5..15),
+                resilience: rng.gen_range(0..1),
+                hit_points: 30,
+                armor: rng.gen_range(0..=10),
             },
             Attributes {
                 id: None,
                 strength: rng.gen_range(1..20),
-                resilience: rng.gen_range(1..20),
                 agility: rng.gen_range(1..20),
                 intelligence: rng.gen_range(1..20),
                 exploration: rng.gen_range(1..20),
@@ -178,7 +178,7 @@ impl ExploreAction {
             let randomized_boost = base_boost + random_variation;
 
             // Ensure the boost is within the desired range
-            round(randomized_boost.clamp(min_boost, max_boost),2)
+            round(randomized_boost.clamp(min_boost, max_boost), 2)
         }
     }
 }

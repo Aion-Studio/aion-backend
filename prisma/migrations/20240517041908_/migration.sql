@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Card" ALTER COLUMN "damage" SET DEFAULT 0,
+ALTER COLUMN "health" SET DEFAULT 0;

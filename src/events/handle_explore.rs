@@ -8,7 +8,7 @@ use crate::{
         traits::async_task::Task,
     },
 };
-use tracing::log::error;
+use tracing::{info, log::error};
 
 use crate::infra::Infra;
 
@@ -18,12 +18,15 @@ pub struct ExploreHandler {}
 impl ExploreHandler {
     pub fn hero_explores(hero_id: String, region_name: RegionName, resp: Responder<()>) {
         tokio::spawn(async move {
+            info!("hero_explores before region");
             let hero_region = Infra::repo()
                 .get_current_hero_region(&hero_id)
                 .await
                 .unwrap();
             let stamina_cost =
                 ExploreAction::get_stamina_cost(&region_name, hero_region.discovery_level);
+
+            info!("hero_explores after stamina cost");
 
             let action = Infra::repo()
                 .get_hero(hero_id)
@@ -34,9 +37,12 @@ impl ExploreHandler {
                     None
                 });
 
+            info!("hero_explores after exploreaction");
+
             match action {
                 Some(action) => {
                     action.start_now();
+                    info!("Explore started: {:?}", action);
                     Infra::tasks().schedule_action(TaskAction::Explore(action));
                     let _ = resp.send(Ok(()));
                 }

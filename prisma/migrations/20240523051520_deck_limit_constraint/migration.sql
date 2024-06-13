@@ -1,0 +1,12 @@
+-- -- This is an empty migration.
+-- -- Add constraint to DeckCard table to limit rows per deck_id
+-- ALTER TABLE HeroCard
+-- ADD CONSTRAINT deck_card_limit CHECK (
+--     NOT EXISTS (
+--         SELECT 1
+--         FROM HeroCard AS hc
+--         WHERE hc.heroId = HeroCard.heroId AND hc.inDeck = true
+--         GROUP BY hc.heroId
+--         HAVING COUNT(*) > 30
+--     )
+-- );

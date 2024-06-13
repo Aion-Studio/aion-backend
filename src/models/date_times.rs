@@ -51,6 +51,7 @@ impl Serialize for SerializableDuration {
     }
 }
 
+#[allow(deprecated)]
 impl<'de> Deserialize<'de> for SerializableDuration {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

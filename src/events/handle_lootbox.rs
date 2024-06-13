@@ -9,11 +9,6 @@ use tracing::{error, info};
 
 use TaskLootBox::*;
 
-use crate::{
-    infra::Infra,
-    models::resources::Resource,
-    services::tasks::{channel::ChannelingAction, explore::ExploreAction},
-};
 use crate::events::game::{ActionCompleted, RaidResult};
 use crate::logger::Logger;
 use crate::models::quest::{Action, Quest};
@@ -21,34 +16,36 @@ use crate::repos::helpers::update_hero_db;
 use crate::services::tasks::action_names::{ActionNames, TaskAction, TaskLootBox};
 use crate::services::tasks::explore::round;
 use crate::services::traits::async_task::Task;
+use crate::{
+    infra::Infra,
+    models::resources::Resource,
+    services::tasks::{channel::ChannelingAction, explore::ExploreAction},
+};
 
-use super::game::{ChannelResult, ExploreResult};
 use super::game::QuestResult;
+use super::game::{ChannelResult, ExploreResult};
 
 #[derive(Clone, Debug)]
 pub struct LootBoxHandler {}
 
 impl LootBoxHandler {
     pub async fn create_lootbox_quest_action(quest_action: TaskAction) {
-        match quest_action {
-            TaskAction::QuestAction(hero_id, action_id) => {
-                let action = Infra::repo().get_action_by_id(&action_id).await.unwrap();
-                let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
-                let lootbox = match action.generate_loot_box(Some(hero_id)) {
-                    Ok(loot_box) => loot_box,
-                    Err(err) => {
-                        error!("Error generating lootbox: {}", err);
-                        return;
-                    }
-                };
-                hero.equip_loot(lootbox.clone());
-                update_hero_db(hero.clone()).await;
-                info!(
-                    "equipped hero with LootBox from questAction {:?}",
-                    lootbox.clone()
-                );
-            }
-            _ => {}
+        if let TaskAction::QuestAction(hero_id, action_id) = quest_action {
+            let action = Infra::repo().get_action_by_id(&action_id).await.unwrap();
+            let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+            let lootbox = match action.generate_loot_box(Some(hero_id)) {
+                Ok(loot_box) => loot_box,
+                Err(err) => {
+                    error!("Error generating lootbox: {}", err);
+                    return;
+                }
+            };
+            hero.equip_loot(lootbox.clone());
+            update_hero_db(hero.clone()).await;
+            info!(
+                "equipped hero with LootBox from questAction {:?}",
+                lootbox.clone()
+            );
         }
     }
     pub async fn create_lootbox_explore(task_action: TaskAction) {
@@ -74,6 +71,7 @@ impl LootBoxHandler {
         };
 
         hero.equip_loot(loot.clone());
+
         update_hero_db(hero.clone()).await;
 
         // update hero_region discovery level
@@ -233,6 +231,7 @@ impl GeneratesResources<f64> for ExploreAction {
     fn generate_resources(&self, _: Option<f64>) -> HashMap<Resource, i32> {
         let mut loot = HashMap::new();
         loot.insert(Resource::StormShard, rand::thread_rng().gen_range(5..20));
+        info!("generated loot {:?}", loot);
         loot
     }
 }
@@ -269,7 +268,7 @@ impl GeneratesResources<()> for Action {
             res.insert(Resource::Valor, valor);
             return res;
         }
-        let mut res = HashMap::new();
+        let res = HashMap::new();
         res
     }
 }

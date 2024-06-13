@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 use tokio::sync::mpsc;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
     events::{
@@ -21,7 +21,7 @@ pub struct MessageManager {
 
 impl MessageManager {
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel(10000);
+        let (tx, rx) = mpsc::channel(100000);
         let _ = Self::init_listener(rx);
         MessageManager { tx }
     }
@@ -31,8 +31,7 @@ impl MessageManager {
             use Command::*;
 
             while let Some(cmd) = rx.recv().await {
-                // Just a default value -- not used
-                // End Default
+                // Note: never return from any of these match arms otherwise the listener will stop
                 let task_action = match cmd {
                     Explore {
                         hero_id,
@@ -82,11 +81,11 @@ impl MessageManager {
                             {
                                 warn!("Failed to send response: {:?}", e);
                             }
-                            return;
+                            None
+                        } else {
+                            QuestHandler::quest_accepted(hero_id.clone(), quest_id.clone(), resp);
+                            Some(TaskAction::QuestAccepted(hero_id.clone(), quest_id))
                         }
-                        QuestHandler::quest_accepted(hero_id.clone(), quest_id.clone(), resp);
-
-                        Some(TaskAction::QuestAccepted(hero_id.clone(), quest_id))
                     }
 
                     QuestAction {
@@ -108,7 +107,6 @@ impl MessageManager {
                         run_parallel!((hero_id.to_owned(), quest.to_owned()); QuestHandler::quest_completed, LootBoxHandler::create_lootbox_quest_complete);
                         Some(TaskAction::QuestComplete(hero_id.clone(), quest.clone()))
                     }
-                    _ => None,
                 };
                 if let Some(task_action) = task_action {
                     CostHandler::deduct_action_costs(task_action)
