@@ -1,5 +1,6 @@
 {
   "name": "prisma",
+  "type": "module",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -10,8 +11,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.596.0",
+    "@aws-sdk/s3-request-presigner": "^3.596.0",
     "@googleapis/sheets": "^7.0.0",
     "@prisma/client": "^5.10.2",
+    "aws-sdk": "^2.1641.0",
     "dotenv": "^16.4.5",
     "prisma": "^5.10.2"
   }

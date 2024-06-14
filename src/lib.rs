@@ -41,6 +41,7 @@ mod repos {
     // pub mod hero_repo;
     pub mod cards;
     pub mod helpers;
+    pub mod hero;
     pub mod repo;
     // pub mod action_repo;
     // pub mod resources_repo;

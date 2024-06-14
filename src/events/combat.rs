@@ -3,6 +3,15 @@ use std::fmt;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
+use crate::events::combat::CombatantIndex::Combatant1;
+use crate::models::card_effect::{ActiveEffect, ActiveEffectType};
+use crate::models::cards::{Card, CardType};
+use crate::models::hero_combatant::HeroCombatant;
+use crate::models::talent::Effect;
+use crate::{
+    models::{combatant::Combatant, npc::Monster},
+    services::impls::combat_service::CombatCommand,
+};
 use actix::Message;
 use serde::ser::SerializeMap;
 use serde::{
@@ -12,17 +21,6 @@ use serde::{
 use serde_json::json;
 use tracing::log::info;
 use tracing::{error, warn};
-
-use crate::events::combat::CombatantIndex::Combatant1;
-use crate::models::card_effect::{ActiveEffect, ActiveEffectType};
-use crate::models::cards::{Card, CardType, EffectType, SpellEffectType};
-use crate::models::hero_combatant::HeroCombatant;
-use crate::models::talent::Effect;
-use crate::prisma::{DamageType, TargetType};
-use crate::{
-    models::{combatant::Combatant, npc::Monster},
-    services::impls::combat_service::CombatCommand,
-};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub enum CombatantIndex {
@@ -266,136 +264,6 @@ impl CombatEncounter {
             // Handle the error case where the card was not found
             error!("Card not found but tried to remove from battle field");
             return;
-        }
-    }
-
-    fn apply_spell_effects(&mut self, card: &Card, idx: &CombatantIndex) {
-        let oppo_id = {
-            let oppo = self.get_combatant(idx, Some(true));
-            let oppo_guard = oppo.lock().unwrap();
-            oppo_guard.get_id()
-        };
-
-        for effect in &card.card_effects {
-            if let EffectType::SpellEffect(spell_effect_type) = &effect.effect {
-                match spell_effect_type {
-                    SpellEffectType::Damage(damage_effect) => {}
-                    SpellEffectType::Poison(poison_effect) => {}
-                    SpellEffectType::Stun(stun_effect) => {}
-                    SpellEffectType::Initiative(initiative_effect) => {}
-                    SpellEffectType::Heal(heal_effect) => {}
-                    SpellEffectType::Armor(armor_effect) => {}
-                    SpellEffectType::Resilience(resilience_effect) => {}
-                    SpellEffectType::BattleCry(battle_cry_effect) => {}
-                    SpellEffectType::SprayOfKnives(spray_of_knives_effect) => {}
-                    SpellEffectType::CowardiceCurse(cowardice_curse_effect) => {}
-                    SpellEffectType::PhantomTouch(phantom_touch_effect) => {}
-                    SpellEffectType::Daze(daze_effect) => {}
-                    _ => {}
-                }
-            };
-            // match &effect.effect {
-            //     EffectType::SpellEffect(spell_effect_type) => {
-            //         for (damage_type, target_type, amount) in &damage_effect.damage {
-            //             match target_type {
-            //                 TargetType::Hero => {
-            //                     let target = self.get_combatant(idx, Some(true));
-            //                     let mut target = target.lock().unwrap();
-            //                     target.take_damage(*amount, *damage_type);
-            //                     drop(target);
-            //                 }
-            //                 TargetType::Both => {
-            //                     let oppo_idx = match idx {
-            //                         Combatant1 => CombatantIndex::Combatant2,
-            //                         CombatantIndex::Combatant2 => Combatant1,
-            //                     };
-            //                     let opponent_minions = self
-            //                         .battle_fields
-            //                         .get_mut(&oppo_idx)
-            //                         .unwrap()
-            //                         .iter_mut()
-            //                         .filter(|card| card.card_type == CardType::Minion)
-            //                         .collect::<Vec<_>>();
-            //                     for card in opponent_minions {
-            //                         card.take_damage(*amount);
-            //                     }
-            //
-            //                     let target = self.get_combatant(idx, Some(true));
-            //                     let mut target = target.lock().unwrap();
-            //                     target.take_damage(*amount, *damage_type);
-            //                     drop(target);
-            //                 }
-            //                 TargetType::Minion => {
-            //                     let oppo_idx = match idx {
-            //                         Combatant1 => CombatantIndex::Combatant2,
-            //                         CombatantIndex::Combatant2 => Combatant1,
-            //                     };
-            //                     let opponent_minions = self
-            //                         .battle_fields
-            //                         .get_mut(&oppo_idx)
-            //                         .unwrap()
-            //                         .iter_mut()
-            //                         .filter(|card| card.card_type == CardType::Minion)
-            //                         .collect::<Vec<_>>();
-            //                     for card in opponent_minions {
-            //                         card.take_damage(*amount);
-            //                     }
-            //                 }
-            //             };
-            //         }
-            //     }
-            //     SpellEffectType::Poison(poison_effect) => {
-            //         if let Some(existing_effect) = self.active_effects.iter_mut().find(|eff| {
-            //             matches!(eff.effect, EffectType::Poison { .. })
-            //                 && eff.combatant_id == oppo_id
-            //         }) {
-            //             if let EffectType::Poison { amount } = &mut existing_effect.effect {
-            //                 *amount += poison_effect.amount; // Assuming you want to add to the existing amount
-            //             }
-            //         } else {
-            //             self.active_effects.push(ActiveEffect {
-            //                 combatant_id: oppo_id.to_string(),
-            //                 effect: EffectType::Poison {
-            //                     amount: poison_effect.amount,
-            //                 },
-            //                 remaining_turns: None,
-            //             });
-            //         }
-            //         // this makes the opponent take damage immediately for poison
-            //         let oppo_arc = self.get_combatant(idx, Some(true));
-            //         let mut guard = oppo_arc.lock().unwrap();
-            //         guard.take_damage(poison_effect.amount, DamageType::Chaos);
-            //     }
-            //     SpellEffectType::Stun(_) => {
-            //         let active_effect = ActiveEffect {
-            //             combatant_id: self.get_combatant(idx, Some(true)).lock().unwrap().get_id(),
-            //             effect: EffectType::Stun,
-            //             remaining_turns: None,
-            //         };
-            //         self.active_effects.push(active_effect);
-            //     }
-            //     SpellEffectType::Initiative(effect) => {
-            //         if let Some(existing_effect) = self.active_effects.iter_mut().find(|eff| {
-            //             matches!(eff.effect, EffectType::Initiative { .. })
-            //                 && eff.combatant_id == oppo_id
-            //         }) {
-            //             if let EffectType::Initiative { amount } = &mut existing_effect.effect {
-            //                 *amount += effect.amount; // Assuming you want to add to the existing amount
-            //             }
-            //         } else {
-            //             self.active_effects.push(ActiveEffect {
-            //                 combatant_id: oppo_id.to_string(),
-            //                 effect: EffectType::Initiative {
-            //                     amount: effect.amount,
-            //                 },
-            //                 remaining_turns: None, // Assuming you have a duration or similar
-            //             });
-            //         }
-            //     }
-            //     eff => {
-            //         warn!("unimplemented effect {:?}", eff);
-            //     }
-            // }
         }
     }
 

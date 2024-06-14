@@ -12,7 +12,7 @@ use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
 use crate::prisma::{
     account, action, deck, deck_card, hero_actions, hero_quests, npc, npc_card, quest,
-    resource_type, ResourceEnum,
+    resource_type, Resource,
 };
 use crate::repos::cards::CardRepo;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
@@ -27,9 +27,9 @@ use crate::{
         resources::Resource,
     },
     prisma::{
-        action_completed, attributes, base_stats, hero,
+        action_completed, hero,
         hero_region::{self, current_location, hero_id},
-        hero_resource, inventory, leyline,
+        hero_resource, leyline,
         region::{self, adjacent_regions},
         PrismaClient,
     },

@@ -19,31 +19,67 @@ model Account {
 }
 
 model Hero {
-  id                          String            @id @default(uuid())
-  name                        String            @default("Default name")
-  aionCapacity                Int
-  baseStatsId                 String            @unique @map("base_stats_id")
-  attributesId                String            @unique @map("attributes_id")
-  baseStats                   BaseStats         @relation(fields: [baseStatsId], references: [id])
-  attributes                  Attributes        @relation(fields: [attributesId], references: [id])
-  inventory                   Inventory         @relation(fields: [inventoryId], references: [id])
-  inventoryId                 String            @unique @map("inventory_id")
-  retinueSlots                RetinueSlot[]
-  heroRegion                  HeroRegion[]
-  actionsCompleted            ActionCompleted[]
-  resources                   HeroResource[]
-  stamina                     Int               @default(100)
-  staminaMax                  Int               @default(100)
-  staminaRegenRate            Int               @default(1)
-  heroActions                 HeroActions[]
-  heroQuests                  HeroQuests[]
-  lastStaminaRegenerationTime DateTime?         @map("last_stamina_regeneration_time")
-  heroTalents                 HeroTalent[]
-  decks                       Deck[]
-  Cards                       HeroCard[]
-  // New field and relationship
-  accountId                   String            @map("account_id")
-  account                     Account           @relation(fields: [accountId], references: [id])
+  id              String            @id @default(uuid())
+  class           Class
+  hitpoints       Int
+  strength        Int
+  dexterity       Int
+  intelligence    Int
+  explore         Int
+  stamina         Int
+  crafting        Int
+  relics          Relic[]
+  spells          Spell[]
+  Account         Account?          @relation(fields: [accountId], references: [id])
+  accountId       String?
+  HeroResource    HeroResource[]
+  HeroActions     HeroActions[]
+  HeroQuests      HeroQuests[]
+  ActionCompleted ActionCompleted[]
+  HeroRegion      HeroRegion[]
+  HeroCard        HeroCard[]
+  Deck            Deck[]
+}
+
+enum Class {
+  Fighter
+  Ranger
+  Wizard
+}
+
+model Relic {
+  id      String        @id @default(uuid())
+  name    String
+  effects RelicEffect[]
+  heroId  String
+  hero    Hero          @relation(fields: [heroId], references: [id])
+}
+
+model RelicEffect {
+  id       String     @id @default(uuid())
+  type     EffectType // Enum for type of effect
+  value    Int
+  target   String // Target of the effect, e.g., "self" or "enemy"
+  duration Int? // Duration in turns, if applicable
+  relicId  String
+  relic    Relic      @relation(fields: [relicId], references: [id])
+}
+
+enum EffectType {
+  Heal
+  Damage
+  Buff
+  Debuff
+  ApplySpell
+}
+
+model Spell {
+  id     String @id @default(uuid())
+  name   String
+  slot   Int // Slot number, e.g., 1, 2, 3
+  level  Int // Required level to unlock
+  heroId String
+  hero   Hero   @relation(fields: [heroId], references: [id])
 }
 
 model HeroResource {
@@ -132,85 +168,23 @@ model HeroRegion {
   current_location Boolean @default(false) @map("current_location")
 }
 
-model BaseStats {
-  id         String @id @default(uuid())
-  level      Int
-  xp         Int
-  resilience Int    @default(0)
-  damageMin  Int
-  damageMax  Int
-  hitPoints  Int    @map("hit_points")
-  armor      Int
-  hero       Hero?
-}
-
-model Attributes {
-  id           String     @id @default(uuid())
-  strength     Int
-  agility      Int
-  intelligence Int
-  exploration  Int
-  crafting     Int
-  Hero         Hero?
-  Follower     Follower[]
-}
-
-model Item {
-  id                  String     @id @default(uuid())
-  name                String
-  weight              Int
-  value               Int
-  activeInventoryId   String?    @map("active_inventory_id")
-  activeInventory     Inventory? @relation("active", fields: [activeInventoryId], references: [id])
-  backpackInventoryId String?    @map("backpack_inventory_id")
-  backpackInventory   Inventory? @relation("backpack", fields: [backpackInventoryId], references: [id])
-}
-
-model Inventory {
-  id       String @id @default(uuid())
-  active   Item[] @relation("active")
-  backpack Item[] @relation("backpack")
-  hero     Hero?
-}
-
-model RetinueSlot {
-  id         String    @id @default(uuid())
-  slotType   String
-  HeroId     String    @map("hero_id")
-  Hero       Hero      @relation(fields: [HeroId], references: [id])
-  Follower   Follower? @relation(fields: [followerId], references: [id])
-  followerId String?
-}
-
-model Follower {
-  id           String        @id @default(uuid())
-  name         String
-  level        Int
-  attributesId String        @map("attributes_id")
-  attributes   Attributes    @relation(fields: [attributesId], references: [id])
-  RetinueSlot  RetinueSlot[]
-
-  followerTalents FollowerTalent[]
-}
-
 model ResourceType {
   id           String         @id @default(uuid())
-  type         ResourceEnum
+  type         Resource
   HeroResource HeroResource[]
 
   @@unique([type])
 }
 
-enum ResourceEnum {
+enum Resource {
   Aion
-  Valor
-  NexusOrb
-  StormShard
+  Flux
+  Gem
 }
 
 model ResourceCost {
-  id       String       @id @default(uuid())
-  resource ResourceEnum
+  id       String   @id @default(uuid())
+  resource Resource
   amount   Int
 }
 
@@ -239,318 +213,54 @@ model Leyline {
   actions Action[] // This will relate Leyline to many Actions
 }
 
-model Talent {
-  id              String           @id @default(uuid())
-  name            String
-  description     String?
-  cooldown        Int
-  effects         Json
-  heroTalents     HeroTalent[]
-  followerTalents FollowerTalent[]
-}
-
-// Join table for Hero and Talent
-model HeroTalent {
-  heroId   String
-  talentId String
-  hero     Hero   @relation(fields: [heroId], references: [id])
-  talent   Talent @relation(fields: [talentId], references: [id])
-
-  @@id([heroId, talentId])
-}
-
-// Join table for Follower and Talent
-model FollowerTalent {
-  followerId String
-  talentId   String
-  follower   Follower @relation(fields: [followerId], references: [id])
-  talent     Talent   @relation(fields: [talentId], references: [id])
-
-  @@id([followerId, talentId])
-}
-
 model Npc {
-  id         String @id @default(uuid())
-  name       String
-  level      Int
-  armor      Int    @default(0)
-  resilience Int
-  strength   Int
-  agility    Int
-  damageMin  Int    @default(0)
-  damageMax  Int    @default(0)
-  hp         Int    @default(150)
+  id        String @id @default(uuid())
+  name      String
+  level     Int
+  armor     Int    @default(0)
+  strength  Int
+  damageMin Int    @default(0)
+  damageMax Int    @default(0)
+  hp        Int    @default(150)
 
-  deck   Deck?   @relation(fields: [deckId], references: [id])
-  deckId String? @unique @default(uuid())
-
-  leyline Leyline?  @relation("NpcToLeyline")
-  actions Action[]  @relation("ActionToNpc")
-  NpcCard NpcCard[]
+  leyline Leyline? @relation("NpcToLeyline")
+  actions Action[] @relation("ActionToNpc")
+  Deck    Deck[]
 }
 
 model Card {
-  id     String @id @default(uuid())
-  name   String
-  nation Nation
-  rarity Rarity
-  imgUrl String @default("https://imagedelivery.net/OnMBHZ1Vl1a2W_jlBO5uVw/d1fdf798-a967-4a89-325f-22432cf29f00/lg")
-
-  manaCost  Int
-  health    Int @default(0)
-  damage    Int @default(0)
-  deckLimit Int @default(2)
-
-  cardType CardType
-
-  HeroCards HeroCard[]
-  NpcCard   NpcCard[]
-
-  @@unique([name, nation])
+  id       String       @id @default(uuid())
+  name     String
+  class    Class // e.g., Attack, Weapon Attack, Heal, Armor, Lifesteal
+  cost     Int // Cost to play the card
+  effects  CardEffect[] // Relation to CardEffect
+  HeroCard HeroCard[]
 }
 
 model CardEffect {
-  id             String        @id @default(uuid())
-  cardId         String
-  SpellEffect    SpellEffect?  @relation(fields: [spellEffectId], references: [id])
-  spellEffectId  String?
-  MinionEffect   MinionEffect? @relation(fields: [minionEffectId], references: [id])
-  minionEffectId String?
+  id          String     @id @default(uuid())
+  efffectType EffectType // Enum for type of effect
+  value       Int
+  target      TargetType // Target of the effect, e.g., "self" or "enemy"
+  duration    Int? // Duration in turns, if applicable
+  cardId      String
+  card        Card       @relation(fields: [cardId], references: [id])
 }
 
-model SpellEffect {
-  id                     String                @id @default(uuid())
-  duration               Int                   @default(0)
-  CardEffect             CardEffect[]
-  DamageEffect           DamageEffect?         @relation(fields: [damageEffectId], references: [id])
-  damageEffectId         String?
-  DazeEffect             DazeEffect?           @relation(fields: [dazeEffectId], references: [id])
-  dazeEffectId           String?
-  BattleCryEffect        BattleCryEffect?      @relation(fields: [battleCryEffectId], references: [id])
-  battleCryEffectId      String?
-  CowardiceCurseEffect   CowardiceCurseEffect? @relation(fields: [cowardiceCurseEffectId], references: [id])
-  cowardiceCurseEffectId String?
-  PhantomTouchEffect     PhantomTouchEffect?   @relation(fields: [phantomTouchEffectId], references: [id])
-  phantomTouchEffectId   String?
-  SprayOfKnivesEffect    SprayOfKnivesEffect?  @relation(fields: [sprayOfKnivesEffectId], references: [id])
-  sprayOfKnivesEffectId  String?
-  HealEffect             HealEffect?           @relation(fields: [healEffectId], references: [id])
-  healEffectId           String?
-  ArmorEffect            ArmorEffect?          @relation(fields: [armorEffectId], references: [id])
-  armorEffectId          String?
-  ResilienceEffect       ResilienceEffect?     @relation(fields: [resilienceEffectId], references: [id])
-  resilienceEffectId     String?
-  PoisonEffect           PoisonEffect?         @relation(fields: [poisonEffectId], references: [id])
-  poisonEffectId         String?
-  InitiativeEffect       InitiativeEffect?     @relation(fields: [initiativeEffectId], references: [id])
-  initiativeEffectId     String?
-  StunEffect             StunEffect?           @relation(fields: [stunEffectId], references: [id])
-  stunEffectId           String?
-}
-
-model MinionEffect {
-  id                      String                 @id @default(uuid())
-  duration                Int                    @default(0)
-  cardEffects             CardEffect[]
-  EtherealEffect          EtherealEffect?        @relation(fields: [etherealEffectId], references: [id])
-  etherealEffectId        String?
-  TwinEffect              TwinEffect?            @relation(fields: [twinEffectId], references: [id])
-  twinEffectId            String?
-  CleanseEffect           CleanseEffect?         @relation(fields: [cleanseEffectId], references: [id])
-  cleanseEffectId         String?
-  BlockEffect             BlockEffect?           @relation(fields: [blockEffectId], references: [id])
-  blockEffectId           String?
-  RoarAuraEffect          RoarAuraEffect?        @relation(fields: [roarAuraEffectId], references: [id])
-  roarAuraEffectId        String?
-  DyingWishHealEffect     DyingWishHealEffect?   @relation(fields: [dyingWishHealEffectId], references: [id])
-  dyingWishHealEffectId   String?
-  DyingWishDamageEffect   DyingWishDamageEffect? @relation(fields: [dyingWishDamageEffectId], references: [id])
-  dyingWishDamageEffectId String?
-  TauntEffect             TauntEffect?           @relation(fields: [tauntEffectId], references: [id])
-  tauntEffectId           String?
-  ChargeEffect            ChargeEffect?          @relation(fields: [chargeEffectId], references: [id])
-  chargeEffectId          String?
-  LifestealEffect         LifestealEffect?       @relation(fields: [lifestealEffectId], references: [id])
-  lifestealEffectId       String?
-  PickupEffect            PickupEffect?          @relation(fields: [pickupEffectId], references: [id])
-  pickupEffectId          String?
-}
-
-enum CardType {
-  Spell
-  Minion
-}
-
-// --------------------------              MINION EFFECTS                ---------------------------
-
-model EtherealEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-}
-
-model TwinEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-}
-
-model CleanseEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-  amount       Int
-}
-
-model BlockEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-}
-
-model RoarAuraEffect {
-  id           String         @id @default(uuid())
-  amount       Int
-  minionEffect MinionEffect[]
-}
-
-model DyingWishHealEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-  amount       Int
-}
-
-model DyingWishDamageEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-  amount       Int
-}
-
-model TauntEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-}
-
-model ChargeEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-}
-
-model LifestealEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-  percentage   Float          @default(0)
-}
-
-model PickupEffect {
-  id           String         @id @default(uuid())
-  minionEffect MinionEffect[]
-  amount       Int
-}
-
-// --------------------------              SPELL EFFECTS                ---------------------------
-model DamageEffect {
-  id          String                @id @default(uuid())
-  spellEffect SpellEffect[]
-  damage      DamageEffectDetails[]
-}
-
-model DamageEffectDetails {
-  id             String        @id @default(uuid())
-  amount         Int
-  damageType     DamageType    @default(Physical)
-  targetType     TargetType    @default(Both)
-  DamageEffect   DamageEffect? @relation(fields: [damageEffectId], references: [id])
-  damageEffectId String?
-}
-
-model DazeEffect {
-  id          String        @id @default(uuid())
-  spellEffect SpellEffect[]
-}
-
-model BattleCryEffect {
-  id          String        @id @default(uuid())
-  spellEffect SpellEffect[]
-  amount      Int
-}
-
-model CowardiceCurseEffect {
-  id          String        @id @default(uuid())
-  spellEffect SpellEffect[]
-  amount      Int
-}
-
-model PhantomTouchEffect {
-  id String @id @default(uuid())
-
-  spellEffect SpellEffect[]
-
-  amount Int
-}
-
-model SprayOfKnivesEffect {
-  id          String        @id @default(uuid())
-  amount      Int
-  spellEffect SpellEffect[]
-}
-
-model HealEffect {
-  id          String        @id @default(uuid())
-  amount      Int
-  spellEffect SpellEffect[]
-  targetType  TargetType
-}
-
-model ArmorEffect {
-  id          String        @id @default(uuid())
-  amount      Int
-  spellEffect SpellEffect[]
-}
-
-model ResilienceEffect {
-  id          String        @id @default(uuid())
-  spellEffect SpellEffect[]
-  amount      Int
-}
-
-model PoisonEffect {
-  id          String        @id @default(uuid())
-  amount      Int
-  spellEffect SpellEffect[]
-}
-
-model InitiativeEffect {
-  id          String        @id @default(uuid())
-  spellEffect SpellEffect[]
-  amount      Int
-}
-
-model StunEffect {
-  spellEffect SpellEffect[]
-  id          String        @id @default(uuid())
-}
-
-// this can be an NFT. The user would sell the HeroCard instance.
 model HeroCard {
-  id         String    @id @default(uuid())
-  instanceId String    @unique @default(uuid())
-  heroId     String
-  cardId     String
-  hero       Hero      @relation(fields: [heroId], references: [id])
-  card       Card      @relation(fields: [cardId], references: [id])
-  deckCard   DeckCard? @relation(fields: [deckCardId], references: [id])
-  deckCardId String?   @unique
-}
-
-model NpcCard {
-  id     String @id @default(uuid())
-  npcId  String
-  cardId String
-  npc    Npc    @relation(fields: [npcId], references: [id])
-  card   Card   @relation(fields: [cardId], references: [id])
+  id       String     @id @default(uuid())
+  heroId   String
+  cardId   String
+  hero     Hero       @relation(fields: [heroId], references: [id])
+  card     Card       @relation(fields: [cardId], references: [id])
+  DeckCard DeckCard[]
 }
 
 model DeckCard {
-  id       String    @id @default(uuid())
-  deckId   String
-  HeroCard HeroCard?
+  id         String    @id @default(uuid())
+  deckId     String
+  HeroCard   HeroCard? @relation(fields: [heroCardId], references: [id])
+  heroCardId String?
 }
 
 model Deck {
@@ -558,20 +268,14 @@ model Deck {
   name   String  @default("my deck")
   Hero   Hero?   @relation(fields: [heroId], references: [id])
   heroId String?
-  Npc    Npc?
+  Npc    Npc?    @relation(fields: [npcId], references: [id])
   active Boolean @default(false)
+  npcId  String?
 }
 
 enum TargetType {
-  Minion
-  Hero
-  Both
-}
-
-enum DamageType {
-  Physical
-  Spell
-  Chaos
+  Opponent
+  Itself
 }
 
 enum Nation {

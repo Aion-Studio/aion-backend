@@ -8,7 +8,7 @@ use crate::prisma::deck;
 use crate::prisma::deck_card;
 use crate::{
     models::cards::{Card, CardEffect, HeroCard},
-    prisma::{card, card_effect, damage_effect, hero, hero_card, minion_effect, spell_effect},
+    prisma::{card, hero, hero_card},
     webserver::get_prisma_client,
 };
 
@@ -122,7 +122,6 @@ impl CardRepo {
     }
 
     pub async fn fetch_card_with_effects(card_data: card::Data) -> anyhow::Result<Card> {
-        let card_effects = CardRepo::fetch_card_effects(card_data.id.clone()).await?;
         let card = Card::from((card_data, card_effects));
         Ok(card)
     }
@@ -190,52 +189,6 @@ impl CardRepo {
                 Err(e)
             }
         }
-    }
-
-    pub async fn fetch_card_effects(card_id: String) -> Result<Vec<CardEffect>, QueryError> {
-        let prisma = get_prisma_client();
-        let card_effects = prisma
-            .card_effect()
-            .find_many(vec![card_effect::card_id::equals(card_id)])
-            .with(
-                card_effect::minion_effect::fetch()
-                    .with(minion_effect::ethereal_effect::fetch())
-                    .with(minion_effect::cleanse_effect::fetch())
-                    .with(minion_effect::block_effect::fetch())
-                    .with(minion_effect::roar_aura_effect::fetch())
-                    .with(minion_effect::dying_wish_heal_effect::fetch())
-                    .with(minion_effect::dying_wish_damage_effect::fetch())
-                    .with(minion_effect::taunt_effect::fetch())
-                    .with(minion_effect::charge_effect::fetch())
-                    .with(minion_effect::lifesteal_effect::fetch())
-                    .with(minion_effect::pickup_effect::fetch())
-                    .with(minion_effect::twin_effect::fetch()),
-            )
-            .with(
-                card_effect::spell_effect::fetch()
-                    .with(spell_effect::stun_effect::fetch())
-                    .with(spell_effect::heal_effect::fetch())
-                    .with(spell_effect::armor_effect::fetch())
-                    .with(spell_effect::resilience_effect::fetch())
-                    .with(spell_effect::poison_effect::fetch())
-                    .with(spell_effect::initiative_effect::fetch())
-                    .with(spell_effect::battle_cry_effect::fetch())
-                    .with(spell_effect::cowardice_curse_effect::fetch())
-                    .with(spell_effect::phantom_touch_effect::fetch())
-                    .with(spell_effect::spray_of_knives_effect::fetch())
-                    .with(spell_effect::daze_effect::fetch())
-                    .with(
-                        spell_effect::damage_effect::fetch()
-                            .with(damage_effect::damage::fetch(vec![])),
-                    ),
-            )
-            .exec()
-            .await?
-            .into_iter()
-            .map(CardEffect::from)
-            .collect();
-
-        Ok(card_effects)
     }
 
     pub async fn deck_cards_by_deck_id(deck_id: String) -> Vec<Card> {
