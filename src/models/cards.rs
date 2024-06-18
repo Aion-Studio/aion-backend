@@ -1,14 +1,7 @@
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
-use crate::prisma::{self, daze_effect, EffectType};
-use crate::prisma::{
-    armor_effect, battle_cry_effect, block_effect, charge_effect, cleanse_effect,
-    cowardice_curse_effect, damage_effect, dying_wish_heal_effect, ethereal_effect, heal_effect,
-    initiative_effect, lifesteal_effect, phantom_touch_effect, pickup_effect, poison_effect,
-    resilience_effect, roar_aura_effect, spray_of_knives_effect, stun_effect, taunt_effect,
-    twin_effect, DamageType, TargetType,
-};
+use crate::prisma::{self, Class, EffectType, TargetType};
+
 use crate::prisma::{card, deck};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -33,30 +26,12 @@ pub struct HeroCard {
 #[serde(rename_all = "camelCase")]
 pub struct Card {
     pub id: String,
+    pub class: Class,
     pub name: String,
-    pub nation: Nation,
-    pub rarity: Rarity,
     pub img_url: String,
-    pub mana_cost: i32,
-    pub health: i32,
-    pub damage: i32,
-    pub card_type: CardType,
+    pub cost: i32,
     pub effects: Vec<CardEffect>, // Updated to use card_effects
-    pub round_played: i32,
     pub last_attack_round: Option<i32>,
-}
-
-impl Card {
-    pub fn attack(&self, target: &mut Card) {
-        target.health -= self.damage;
-        info!(
-            "{:?} attacks {:?} for {:?} damage",
-            self.name, target.name, self.damage
-        );
-    }
-    pub fn take_damage(&mut self, damage: i32) {
-        self.health -= damage;
-    }
 }
 
 impl Default for Card {
@@ -64,14 +39,11 @@ impl Default for Card {
         Card {
             id: "".to_string(),
             name: "".to_string(),
-            nation: Nation::Dusane,
-            rarity: Rarity::Common,
             img_url: "".to_string(),
-            mana_cost: 0,
-            health: 0,
-            damage: 0,
-            round_played: 0,
+            cost: 0,
+            class: Class::Fighter,
             last_attack_round: None,
+            effects: Vec::new(),
         }
     }
 }
@@ -81,9 +53,10 @@ impl From<(card::Data, Vec<CardEffect>)> for Card {
         Card {
             id: data.id,
             name: data.name,
+            class: data.class,
             cost: data.cost,
             effects,
-            round_played: 0,
+            img_url: data.img_url,
             last_attack_round: None,
         }
     }
@@ -125,8 +98,8 @@ impl From<prisma::card_effect::Data> for CardEffect {
 pub struct DamageEffect {
     pub id: String,
     // pub amount: i32,
-    pub damage: Vec<(i32)>, // pub damage_type: DamageType,
-                            // pub target_type: TargetType,
+    pub damage: Vec<i32>, // pub damage_type: DamageType,
+                          // pub target_type: TargetType,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct BattleCryEffect {
@@ -311,23 +284,7 @@ impl From<Nation> for prisma::Nation {
         }
     }
 }
-impl From<prisma::CardType> for CardType {
-    fn from(card_type: prisma::CardType) -> Self {
-        match card_type {
-            prisma::CardType::Spell => CardType::Spell,
-            prisma::CardType::Minion => CardType::Minion,
-        }
-    }
-}
 
-impl From<CardType> for prisma::CardType {
-    fn from(card_type: CardType) -> Self {
-        match card_type {
-            CardType::Spell => prisma::CardType::Spell,
-            CardType::Minion => prisma::CardType::Minion,
-        }
-    }
-}
 impl From<prisma::Rarity> for Rarity {
     fn from(rarity: prisma::Rarity) -> Self {
         match rarity {

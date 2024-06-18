@@ -7,12 +7,14 @@ use serde_json::{json, Value};
 use tracing::{error, info, warn};
 
 use crate::models::cards::{Card, Deck};
-use crate::models::hero::{convert_to_fixed_offset, Attributes, BaseStats};
+use crate::models::hero::convert_to_fixed_offset;
 use crate::models::npc::Monster;
 use crate::models::quest::{Action, HeroQuest, Quest};
+use crate::models::resources::Resource;
+use crate::prisma::stamina::amount;
 use crate::prisma::{
-    account, action, deck, deck_card, hero_actions, hero_quests, npc, npc_card, quest,
-    resource_type, Resource,
+    action, deck, hero_actions, hero_quests, hero_spell, npc, quest, resource_type, spell, stamina,
+    Resource as PrismaResource,
 };
 use crate::repos::cards::CardRepo;
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
@@ -24,7 +26,6 @@ use crate::{
     models::{
         hero::Hero,
         region::{HeroRegion, Leyline, Region, RegionName},
-        resources::Resource,
     },
     prisma::{
         action_completed, hero,
@@ -47,88 +48,6 @@ impl Repo {
         Self { prisma }
     }
 
-    pub async fn insert_hero(&self, new_hero: Hero) -> Result<Hero, QueryError> {
-        // Use Prisma to create a new Hero in the database
-        // Convert the resulting record into a Hero struct and return it
-        // ...
-        let base_inventory = self.prisma.inventory().create(vec![]).exec().await.unwrap();
-
-        let base_stats = self
-            .prisma
-            .base_stats()
-            .create(
-                new_hero.base_stats.level,
-                new_hero.base_stats.xp,
-                new_hero.base_stats.damage.min,
-                new_hero.base_stats.damage.max,
-                new_hero.base_stats.hit_points,
-                new_hero.base_stats.armor,
-                vec![],
-            )
-            .exec()
-            .await
-            .unwrap();
-
-        let base_attributes = self
-            .prisma
-            .attributes()
-            .create(
-                new_hero.attributes.strength,
-                new_hero.attributes.agility,
-                new_hero.attributes.intelligence,
-                new_hero.attributes.exploration,
-                new_hero.attributes.crafting,
-                vec![],
-            )
-            .exec()
-            .await
-            .unwrap();
-
-        let account = self
-            .prisma
-            .account()
-            .create("tempId123".to_string(), vec![])
-            .exec()
-            .await
-            .unwrap();
-
-        let result = self
-            .prisma
-            .hero()
-            .create(
-                new_hero.aion_capacity,
-                base_stats::id::equals(base_stats.clone().id),
-                attributes::id::equals(base_attributes.clone().id),
-                inventory::id::equals(base_inventory.clone().id),
-                account::id::equals(account.clone().id),
-                vec![hero::name::set(new_hero.name)],
-            )
-            .with(hero::base_stats::fetch())
-            .with(hero::attributes::fetch())
-            .with(hero::inventory::fetch())
-            .exec()
-            .await?;
-        let hero: Hero = result.into();
-
-        self.prisma
-            .deck()
-            .create(vec![deck::hero_id::set(Some(hero.get_id()))])
-            .exec()
-            .await?;
-        let region_name = RegionName::Dusane;
-        self.prisma
-            .hero_region()
-            .create(
-                0.0,
-                hero::id::equals(hero.get_id()),
-                region::name::equals(region_name.to_str()),
-                vec![current_location::set(true)],
-            )
-            .exec()
-            .await?;
-        let hero = self.hero_by_id(hero.get_id()).await.unwrap();
-        Ok(hero)
-    }
     pub fn get_hero(&self, hero_id: String) -> RepoFuture<Hero> {
         Box::pin(async move {
             match self.hero_by_id(hero_id).await {
@@ -177,9 +96,10 @@ impl Repo {
             .prisma
             .hero()
             .find_unique(hero::id::equals(hero_id.clone()))
-            .with(hero::base_stats::fetch())
-            .with(hero::attributes::fetch())
-            .with(hero::inventory::fetch())
+            .with(
+                hero::hero_spells::fetch(vec![hero_spell::hero_id::equals(hero_id.clone())])
+                    .with(hero_spell::spell::fetch().with(spell::effects::fetch(vec![]))),
+            )
             .with(hero::decks::fetch(vec![deck::hero_id::equals(Some(
                 hero_id.clone(),
             ))]))
@@ -189,7 +109,7 @@ impl Repo {
             .with(
                 // fetch resources where the hero_resource id is our hero, then
                 // include the resource for each hero_resource
-                hero::resources::fetch(vec![hero_resource::hero_id::equals(hero_id.clone())])
+                hero::hero_resources::fetch(vec![hero_resource::hero_id::equals(hero_id.clone())])
                     .with(hero_resource::resource::fetch()),
             )
             .exec()
@@ -232,8 +152,6 @@ impl Repo {
     }
 
     pub async fn update_hero(&self, hero: Hero) -> Result<Hero, QueryError> {
-        self.update_base_stats(&hero.base_stats).await?;
-        self.update_attributes(&hero.attributes).await?;
         self.update_hero_resources(&hero.resources, String::from(&hero.get_id()))
             .await?;
 
@@ -243,7 +161,6 @@ impl Repo {
             .update(
                 hero::id::equals(hero.get_id()),
                 vec![
-                    hero::aion_capacity::set(hero.aion_capacity),
                     hero::stamina::set(hero.stamina),
                     hero::stamina_max::set(hero.stamina_max),
                     hero::stamina_regen_rate::set(hero.stamina_regen_rate),
@@ -274,7 +191,7 @@ impl Repo {
         let resource_creation_tasks: Vec<_> = resources
             .iter()
             .map(|(resource, amount)| {
-                let resource_enum = ResourceEnum::from(resource.clone());
+                let resource_enum = PrismaResource::from(resource.clone());
                 let prisma = self.prisma.clone();
                 let hero_id_clone = hero_id.clone();
 
@@ -343,30 +260,6 @@ impl Repo {
                 }
             }
         }
-        Ok(())
-    }
-
-    async fn update_base_stats(&self, base_stats: &BaseStats) -> Result<(), QueryError> {
-        self.prisma
-            .base_stats()
-            .update(
-                base_stats::id::equals(base_stats.clone().id.unwrap()),
-                base_stats_update_params(&base_stats),
-            )
-            .exec()
-            .await?;
-        Ok(())
-    }
-
-    async fn update_attributes(&self, attributes: &Attributes) -> Result<(), QueryError> {
-        self.prisma
-            .attributes()
-            .update(
-                attributes::id::equals(attributes.clone().id.unwrap()),
-                attributes_update_params(&attributes),
-            )
-            .exec()
-            .await?;
         Ok(())
     }
 
@@ -696,7 +589,7 @@ impl Repo {
             .action()
             .find_unique(action::UniqueWhereParam::IdEquals(String::from(action_id)))
             .with(action::quest::fetch())
-            .with(action::npc::fetch().with(npc::deck::fetch()))
+            .with(action::npc::fetch())
             .exec()
             .await?;
 
@@ -802,24 +695,24 @@ impl Repo {
         Ok(())
     }
     pub async fn deduct_stamina(&self, hero_id: &str, stamina: i32) -> Result<(), QueryError> {
-        let hero = self
+        let hero_stamina = self
             .prisma
-            .hero()
-            .find_unique(hero::id::equals(hero_id.to_string()))
+            .stamina()
+            .find_unique(stamina::hero_id::equals(hero_id.to_string()))
             .exec()
-            .await;
+            .await?;
 
-        let hero = hero.unwrap();
-        let new_stamina = match hero {
-            Some(h) => h.stamina - stamina,
-            None => 0,
+        // let hero = hero.unwrap();
+        let new_stamina = match hero_stamina {
+            Some(h) => h.amount - stamina,
+            None => return Err(QueryError::Serialize("No stamina found".to_string())),
         };
 
         self.prisma
-            .hero()
+            .stamina()
             .update(
-                hero::id::equals(hero_id.to_string()),
-                vec![hero::stamina::set(new_stamina)],
+                stamina::hero_id::equals(hero_id.to_string()),
+                vec![amount::set(new_stamina)],
             )
             .exec()
             .await?;
@@ -858,13 +751,7 @@ impl Repo {
             .order_by(action_completed::created_at::order(Direction::Desc))
             .take(take)
             .skip(skip)
-            .with(
-                action_completed::hero::fetch()
-                    .with(hero::base_stats::fetch())
-                    .with(hero::attributes::fetch())
-                    .with(hero::inventory::fetch())
-                    .with(hero::resources::fetch(vec![])),
-            )
+            .with(action_completed::hero::fetch())
             .exec()
             .await;
         match data {
@@ -1062,10 +949,7 @@ impl Repo {
             .prisma
             .hero()
             .find_many(vec![])
-            .with(hero::base_stats::fetch())
-            .with(hero::attributes::fetch())
-            .with(hero::inventory::fetch())
-            .with(hero::resources::fetch(vec![]).with(hero_resource::resource::fetch()))
+            .with(hero::hero_resources::fetch(vec![]).with(hero_resource::resource::fetch()))
             .with(hero::hero_region::fetch(vec![]))
             .exec()
             .await?;
@@ -1084,29 +968,6 @@ impl Repo {
         result.map_err(|e| QueryError::Serialize(e.to_string()))
     }
 
-    pub async fn get_npc_cards(&self, npc_id: &str) -> Result<Vec<Card>, QueryError> {
-        let deck_cards = self
-            .prisma
-            .npc_card()
-            .find_many(vec![npc_card::npc_id::equals(String::from(npc_id))])
-            .with(npc_card::card::fetch())
-            .exec()
-            .await?;
-
-        let cards_with_effects = deck_cards
-            .into_iter()
-            .map(|card| async move {
-                let card_with_effects = CardRepo::fetch_card_with_effects(*(card.card.unwrap()))
-                    .await
-                    .unwrap();
-                card_with_effects
-            }) // Unwrap the card data
-            .collect::<Vec<_>>();
-
-        let cards = join_all(cards_with_effects).await;
-        Ok(cards)
-    }
-
     pub async fn get_npc_by_action_id(&self, action_id: &str) -> Result<Monster, QueryError> {
         let npc = self
             .prisma
@@ -1114,23 +975,15 @@ impl Repo {
             .find_first(vec![npc::WhereParam::ActionsSome(vec![
                 action::id::equals(action_id.to_string()),
             ])])
-            .with(npc::deck::fetch().with(deck::npc::fetch()))
             .exec()
             .await
             .unwrap()
             .unwrap();
 
         //we assume npc has a deck and cards when created
-        let deck_cards = self.get_npc_cards(&npc.id).await.unwrap();
 
         let mut npc_obj: Monster = npc.into();
-        npc_obj.deck = Some(Deck {
-            id: "doesnt matter".to_string(),
-            name: "npc deck".to_string(),
-            active: true,
-            hero_id: None,
-            cards_in_deck: deck_cards,
-        });
+
         Ok(npc_obj)
     }
 }

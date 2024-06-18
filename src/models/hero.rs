@@ -11,18 +11,16 @@ use crate::events::game::ActionDurations;
 use crate::infra::Infra;
 use crate::models::cards::Deck;
 use crate::models::hero_combatant::HeroCombatant;
-use crate::prisma::ResourceEnum;
+use crate::prisma::{stamina, Class, Resource as ResourcePrisma};
 use crate::services::tasks::action_names::{ActionNames, TaskLootBox};
 use crate::{
     events::game::ActionCompleted,
-    prisma::{
-        attributes, base_stats, follower, hero, hero_resource, inventory, item, retinue_slot,
-    },
+    prisma::{hero, hero_resource},
 };
 
 use super::region::RegionName;
 use super::resources::Resource;
-use super::talent::Talent;
+use super::talent::{Spell, Talent};
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -31,85 +29,80 @@ use super::talent::Talent;
 pub struct Hero {
     pub id: Option<String>,
     pub name: String,
-    pub base_stats: BaseStats,
-    pub attributes: Attributes,
-    pub inventory: Option<Inventory>,
-    pub retinue_slots: Vec<RetinueSlot>,
+    pub class: Class,
+    pub hp: i32,
+    pub level: i32,
+    pub strength: i32,
+    pub armor: i32,
+    pub intelligence: i32,
+    pub dexterity: i32,
+    pub explore: i32,
+    pub crafting: i32,
     pub resources: HashMap<Resource, i32>,
-    pub aion_capacity: i32, // NOTO: This is not used anywhere at the moment
-    pub stamina: i32,
-    pub stamina_max: i32,
-    pub stamina_regen_rate: i32,
-    pub last_stamina_regeneration_time: Option<DateTime<Utc>>, // Add this
-    pub talents: Vec<Talent>,
+    pub stamina: Stamina,
     pub decks: Option<Vec<Deck>>,
+    pub spells: Vec<Spell>,
 }
 
-// methods to only update the model struct based on some calculation
 impl Hero {
-    pub fn new(
-        base_stats: BaseStats,
-        attributes: Attributes,
-        aion_capacity: i32,
-        aion_collected: i32,
-    ) -> Self {
+    pub fn new(hp: i32, strength: i32, dexterity: i32, class: Class) -> Self {
         Self {
             id: None,
             name: Self::generate_hero_name(),
-            base_stats,
-            inventory: None,
-            attributes,
-            retinue_slots: vec![],
-            aion_capacity,
+            hp,
+            class,
+            level: 1,
+            strength,
+            armor: 1,
+            dexterity,
+            intelligence: 7,
             resources: Resource::randomize_amounts(),
-            stamina: 100,
-            stamina_max: 100,
-            stamina_regen_rate: 1,
-            last_stamina_regeneration_time: None,
-            talents: vec![],
+            crafting: 20,
+            stamina: Stamina::new(),
+            explore: 15,
             decks: None,
+            spells: vec![],
         }
     }
 
+    pub fn active_deck(&self) -> Deck {
+        self.decks
+            .as_ref()
+            .unwrap()
+            .into_iter()
+            .find(|deck| deck.active)
+            .unwrap()
+            .clone()
+    }
+
     pub fn to_combatant(&self) -> HeroCombatant {
-        HeroCombatant::new(
-            self.id.clone().unwrap(),
-            self.name.clone(),
-            self.base_stats.clone(),
-            self.attributes.clone(),
-            self.inventory.clone().unwrap(),
-            self.decks
-                .as_ref()
-                .unwrap()
-                .into_iter()
-                .find(|deck| deck.active)
-                .unwrap()
-                .clone(),
-            0,
-        )
+        HeroCombatant::new(self.clone(), self.active_deck())
     }
 
     pub fn level(&self) -> i32 {
-        self.base_stats.level
+        self.level
     }
 
     pub fn regenerate_stamina(&mut self, res: &ActionCompleted) {
         let now = Utc::now();
 
         // Calculate seconds since last update only if last_stamina_regeneration_time is Some
-        if let Some(last_regeneration_time) = self.last_stamina_regeneration_time {
+        if let Some(last_regeneration_time) = self.stamina.last_regen_time {
             let seconds = now
                 .signed_duration_since(last_regeneration_time)
                 .num_seconds() as i32;
 
-            let stamina_to_add =
-                ((seconds as f64) * (self.stamina_regen_rate as f64 / 100.0)).round() as i32;
+            let stamina_to_add = ((seconds as f64)
+                * (Hero::calculate_stamina_regen_rate(self.level.clone(), self.intelligence.clone())
+                    as f64
+                    / 100.0))
+                .round() as i32;
 
             // Add to self.stamina only if it is less than self.stamina_max
-            if self.stamina + stamina_to_add < self.stamina_max {
-                self.stamina += stamina_to_add;
+            if self.stamina.amount + stamina_to_add < self.stamina.capacity {
+                self.stamina.amount += stamina_to_add;
             } else {
-                self.stamina = self.stamina_max;
+                self.stamina.amount = self.stamina.capacity;
             }
         } else {
             // This is the first time we're regenerating stamina, so no need to add anything yet
@@ -117,17 +110,11 @@ impl Hero {
         }
 
         // Update the last stamina regeneration time to now, regardless of whether we regenerated stamina
-        self.last_stamina_regeneration_time = Some(now);
+        self.stamina.last_regen_time = Some(now);
     }
 
     pub fn deduct_stamina(&mut self, stamina: i32) {
-        self.stamina -= stamina;
-    }
-
-    pub fn deduct_shards(&mut self, cost: &i32) {
-        self.resources
-            .entry(Resource::StormShard)
-            .and_modify(|r| *r -= cost);
+        self.stamina.amount -= stamina;
     }
 
     // adds the loot onto the hero struct
@@ -135,14 +122,12 @@ impl Hero {
         match loot {
             TaskLootBox::Region(result) => {
                 let xp = result.xp;
-                self.gain_experience(xp);
                 // find the resource enum type in the  self.resources and increase the amount by result.resources
                 self.add_resources(result.resources);
             }
             TaskLootBox::Channel(result) => {
                 let hero_id = result.hero_id.clone();
                 let xp = result.xp;
-                self.gain_experience(xp);
                 self.gain_stamina(result.stamina_gained);
                 self.add_resources(result.resources);
             }
@@ -151,7 +136,6 @@ impl Hero {
             }
             TaskLootBox::Raid(result) => {
                 self.add_resources(result.resources);
-                self.gain_experience(result.xp);
             }
         }
     }
@@ -169,7 +153,6 @@ impl Hero {
         match loot_box {
             TaskLootBox::Region(result) => {
                 let xp = result.xp;
-                self.gain_experience(xp);
             }
             TaskLootBox::Channel(result) => {
                 let hero_id = result.hero_id.clone();
@@ -208,72 +191,6 @@ impl Hero {
         let timeout_duration = ActionDurations::timeouts(action_name);
         timeout_duration
     }
-
-    pub fn level_calculator(xp: i32) -> i32 {
-        let levels_1_10: [i32; 10] = [0, 200, 700, 1600, 3000, 5000, 7700, 10500, 13800, 17600];
-
-        let levels_10_20_increase = 1500;
-        let mut cumulative_xp = levels_1_10[9];
-        let mut levels_10_20: [i32; 10] = [0; 10];
-        for i in 0..10 {
-            cumulative_xp += levels_10_20_increase;
-            levels_10_20[i] = cumulative_xp;
-        }
-
-        let levels_20_30_increase = 2500;
-        let mut levels_20_30: [i32; 10] = [0; 10];
-        for i in 0..10 {
-            cumulative_xp += levels_20_30_increase;
-            levels_20_30[i] = cumulative_xp;
-        }
-
-        let levels_30_40_increase = 5000;
-        let mut levels_30_40: [i32; 10] = [0; 10];
-        for i in 0..10 {
-            cumulative_xp += levels_30_40_increase;
-            levels_30_40[i] = cumulative_xp;
-        }
-
-        let levels_40_50_increase = 10000;
-        let mut levels_40_50: [i32; 10] = [0; 10];
-        for i in 0..10 {
-            cumulative_xp += levels_40_50_increase;
-            levels_40_50[i] = cumulative_xp;
-        }
-
-        let levels_50_60: [i32; 10] = [
-            cumulative_xp + 250000,
-            cumulative_xp + 600000,
-            cumulative_xp + 1050000,
-            cumulative_xp + 1600000,
-            cumulative_xp + 2250000,
-            cumulative_xp + 3000000,
-            cumulative_xp + 3850000,
-            cumulative_xp + 4800000,
-            cumulative_xp + 5850000,
-            cumulative_xp + 7050000,
-        ];
-
-        let level_thresholds: [i32; 60] = [
-            levels_1_10,
-            levels_10_20,
-            levels_20_30,
-            levels_30_40,
-            levels_40_50,
-            levels_50_60,
-        ]
-        .concat()
-        .try_into()
-        .unwrap();
-
-        for (level, &threshold) in level_thresholds.iter().enumerate() {
-            if xp < threshold {
-                return level as i32;
-            }
-        }
-
-        60 // If XP is beyond the last threshold, return 60}
-    }
 }
 
 impl Hero {
@@ -282,38 +199,39 @@ impl Hero {
     }
 
     pub fn level_up(&mut self) {
-        self.base_stats.level += 1;
+        self.level += 1;
         // Update other stats as per your game logic
-    }
-
-    pub fn gain_experience(&mut self, xp: i32) {
-        self.base_stats.xp += xp;
-        // Check for level up
     }
 
     pub fn gain_stamina(&mut self, stamina: i32) {
         // add stamina up to stamina_max
-        if self.stamina + stamina > self.stamina_max {
-            self.stamina = self.stamina_max;
+        if self.stamina.amount + stamina > self.stamina.capacity {
+            self.stamina.amount = self.stamina.capacity;
             return;
         }
-        self.stamina += stamina;
+        self.stamina.amount += stamina;
     }
 
-    pub fn equip(&mut self, item: Item) {
-        if let Some(inv) = &mut self.inventory {
-            inv.active.push(item);
-        }
+    // smooth curve to level 60
+
+    fn adjusted_logarithmic_function(x: i32, attribute: i32) -> i32 {
+        // Ensure attribute is within the valid range
+        let attribute = attribute.clamp(1, 15) as f64;
+
+        let x_transformed = (x as f64) / 60.0;
+        let base_value = 1.5 + 7.5 * ((1.0 + 9.0 * x_transformed).ln() / 10.0_f64.ln());
+
+        // Calculate the attribute multiplier
+        let intelligence_boost = 1.0 + 0.35 * ((attribute - 1.0) / 14.0);
+
+        // Apply the attribute multiplier
+        let result = base_value * intelligence_boost;
+
+        result.round() as i32
     }
 
-    pub fn equip_backpack(&mut self, item: Item) {
-        if let Some(inv) = &mut self.inventory {
-            inv.backpack.push(item);
-        }
-    }
-
-    pub fn assign_follower(&mut self, slot: RetinueSlot) {
-        self.retinue_slots.push(slot);
+    pub fn calculate_stamina_regen_rate(level: i32, intelligence: i32) -> i32 {
+        Hero::adjusted_logarithmic_function(level, intelligence)
     }
 
     fn generate_hero_name() -> String {
@@ -361,66 +279,6 @@ impl Hero {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub struct BaseStats {
-    pub id: Option<String>,
-    pub level: i32,
-    pub xp: i32,
-    pub damage: Range<i32>,
-    pub hit_points: i32,
-    pub armor: i32,
-    pub resilience: i32,
-}
-
-#[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
-pub struct Attributes {
-    pub id: Option<String>,
-    pub strength: i32,
-    pub agility: i32,
-    pub intelligence: i32,
-    pub exploration: i32,
-    pub crafting: i32,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct AttributeModifier {
-    attribute: Attributes,
-    // which attribute this modifier affects
-    change: i32, // positive for increase, negative for decrease
-}
-
-#[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
-pub struct Inventory {
-    pub hero_id: String,
-    pub active: Vec<Item>,
-    pub backpack: Vec<Item>,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-pub enum RetinueSlot {
-    Mage(Follower),
-    Warrior(Follower),
-    Priest(Follower),
-    Ranger(Follower),
-    Alchemist(Follower),
-}
-
-#[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
-pub struct Follower {
-    pub name: String,
-    pub level: i32,
-    pub bonus_attributes: Attributes,
-    pub talents: Vec<Talent>,
-}
-
-#[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
-pub struct Item {
-    pub id: String,
-    pub name: String,
-    pub weight: i32,
-    pub value: i32,
-}
-
 #[derive(Clone, Debug, PartialEq, Default, Deserialize, Serialize)]
 pub struct Range<T> {
     pub min: T,
@@ -437,27 +295,8 @@ impl From<hero::Data> for Hero {
     fn from(data: hero::Data) -> Self {
         // Unwrapping the Option values and converting the data from each field
         // If the field is None, we provide a default value using the Default trait
-        let base_stats = match data.base_stats {
-            Some(bs) => (*bs).into(),     // Convert from base_stats::Data to BaseStats
-            None => BaseStats::default(), // Provide a default value
-        };
 
-        let attributes = match data.attributes {
-            Some(attr) => (*attr).into(), // Convert from attributes::Data to Attributes
-            None => Attributes::default(), // Provide a default value
-        };
-
-        let inventory = match data.inventory {
-            Some(inv) => (*inv).into(),   // Convert from inventory::Data to Inventory
-            None => Inventory::default(), // Provide a default value
-        };
-
-        let retinue_slots = match data.retinue_slots {
-            Some(rslots) => rslots.into_iter().map(RetinueSlot::from).collect(),
-            None => vec![],
-        };
-
-        let resources = if let Some(resources) = &data.resources {
+        let resources = if let Some(resources) = &data.hero_resources {
             // Check if any resource is None
             if resources.iter().any(|r| r.resource.is_none()) {
                 HashMap::new()
@@ -473,25 +312,27 @@ impl From<hero::Data> for Hero {
             HashMap::new()
         };
 
-        // let deck = data.deck.and_then(|data| data).map(|boxed| (*boxed).into());
-
         Self {
             id: Some(data.id),
             name: data.name,
-            base_stats,
-            attributes,
-            inventory: Some(inventory),
-            retinue_slots,
-            aion_capacity: data.aion_capacity,
-            stamina: data.stamina,
-            stamina_max: data.stamina_max,
-            stamina_regen_rate: data.stamina_regen_rate,
+            class: data.class,
+            hp: data.hp,
+            level: data.level,
+            strength: data.strength,
+            armor: data.armor,
+            intelligence: data.intelligence,
+            dexterity: data.dexterity,
+            explore: data.explore,
+            crafting: data.crafting,
+            spells: data.hero_spells.map_or(vec![], |spells| {
+                spells
+                    .into_iter()
+                    .map(|spell| Spell::from(spell))
+                    .collect::<Vec<Spell>>()
+            }),
+            stamina: data.stamina.into(),
             resources,
-            last_stamina_regeneration_time: convert_to_utc(data.last_stamina_regeneration_time),
-            talents: match data.hero_talents {
-                Some(talents) => talents.into_iter().map(Talent::from).collect(),
-                None => vec![],
-            },
+
             decks: None, // we fill in the deck manually
         }
     }
@@ -506,119 +347,50 @@ pub fn convert_to_fixed_offset(dt: Option<DateTime<Utc>>) -> Option<DateTime<Fix
     dt.map(|datetime| datetime.with_timezone(&FixedOffset::east(0)))
 }
 
-impl From<base_stats::Data> for BaseStats {
-    fn from(data: base_stats::Data) -> Self {
-        Self {
-            id: Some(data.id),
-            level: Hero::level_calculator(data.xp),
-            xp: data.xp,
-            damage: Range {
-                min: data.damage_min,
-                max: data.damage_max,
-            },
-            hit_points: data.hit_points,
-            armor: data.armor,
-            resilience: data.resilience,
-        }
-    }
-}
-
-impl From<attributes::Data> for Attributes {
-    fn from(data: attributes::Data) -> Self {
-        Self {
-            id: Some(data.id),
-            strength: data.strength,
-            agility: data.agility,
-            intelligence: data.intelligence,
-            exploration: data.exploration,
-            crafting: data.crafting,
-        }
-    }
-}
-
-impl From<item::Data> for Item {
-    fn from(data: item::Data) -> Self {
-        Item {
-            id: data.id,
-            name: data.name,
-            weight: data.weight,
-            value: data.value,
-        }
-    }
-}
-
-impl From<inventory::Data> for Inventory {
-    fn from(data: inventory::Data) -> Self {
-        let active = data
-            .active
-            .unwrap_or_else(Vec::new)
-            .into_iter()
-            .map(Item::from)
-            .collect();
-
-        let backpack = data
-            .backpack
-            .unwrap_or_else(Vec::new)
-            .into_iter()
-            .map(Item::from)
-            .collect();
-        Inventory {
-            hero_id: data.id,
-            active,
-            backpack,
-        }
-    }
-}
-
-impl From<follower::Data> for Follower {
-    fn from(data: follower::Data) -> Self {
-        let attributes = match data.attributes {
-            Some(attr) => (*attr).into(), // Convert from prisma::attributes::Data to Attributes
-            None => Attributes::default(), // Provide a default value
-        };
-
-        Self {
-            name: data.name,
-            level: data.level,
-            bonus_attributes: attributes,
-            talents: match data.follower_talents {
-                Some(talents) => talents.into_iter().map(Talent::from).collect(),
-                None => vec![],
-            },
-        }
-    }
-}
-
-impl From<retinue_slot::Data> for RetinueSlot {
-    fn from(data: retinue_slot::Data) -> Self {
-        let follower = data
-            .follower
-            .and_then(|f| f) // This line is used to flatten Option<Option<T>> to Option<T>
-            .map(|f| (*f).into()) // Convert prisma::follower::Data to Follower
-            .unwrap_or_default(); // Provide a default Follower if None
-
-        match data.slot_type.as_str() {
-            "Mage" => RetinueSlot::Mage(follower),
-            "Warrior" => RetinueSlot::Warrior(follower),
-            "Priest" => RetinueSlot::Priest(follower),
-            "Ranger" => RetinueSlot::Ranger(follower),
-            "Alchemist" => RetinueSlot::Alchemist(follower),
-            _ => panic!("Invalid slot type!"), // Handle invalid slot_type appropriately
-        }
-    }
-}
-
 impl From<hero_resource::Data> for Resource {
     fn from(data: hero_resource::Data) -> Self {
         if let Some(resource_data) = data.resource {
             match resource_data.r#type {
-                ResourceEnum::Aion => Resource::Aion,
-                ResourceEnum::Valor => Resource::Valor,
-                ResourceEnum::NexusOrb => Resource::NexusOrb,
-                ResourceEnum::StormShard => Resource::StormShard,
+                ResourcePrisma::Aion => Resource::Aion,
+                ResourcePrisma::Gem => Resource::Gem,
+                ResourcePrisma::Flux => Resource::Flux,
             }
         } else {
             panic!("Invalid resource type!")
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct Stamina {
+    pub capacity: i32,
+    pub amount: i32,
+    pub regen_rate: i32,
+    pub last_regen_time: Option<DateTime<Utc>>,
+}
+
+impl Stamina {
+    pub fn new() -> Self {
+        Self {
+            capacity: 100,
+            amount: 100,
+            regen_rate: 1,
+            last_regen_time: None,
+        }
+    }
+}
+
+impl From<Option<Box<stamina::Data>>> for Stamina {
+    fn from(data: Option<Box<stamina::Data>>) -> Self {
+        if let Some(data) = data {
+            Self {
+                capacity: data.capacity,
+                amount: data.amount,
+                regen_rate: data.regen_rate,
+                last_regen_time: convert_to_utc(Some(data.last_regen_time)),
+            }
+        } else {
+            Stamina::new()
         }
     }
 }

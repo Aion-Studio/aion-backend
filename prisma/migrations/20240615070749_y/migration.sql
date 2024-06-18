@@ -2,13 +2,13 @@
 CREATE TYPE "Class" AS ENUM ('Fighter', 'Ranger', 'Wizard');
 
 -- CreateEnum
-CREATE TYPE "EffectType" AS ENUM ('Heal', 'Damage', 'Buff', 'Debuff', 'ApplySpell');
+CREATE TYPE "EffectType" AS ENUM ('Heal', 'Damage', 'Buff', 'Debuff');
 
 -- CreateEnum
 CREATE TYPE "Resource" AS ENUM ('Aion', 'Flux', 'Gem');
 
 -- CreateEnum
-CREATE TYPE "TargetType" AS ENUM ('Opponent', 'Self');
+CREATE TYPE "TargetType" AS ENUM ('Opponent', 'Itself');
 
 -- CreateEnum
 CREATE TYPE "Nation" AS ENUM ('Dusane', 'Aylen', 'Ironmark', 'Kelidor', 'Meta');
@@ -30,7 +30,7 @@ CREATE TABLE "Account" (
 CREATE TABLE "Hero" (
     "id" TEXT NOT NULL,
     "class" "Class" NOT NULL,
-    "hitpoints" INTEGER NOT NULL,
+    "hp" INTEGER NOT NULL,
     "strength" INTEGER NOT NULL,
     "dexterity" INTEGER NOT NULL,
     "intelligence" INTEGER NOT NULL,
@@ -56,7 +56,7 @@ CREATE TABLE "RelicEffect" (
     "id" TEXT NOT NULL,
     "type" "EffectType" NOT NULL,
     "value" INTEGER NOT NULL,
-    "target" TEXT NOT NULL,
+    "target" "TargetType" NOT NULL,
     "duration" INTEGER,
     "relicId" TEXT NOT NULL,
 
@@ -64,14 +64,34 @@ CREATE TABLE "RelicEffect" (
 );
 
 -- CreateTable
+CREATE TABLE "HeroSpell" (
+    "id" TEXT NOT NULL,
+    "slot" INTEGER NOT NULL,
+    "heroId" TEXT NOT NULL,
+    "spellId" TEXT NOT NULL,
+
+    CONSTRAINT "HeroSpell_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Spell" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "slot" INTEGER NOT NULL,
     "level" INTEGER NOT NULL,
-    "heroId" TEXT NOT NULL,
+    "duration" INTEGER,
 
     CONSTRAINT "Spell_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SpellEffect" (
+    "id" TEXT NOT NULL,
+    "value" INTEGER NOT NULL,
+    "target" "TargetType" NOT NULL,
+    "effect" "EffectType" NOT NULL,
+    "spellId" TEXT,
+
+    CONSTRAINT "SpellEffect_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -210,11 +230,23 @@ CREATE TABLE "Npc" (
 CREATE TABLE "Card" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
+    "class" "Class" NOT NULL,
     "cost" INTEGER NOT NULL,
-    "effects" TEXT NOT NULL,
+    "imgUrl" TEXT NOT NULL,
 
     CONSTRAINT "Card_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CardEffect" (
+    "id" TEXT NOT NULL,
+    "efffectType" "EffectType" NOT NULL,
+    "value" INTEGER NOT NULL,
+    "target" "TargetType" NOT NULL,
+    "duration" INTEGER,
+    "cardId" TEXT NOT NULL,
+
+    CONSTRAINT "CardEffect_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -283,7 +315,13 @@ ALTER TABLE "Relic" ADD CONSTRAINT "Relic_heroId_fkey" FOREIGN KEY ("heroId") RE
 ALTER TABLE "RelicEffect" ADD CONSTRAINT "RelicEffect_relicId_fkey" FOREIGN KEY ("relicId") REFERENCES "Relic"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Spell" ADD CONSTRAINT "Spell_heroId_fkey" FOREIGN KEY ("heroId") REFERENCES "Hero"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "HeroSpell" ADD CONSTRAINT "HeroSpell_heroId_fkey" FOREIGN KEY ("heroId") REFERENCES "Hero"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HeroSpell" ADD CONSTRAINT "HeroSpell_spellId_fkey" FOREIGN KEY ("spellId") REFERENCES "Spell"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SpellEffect" ADD CONSTRAINT "SpellEffect_spellId_fkey" FOREIGN KEY ("spellId") REFERENCES "Spell"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "HeroResource" ADD CONSTRAINT "HeroResource_hero_id_fkey" FOREIGN KEY ("hero_id") REFERENCES "Hero"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -332,6 +370,9 @@ ALTER TABLE "Leyline" ADD CONSTRAINT "Leyline_RegionName_fkey" FOREIGN KEY ("Reg
 
 -- AddForeignKey
 ALTER TABLE "Leyline" ADD CONSTRAINT "Leyline_npcId_fkey" FOREIGN KEY ("npcId") REFERENCES "Npc"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CardEffect" ADD CONSTRAINT "CardEffect_cardId_fkey" FOREIGN KEY ("cardId") REFERENCES "Card"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "HeroCard" ADD CONSTRAINT "HeroCard_heroId_fkey" FOREIGN KEY ("heroId") REFERENCES "Hero"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

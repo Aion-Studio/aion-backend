@@ -44,7 +44,6 @@ impl CostHandler {
                         .get_quest_by_id(quest_id.clone())
                         .await
                         .unwrap();
-                    hero.deduct_shards(&quest.cost);
 
                     update_hero_db(hero).await;
                 });

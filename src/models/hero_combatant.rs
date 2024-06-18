@@ -6,46 +6,32 @@ use serde::{Deserialize, Serialize};
 use crate::events::combat::CombatError;
 use crate::models::cards::{Card, Deck};
 use crate::models::combatant::Combatant;
-use crate::models::hero::{Attributes, BaseStats, Inventory, Range};
-use crate::models::talent::Talent;
-use crate::prisma::DamageType;
+
+use super::hero::Hero;
+use super::talent::Spell;
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HeroCombatant {
     id: String,
-    name: String,
-    pub base_stats: BaseStats,
-    pub attributes: Attributes,
-    pub inventory: Inventory,
-    pub deck: Deck,
-    pub mana: i32,
+    mana: i32,
+    hero: Hero,
     cards_in_discard: Vec<Card>,
     cards_in_hand: Vec<Card>,
-    talents: Vec<Talent>,
+    deck: Deck,
+    gauge: i32,
 }
 
 impl HeroCombatant {
-    pub fn new(
-        id: String,
-        name: String,
-        base_stats: BaseStats,
-        attributes: Attributes,
-        inventory: Inventory,
-        deck: Deck,
-        mana: i32,
-    ) -> Self {
+    pub fn new(hero: Hero, deck: Deck) -> Self {
         HeroCombatant {
-            id,
-            name,
-            base_stats,
-            attributes,
-            inventory,
-            deck,
-            mana,
+            id: hero.id.clone().unwrap(),
+            hero,
             cards_in_discard: vec![],
             cards_in_hand: vec![],
-            talents: vec![],
+            deck,
+            mana: 0,
+            gauge: 0,
         }
     }
 }
@@ -55,55 +41,39 @@ impl Combatant for HeroCombatant {
     }
 
     fn get_name(&self) -> &str {
-        &self.name
+        &self.hero.name
     }
     fn get_hp(&self) -> i32 {
-        self.base_stats.hit_points
+        self.hero.hp
     }
 
     fn get_damage(&self) -> i32 {
-        self.base_stats.damage.roll()
+        self.hero.strength
+    }
+
+    fn get_spells(&self) -> Vec<Spell> {
+        self.hero.spells.clone()
+    }
+
+    fn get_armor(&self) -> i32 {
+        self.hero.armor
+    }
+
+    fn get_level(&self) -> i32 {
+        self.hero.level
+    }
+
+    fn take_damage(&mut self, damage: i32) {
+        self.hero.hp = max(0, self.hero.hp - damage);
     }
 
     fn get_mana(&self) -> i32 {
         self.mana
     }
-    fn get_talents(&self) -> &Vec<Talent> {
-        &self.talents
-    }
 
-    fn get_damage_stats(&self) -> Range<i32> {
-        self.base_stats.damage.clone()
-    }
-
-    fn get_armor(&self) -> i32 {
-        self.base_stats.armor
-    }
-
-    fn get_level(&self) -> i32 {
-        self.base_stats.level
-    }
-
-    fn take_damage(&mut self, damage: i32, damage_type: DamageType) {
-        match damage_type {
-            DamageType::Physical => {
-                let diff = damage - self.base_stats.armor;
-                self.base_stats.armor = max(0, self.base_stats.armor - damage);
-                if diff > 0 {
-                    self.base_stats.hit_points -= diff;
-                }
-            }
-            DamageType::Spell => {
-                let diff = damage - self.base_stats.resilience;
-                self.base_stats.resilience = max(0, self.base_stats.resilience - damage);
-                if diff > 0 {
-                    self.base_stats.hit_points -= diff;
-                }
-            }
-            DamageType::Chaos => {
-                self.base_stats.hit_points -= damage;
-            }
-        }
+    fn add_mana(&mut self) {
+        // NOTE: eventually this will be a variable
+        self.mana += 3;
     }
 
     fn shuffle_deck(&mut self) {
@@ -120,8 +90,9 @@ impl Combatant for HeroCombatant {
         deck.cards_in_deck.shuffle(&mut rng);
     }
 
-    fn draw_cards(&mut self, num_cards: i32) {
-        if self.deck.cards_in_deck.len() < num_cards as usize {
+    fn draw_cards(&mut self) {
+        let num_cards_to_draw = 5; // NOTE: evenutally effects can make this a variable
+        if self.deck.cards_in_deck.len() < num_cards_to_draw as usize {
             self.shuffle_deck();
         }
         if self.deck.cards_in_deck.is_empty() {
@@ -131,7 +102,7 @@ impl Combatant for HeroCombatant {
             &mut self
                 .deck
                 .cards_in_deck
-                .drain(0..num_cards as usize)
+                .drain(0..num_cards_to_draw as usize)
                 .collect::<Vec<Card>>(),
         );
     }
@@ -140,19 +111,13 @@ impl Combatant for HeroCombatant {
         self.cards_in_discard.push(card);
     }
     /// Sets the hero's mana to the amount
-    fn add_mana(&mut self, mana: i32) {
-        self.mana = mana;
-    }
 
-    fn spend_mana(&mut self, mana: i32) {
-        self.mana -= mana;
+    fn spend_mana(&mut self, energy: i32) {
+        self.mana -= energy;
     }
 
     fn get_hand(&self) -> &Vec<Card> {
         &self.cards_in_hand
-    }
-    fn get_resilience(&self) -> i32 {
-        self.base_stats.resilience
     }
 
     fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {

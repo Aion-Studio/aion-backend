@@ -1,13 +1,54 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tracing::error;
 
-use crate::prisma::{
-    follower_talent, hero_talent,
-    talent::{self},
-};
+use crate::prisma::{hero_spell, EffectType, TargetType};
 
-use super::{hero::BaseStats, resources::Resource};
+use super::resources::Resource;
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Spell {
+    pub id: String,
+    pub name: String,
+    pub level: i32,
+    pub duration: i32,
+    pub effects: Vec<SpellEffect>,
+}
+
+impl From<hero_spell::Data> for Spell {
+    fn from(data: hero_spell::Data) -> Self {
+        let spell_unwrapped = match data.spell.flatten() {
+            Some(spell) => *spell,
+            None => panic!("Spell data is missing"),
+        };
+        let effects: Vec<SpellEffect> = spell_unwrapped.effects().map_or(vec![], |effects| {
+            effects
+                .iter()
+                .map(|effect| SpellEffect {
+                    id: effect.id.clone(),
+                    value: effect.value.clone(),
+                    target: effect.target.clone(),
+                    effect: effect.effect.clone(),
+                })
+                .collect()
+        });
+
+        Self {
+            id: spell_unwrapped.id,
+            name: spell_unwrapped.name.clone(),
+            level: spell_unwrapped.level,
+            duration: spell_unwrapped.duration.unwrap(),
+            effects,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpellEffect {
+    pub id: String,
+    pub value: i32,
+    pub target: TargetType,
+    pub effect: EffectType,
+}
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Talent {
@@ -18,74 +59,6 @@ pub struct Talent {
     pub effects: Vec<Effect>,
 }
 
-impl From<hero_talent::Data> for Talent {
-    fn from(data: hero_talent::Data) -> Self {
-        let talent = match data.talent {
-            Some(talent) => talent,
-            None => Box::new(talent::Data {
-                hero_talents: None,
-                follower_talents: None,
-
-                id: "".to_string(),
-                name: "".to_string(),
-                description: Some("".to_string()),
-                cooldown: 0,
-                effects: json!({}),
-            }),
-        };
-        Talent {
-            id: talent.id,
-            name: talent.name,
-            description: match talent.description {
-                Some(description) => description,
-                None => "".to_string(),
-            },
-            cooldown: talent.cooldown,
-            effects: match effects_from_json(&talent.effects) {
-                Ok(effects) => effects,
-                Err(e) => {
-                    error!("Error deserializing talent effects: {}", e);
-                    vec![]
-                }
-            },
-        }
-    }
-}
-
-impl From<follower_talent::Data> for Talent {
-    fn from(data: follower_talent::Data) -> Self {
-        let talent = match data.talent {
-            Some(talent) => talent,
-            None => Box::new(talent::Data {
-                hero_talents: None,
-                follower_talents: None,
-
-                id: "".to_string(),
-                name: "".to_string(),
-                description: Some("".to_string()),
-                cooldown: 0,
-                effects: json!({}),
-            }),
-        };
-        Talent {
-            id: talent.id,
-            name: talent.name,
-            description: match talent.description {
-                Some(description) => description,
-                None => "".to_string(),
-            },
-            cooldown: talent.cooldown,
-            effects: match effects_from_json(&talent.effects) {
-                Ok(effects) => effects,
-                Err(e) => {
-                    error!("Error deserializing talent effects: {}", e);
-                    vec![]
-                }
-            },
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum Effect {
     // Damage Effects
@@ -94,7 +67,6 @@ pub enum Effect {
     PercentageDamage(f32),    // Percentage of the target's maximum health to inflict as damage
 
     // Stat Manipulation Effects
-    ModifyStat(BaseStats, i32, i32), // The stat to modify, amount to change (positive or negative), duration in turns
 
     // Crowd Control Effects
     Stun,    // Enemy misses their next turn
@@ -127,30 +99,6 @@ pub enum ActionSource {
     Follower,
 }
 
-// fn serialize_effect(effect: &Effect) -> Value {
-//     match effect {
-//         Effect::Damage(amount) => json!({"type": "Damage", "amount": amount}),
-//         // Add cases for other variants
-//         _ => json!({}), // Placeholder for unimplemented variants
-//     }
-// }
-//
-// // Function to deserialize JSON to an Effect (outline)
-// fn deserialize_effect(value: &Value) -> Result<Effect, String> {
-//     let obj = value.as_object().ok_or("Expected a JSON object")?;
-//     match obj.get("type").and_then(Value::as_str) {
-//         Some("Damage") => {
-//             let amount = obj
-//                 .get("amount")
-//                 .and_then(Value::as_i64)
-//                 .ok_or("Expected amount")?;
-//             Ok(Effect::Damage(amount as i32))
-//         }
-//         // Add cases for other variants
-//         _ => Err("Unknown effect type".to_string()),
-//     }
-// }
-
 // Effect -> JSON
 fn effect_to_json(effect: &Effect) -> Value {
     match effect {
@@ -175,12 +123,7 @@ fn effect_to_json(effect: &Effect) -> Value {
             "type": "PercentageDamage",
             "percentage": percentage
         }),
-        Effect::ModifyStat(stat, amount, duration) => json!({
-            "type": "ModifyStat",
-            "stat": format!("{:?}", stat), // Assuming BaseStats has Serialize
-            "amount": amount,
-            "duration": duration
-        }),
+
         Effect::Stun => json!({ "type": "Stun" }),
         Effect::Silence => json!({ "type": "Silence" }),
         // ... Similar for Root, Disarm ...
@@ -251,18 +194,7 @@ fn effect_from_json(json_value: &Value) -> Result<Effect, String> {
             Ok(Effect::PercentageDamage(percentage))
         }
         "ModifyStat" => {
-            let stat: BaseStats = serde_json::from_value(json_value["stat"].clone())
-                .map_err(|e| format!("Error deserializing 'stat': {}", e))?;
-            let amount = json_value
-                .get("amount")
-                .and_then(|a| a.as_i64())
-                .ok_or("Invalid 'amount' for ModifyStat effect")? as i32;
-            let duration = json_value
-                .get("duration")
-                .and_then(|d| d.as_i64())
-                .ok_or("Invalid 'duration' for ModifyStat effect")?
-                as i32;
-            Ok(Effect::ModifyStat(stat, amount, duration))
+            todo!()
         }
         "Stun" => Ok(Effect::Stun),
         "Silence" => Ok(Effect::Silence),

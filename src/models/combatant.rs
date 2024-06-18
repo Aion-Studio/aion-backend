@@ -4,10 +4,8 @@ use std::fmt::Formatter;
 
 use crate::events::combat::CombatError;
 use crate::models::cards::Card;
-use crate::models::hero::Range;
-use crate::prisma::DamageType;
 
-use super::talent::Talent;
+use super::talent::Spell;
 
 // pub trait Combatant: Send + Sync {
 pub trait Combatant: CloneBoxCombatant + Send + Sync {
@@ -16,20 +14,18 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn get_hp(&self) -> i32;
     fn get_damage(&self) -> i32;
     fn get_mana(&self) -> i32;
-    fn get_talents(&self) -> &Vec<Talent>;
-    fn get_damage_stats(&self) -> Range<i32>;
+    fn get_spells(&self) -> Vec<Spell>;
 
     fn get_armor(&self) -> i32;
-    fn get_resilience(&self) -> i32;
     fn get_level(&self) -> i32;
 
     // fn attack(&self, other: &mut dyn Combatant);
-    fn take_damage(&mut self, amount: i32, damage_type: DamageType);
+    fn take_damage(&mut self, amount: i32);
     fn shuffle_deck(&mut self);
-    fn draw_cards(&mut self, num_cards: i32); // goes from deck to hand
+    fn draw_cards(&mut self); // goes from deck to hand
     fn add_to_discard(&mut self, card: Card);
     /// Sets the hero's mana to the amount
-    fn add_mana(&mut self, mana: i32);
+    fn add_mana(&mut self);
     fn spend_mana(&mut self, mana: i32);
     fn get_hand(&self) -> &Vec<Card>;
     /// Removes a card from hand.

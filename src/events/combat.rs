@@ -3,9 +3,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
-use crate::events::combat::CombatantIndex::Combatant1;
 use crate::models::card_effect::{ActiveEffect, ActiveEffectType};
-use crate::models::cards::{Card, CardType};
+use crate::models::cards::Card;
 use crate::models::hero_combatant::HeroCombatant;
 use crate::models::talent::Effect;
 use crate::{
@@ -24,16 +23,18 @@ use tracing::{error, warn};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub enum CombatantIndex {
-    Combatant1,
-    Combatant2,
+    Player,
+    Npc,
 }
+
+use CombatantIndex::*;
+
 type CombatantId = String;
 #[derive(Debug)]
 pub struct CombatEncounter {
     id: String,
-    pub combatant1: Arc<Mutex<dyn Combatant>>,
-    pub combatant2: Arc<Mutex<dyn Combatant>>,
-    pub battle_fields: HashMap<CombatantIndex, Vec<Card>>,
+    pub player_combatant: Arc<Mutex<dyn Combatant>>,
+    pub npc_combatant: Arc<Mutex<dyn Combatant>>,
     pub round: i32,
     pub action_id: Option<String>,
     active_effects: Vec<ActiveEffect>,
@@ -44,22 +45,21 @@ pub struct CombatEncounter {
 }
 
 impl CombatEncounter {
-    pub fn new<T: Combatant + 'static>(hero: HeroCombatant, monster: T) -> Self {
+    pub fn new<T: Combatant + 'static>(hero: HeroCombatant, npc: T) -> Self {
         let hero_hp = hero.get_hp();
-        let monster_hp = monster.get_hp();
-        let combatant1 = Arc::new(Mutex::new(hero));
-        let combatant2 = Arc::new(Mutex::new(monster));
-        combatant1.lock().unwrap().add_mana(1);
-        combatant2.lock().unwrap().add_mana(1);
+        let monster_hp = npc.get_hp();
+        let player_combatant = Arc::new(Mutex::new(hero));
+        let npc_combatant = Arc::new(Mutex::new(npc));
+        player_combatant.lock().unwrap().add_mana(1);
+        npc_combatant.lock().unwrap().add_mana(1);
 
         CombatEncounter {
             id: uuid::Uuid::new_v4().to_string(),
-            combatant1,
-            combatant2, // Box the generic monster
-            battle_fields: HashMap::new(),
+            player_combatant,
+            npc_combatant, // Box the generic monster
             active_effects: Vec::new(),
             status_effects: HashMap::new(),
-            current_turn: Combatant1,
+            current_turn: CombatantIndex::Player,
             started: false,
             initial_hps: (hero_hp, monster_hp),
             action_id: None,
@@ -76,14 +76,14 @@ impl CombatEncounter {
 
     pub fn get_combatant_ids(&self) -> Vec<String> {
         vec![
-            self.combatant1.lock().unwrap().get_id(),
-            self.combatant2.lock().unwrap().get_id(),
+            self.player_combatant.lock().unwrap().get_id(),
+            self.npc_combatant.lock().unwrap().get_id(),
         ]
     }
 
     pub fn has_combatant(&self, combatant_id: &str) -> bool {
-        self.combatant1.lock().unwrap().get_id() == combatant_id
-            || self.combatant2.lock().unwrap().get_id() == combatant_id
+        self.player_combatant.lock().unwrap().get_id() == combatant_id
+            || self.npc_combatant.lock().unwrap().get_id() == combatant_id
     }
 
     pub fn whos_turn(&self) -> CombatantIndex {
@@ -95,46 +95,46 @@ impl CombatEncounter {
         is_opponent: Option<bool>,
     ) -> Arc<Mutex<dyn Combatant>> {
         match index {
-            Combatant1 => {
+            Player => {
                 if is_opponent.unwrap_or(false) {
-                    self.combatant2.clone()
+                    self.npc_combatant.clone()
                 } else {
-                    self.combatant1.clone()
+                    self.player_combatant.clone()
                 }
             }
-            CombatantIndex::Combatant2 => {
+            Npc => {
                 if is_opponent.unwrap_or(false) {
-                    self.combatant1.clone()
+                    self.player_combatant.clone()
                 } else {
-                    self.combatant2.clone()
+                    self.npc_combatant.clone()
                 }
             }
         }
     }
 
     pub fn get_combatant_by_id(&self, combatant_id: &str) -> Option<Arc<Mutex<dyn Combatant>>> {
-        let combatant1_id = self.combatant1.lock().unwrap().get_id();
-        if combatant_id == combatant1_id {
-            Some(self.combatant1.clone())
+        let player_combatant_id = self.player_combatant.lock().unwrap().get_id();
+        if combatant_id == player_combatant_id {
+            Some(self.player_combatant.clone())
         } else {
-            Some(self.combatant2.clone())
+            Some(self.npc_combatant.clone())
         }
     }
 
     pub fn get_opponent(&self, combatant_id: &str) -> Arc<Mutex<dyn Combatant>> {
-        let combatant1_id = self.combatant1.lock().unwrap().get_id();
-        if combatant_id == combatant1_id {
-            self.combatant2.clone()
+        let player_combatant_id = self.player_combatant.lock().unwrap().get_id();
+        if combatant_id == player_combatant_id {
+            self.npc_combatant.clone()
         } else {
-            self.combatant1.clone()
+            self.player_combatant.clone()
         }
     }
 
     pub fn get_combatant_idx(&self, combatant_id: &str) -> Option<CombatantIndex> {
-        if combatant_id == self.combatant1.lock().unwrap().get_id() {
-            Some(Combatant1)
-        } else if combatant_id == self.combatant2.lock().unwrap().get_id() {
-            Some(CombatantIndex::Combatant2)
+        if combatant_id == self.player_combatant.lock().unwrap().get_id() {
+            Some(Player)
+        } else if combatant_id == self.npc_combatant.lock().unwrap().get_id() {
+            Some(Npc)
         } else {
             None
         }
@@ -142,82 +142,71 @@ impl CombatEncounter {
 
     // shuffles deck and draws 5 cards
     pub fn initialize(&mut self, combatant_id: &str) -> anyhow::Result<()> {
-        let combatant_idx = self.get_combatant_idx(combatant_id).unwrap();
-        let opponent_idx = match combatant_idx {
-            Combatant1 => CombatantIndex::Combatant2,
-            CombatantIndex::Combatant2 => Combatant1,
-        };
+        let combatant = self.get_combatant(&Player, None);
+        let mut locked = combatant.lock().unwrap();
 
-        for idx in [combatant_idx, opponent_idx] {
-            self.battle_fields.insert(idx.clone(), vec![]); // Initialize battle fields
-            let combatant = self.get_combatant(&idx, None);
-            let mut locked = combatant.lock().unwrap();
-            let num_cards = if self.current_turn == idx { 6 } else { 5 };
-
-            if locked.get_hand().is_empty() {
-                locked.shuffle_deck();
-                locked.draw_cards(num_cards);
-            }
+        if locked.get_hand().is_empty() {
+            locked.shuffle_deck();
+            locked.draw_cards();
         }
         Ok(())
     }
 
     pub fn request_state(&self) -> EncounterState {
         EncounterState {
-            combatant_1: self.combatant1.lock().unwrap().clone_box(),
-            combatant_2: self.combatant2.lock().unwrap().clone_box(),
-            battle_fields: self.battle_fields.clone(),
+            combatant_1: self.player_combatant.lock().unwrap().clone_box(),
+            combatant_2: self.npc_combatant.lock().unwrap().clone_box(),
             turn: self.current_turn.clone(),
             round: self.round,
             active_effects: self.active_effects.clone(),
         }
     }
-    fn handle_attack(
-        &mut self,
-        attacker_idx: CombatantIndex,
-        attacker_id: &str,
-        target_minion_id: &str,
-    ) -> Result<(i32, i32), CombatError> {
-        let defender_idx = match attacker_idx {
-            Combatant1 => CombatantIndex::Combatant2,
-            CombatantIndex::Combatant2 => Combatant1,
-        };
-        // Step 1: Grab and clone the cards from the vectors
-        let (mut attacker_card, mut defender_card) = {
-            let attacker_card = self
-                .find_and_clone_card(&attacker_idx, attacker_id)
-                .ok_or(CombatError::CardNotFound)?;
-
-            let defender_card = self
-                .find_and_clone_card(&defender_idx, target_minion_id)
-                .ok_or(CombatError::CardNotFound)?;
-
-            (attacker_card, defender_card)
-        };
-
-        // saving the numbers before actual attack
-        let defender_damage_taken = (attacker_card.damage).max(0);
-        let attacker_damage_taken = (defender_card.damage).max(0);
-
-        // Step 3: Perform the attack logic on the cloned cards
-        // Assume attack modifies the cards in place;
-        attacker_card.attack(&mut defender_card);
-        // max of 0 and the difference between the health and the damage
-
-        if defender_card.health <= 0 {
-            self.remove_card(&defender_idx, target_minion_id);
-        } else {
-            self.update_card_in_battle_field(&defender_idx, &defender_card)?;
-            // If the defender survives, it counterattacks
-            defender_card.attack(&mut attacker_card);
-            self.update_card_in_battle_field(&attacker_idx, &attacker_card)?;
-            if attacker_card.health <= 0 {
-                self.remove_card(&attacker_idx, attacker_id);
-            }
-        }
-
-        Ok((attacker_damage_taken, defender_damage_taken))
-    }
+    // fn handle_attack(
+    //     &mut self,
+    //     attacker_idx: CombatantIndex,
+    //     attacker_id: &str,
+    //     target_minion_id: &str,
+    // ) -> Result<(i32, i32), CombatError> {
+    //     let defender_idx = match attacker_idx {
+    //         player_combatant => CombatantIndex::npc_combatant,
+    //         CombatantIndex::npc_combatant => player_combatant,
+    //     };
+    //     // Step 1: Grab and clone the cards from the vectors
+    //     let (mut attacker_card, mut defender_card) = {
+    //         let attacker_card = self
+    //             .find_and_clone_card(&attacker_idx, attacker_id)
+    //             .ok_or(CombatError::CardNotFound)?;
+    //
+    //         let defender_card = self
+    //             .find_and_clone_card(&defender_idx, target_minion_id)
+    //             .ok_or(CombatError::CardNotFound)?;
+    //
+    //         (attacker_card, defender_card)
+    //     };
+    //
+    //     // saving the numbers before actual attack
+    //     let defender_damage_taken = (attacker_card.damage).max(0);
+    //     let attacker_damage_taken = (defender_card.damage).max(0);
+    //
+    //     // Step 3: Perform the attack logic on the cloned cards
+    //     // Assume attack modifies the cards in place;
+    //     attacker_card.attack(&mut defender_card);
+    //     // max of 0 and the difference between the health and the damage
+    //
+    //     if defender_card.health <= 0 {
+    //         self.remove_card(&defender_idx, target_minion_id);
+    //     } else {
+    //         self.update_card_in_battle_field(&defender_idx, &defender_card)?;
+    //         // If the defender survives, it counterattacks
+    //         defender_card.attack(&mut attacker_card);
+    //         self.update_card_in_battle_field(&attacker_idx, &attacker_card)?;
+    //         if attacker_card.health <= 0 {
+    //             self.remove_card(&attacker_idx, attacker_id);
+    //         }
+    //     }
+    //
+    //     Ok((attacker_damage_taken, defender_damage_taken))
+    // }
 
     // Utility function to find a card by ID and clone it
     fn find_and_clone_card(&self, idx: &CombatantIndex, card_id: &str) -> Option<Card> {
@@ -275,8 +264,8 @@ impl CombatEncounter {
         use CombatCommand::*;
         let idx = self.get_combatant_idx(combatant_id).unwrap();
         let opponent_idx = match idx {
-            Combatant1 => CombatantIndex::Combatant2,
-            CombatantIndex::Combatant2 => Combatant1,
+            player_combatant => CombatantIndex::Npc,
+            CombatantIndex::Npc => Player,
         };
         let is_valid_turn = self.current_turn == idx;
         if !is_valid_turn {
@@ -284,115 +273,29 @@ impl CombatEncounter {
         }
         let arc = self.get_combatant_by_id(combatant_id).unwrap();
         let result = match cmd.clone() {
-            AttackMinion {
-                attacker,
-                defender_id,
-            } => {
-                let attacker_card = self
-                    .battle_fields
-                    .get_mut(&idx)
-                    .unwrap()
-                    .iter_mut()
-                    .find(|c| c.id == attacker.id)
-                    .unwrap();
-
-                info!(
-                    "Round played check: curr round {:?} attacker played : {:?}",
-                    self.round, attacker_card.round_played
-                );
-                if attacker_card.round_played == self.round
-                    || attacker_card.last_attack_round == Some(self.round)
-                {
-                    warn!("cant attack with just played card");
-                    return Err(CombatError::JustPlayedCardError);
-                }
-                attacker_card.last_attack_round = Some(self.round);
-                self.handle_attack(idx, &attacker.id, &defender_id).map(
-                    |(attacker_damage_taken, defender_damage_taken)| {
-                        CombatTurnMessage::CommandPlayed(AttackExchange {
-                            attacker_damage_taken,
-                            defender_damage_taken,
-                            attacker_id: attacker.id,
-                            defender_id,
-                        })
-                    },
-                )
-            }
             AttackHero(card) => {
-                let can_play = {
-                    let attacker_card = self
-                        .battle_fields
-                        .get_mut(&idx)
-                        .unwrap()
-                        .iter_mut()
-                        .find(|c| c.id == card.id)
-                        .unwrap();
-                    if attacker_card.round_played == self.round {
-                        false
-                    } else {
-                        true
-                    }
-                };
-
-                if !can_play {
-                    return Err(CombatError::JustPlayedCardError);
-                }
-
-                let opponent = self.get_combatant(&idx, Some(true));
-                info!("attacking with card damanage {:?}", card.damage);
-                let mut opponent = opponent.lock().unwrap();
-                opponent.take_damage(card.damage, DamageType::Physical);
-                let attacker_card = self
-                    .battle_fields
-                    .get_mut(&idx)
-                    .unwrap()
-                    .iter_mut()
-                    .find(|c| c.id == card.id)
-                    .unwrap();
-
-                attacker_card.last_attack_round = Some(self.round);
+                // TODO: FIll in
                 Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
             }
             PlayCard(mut card) => {
                 let mut combatant = arc.lock().unwrap();
 
-                if combatant.get_mana() < card.mana_cost {
-                    return Err(CombatError::ManaError);
-                }
-                card.round_played = self.round;
-
-                combatant.play_card(&card)?;
-                combatant.spend_mana(card.mana_cost);
-
-                if card.card_type == CardType::Spell {
-                    self.apply_spell_effects(&card, &idx);
-                    self.battle_fields
-                        .get_mut(&idx)
-                        .unwrap()
-                        .retain(|c| c.id != card.id);
-                    combatant.add_to_discard(card);
-                } else {
-                    info!(
-                        "zzzzz updating battle field for card played {:?} and idx {:?}",
-                        card, idx
-                    );
-                    self.battle_fields.get_mut(&idx).unwrap().push(card);
-                }
+                // TODO FIll in
 
                 drop(combatant);
                 Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
             }
             EndTurn => {
                 self.current_turn = match self.current_turn {
-                    Combatant1 => CombatantIndex::Combatant2,
-                    CombatantIndex::Combatant2 => Combatant1,
+                    player_combatant => CombatantIndex::Npc,
+                    CombatantIndex::Npc => Player,
                 };
 
                 // increment round draws cards for combatant 1, else statement draws for combatant 2
-                if self.current_turn == Combatant1 {
+                if self.current_turn == Player {
                     self.increment_round();
                 } else {
-                    let mutex = self.get_combatant(&CombatantIndex::Combatant2, None);
+                    let mutex = self.get_combatant(&CombatantIndex::Npc, None);
                     let mut combatant = mutex.lock().unwrap();
                     info!(
                         "----drawing 1 card for combatant {:?}",
@@ -405,8 +308,6 @@ impl CombatEncounter {
                     return Ok(CombatTurnMessage::PlayerMissesTurn);
                 }
 
-                self.apply_dots();
-
                 Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
             }
             _ => {
@@ -417,12 +318,16 @@ impl CombatEncounter {
         result
     }
 
+    fn oppo_idx(&self) -> CombatantIndex {
+        match self.current_turn {
+            Player => Npc,
+            Npc => Player,
+        }
+    }
+
     /// Applies damage over time to opponent on your turn
     fn apply_dots(&self) {
-        let turn = match self.current_turn {
-            Combatant1 => CombatantIndex::Combatant2,
-            CombatantIndex::Combatant2 => Combatant1,
-        };
+        let turn = self.oppo_idx();
         for active_effect in &self.active_effects {
             if active_effect.combatant_id
                 == self.get_combatant(&turn, None).lock().unwrap().get_id()
@@ -431,7 +336,7 @@ impl CombatEncounter {
                     ActiveEffectType::Poison { amount } => {
                         let combatant = self.get_combatant(&turn, None);
                         let mut combatant = combatant.lock().unwrap();
-                        combatant.take_damage(amount, DamageType::Chaos);
+                        combatant.take_damage(amount);
                     }
                     _ => {}
                 }
@@ -440,52 +345,20 @@ impl CombatEncounter {
     }
 
     fn check_skip_turn_effects(&mut self) -> Option<()> {
-        let turn = self.current_turn.clone();
-        let mut to_remove = vec![];
-        let mut result = None;
-        for (index, effect) in self.active_effects.iter().enumerate() {
-            if effect.combatant_id == self.get_combatant(&turn, None).lock().unwrap().get_id() {
-                match effect.effect {
-                    ActiveEffectType::Initiative { amount } => {
-                        if amount == 3 {
-                            self.current_turn = match turn {
-                                CombatantIndex::Combatant1 => CombatantIndex::Combatant2,
-                                CombatantIndex::Combatant2 => CombatantIndex::Combatant1,
-                            };
-                            to_remove.push(index); // Mark this effect for removal
-                            result = Some(());
-                        }
-                    }
-                    ActiveEffectType::Stun => {
-                        self.current_turn = match turn {
-                            CombatantIndex::Combatant1 => CombatantIndex::Combatant2,
-                            CombatantIndex::Combatant2 => CombatantIndex::Combatant1,
-                        };
-                        to_remove.push(index); // Mark this effect for remova
-                                               //
-                        result = Some(());
-                    }
-                    _ => {}
-                }
-            }
-        }
-        for index in to_remove.into_iter().rev() {
-            self.active_effects.swap_remove(index);
-        }
-        result
+        unimplemented!()
     }
 
     fn increment_round(&mut self) {
         info!("Ending Round");
         self.round += 1;
         {
-            let mut combatant1 = self.combatant1.lock().unwrap();
-            combatant1.add_mana(self.round);
-            combatant1.draw_cards(1);
+            let mut player_combatant = self.player_combatant.lock().unwrap();
+            player_combatant.add_mana();
+            player_combatant.draw_cards();
         }
         {
-            let mut combatant2 = self.combatant2.lock().unwrap();
-            combatant2.add_mana(self.round);
+            let mut npc_combatant = self.npc_combatant.lock().unwrap();
+            npc_combatant.add_mana();
         }
     }
 }
@@ -499,7 +372,7 @@ pub enum CombatTurnMessage {
     YourTurn(Box<dyn Combatant>), // only sent to the next turn player to show him cooldowns
     Winner(CombatantIndex),
     PlayerState {
-        me: Box<dyn Combatant>,
+        player_combatant: Box<dyn Combatant>,
         me_idx: CombatantIndex,
         turn: CombatantIndex,
         my_battle_field: Vec<Card>,
@@ -509,13 +382,13 @@ pub enum CombatTurnMessage {
         active_effects: Vec<ActiveEffect>,
     },
     EncounterState(EncounterState), // Requested state
+    Temp,
 }
 
 #[derive(Debug)]
 pub struct EncounterState {
     pub turn: CombatantIndex,
     pub round: i32,
-    pub battle_fields: HashMap<CombatantIndex, Vec<Card>>,
     pub combatant_1: Box<dyn Combatant>,
     pub combatant_2: Box<dyn Combatant>,
     pub active_effects: Vec<ActiveEffect>,
@@ -525,8 +398,8 @@ impl Clone for CombatEncounter {
     fn clone(&self) -> Self {
         CombatEncounter {
             id: self.id.clone(),
-            combatant1: self.combatant1.clone(),
-            combatant2: self.combatant2.clone(),
+            player_combatant: self.player_combatant.clone(),
+            npc_combatant: self.npc_combatant.clone(),
             active_effects: self.active_effects.clone(),
             current_turn: self.current_turn.clone(),
             started: self.started,
@@ -534,7 +407,6 @@ impl Clone for CombatEncounter {
             initial_hps: self.initial_hps,
             action_id: self.action_id.clone(),
             round: self.round,
-            battle_fields: self.battle_fields.clone(),
         }
     }
 }
@@ -560,7 +432,6 @@ impl Clone for CombatTurnMessage {
                 CombatTurnMessage::EncounterState(EncounterState {
                     round: state.round,
                     turn: state.turn.clone(),
-                    battle_fields: state.battle_fields.clone(),
                     combatant_1: state.combatant_1.clone_box(),
                     combatant_2: state.combatant_2.clone_box(),
                     active_effects: state.active_effects.clone(),
@@ -585,6 +456,9 @@ impl Clone for CombatTurnMessage {
                 opponent_battle_field: opponent_battle_field.clone(),
                 opponent_hp: *opponent_hp,
             },
+            _ => {
+                todo!()
+            }
         }
     }
 }
@@ -620,7 +494,7 @@ impl Serialize for CombatTurnMessage {
             CombatTurnMessage::YourTurn(combatant) => {
                 let mut map = serializer.serialize_map(Some(3))?;
                 map.serialize_entry("type", "YourTurn")?;
-                map.serialize_entry("talents", &combatant.get_talents())?;
+                map.serialize_entry("spells", &combatant.get_spells())?;
                 map.end()
             }
             CombatTurnMessage::PlayerState {
@@ -707,8 +581,8 @@ impl<'de> Deserialize<'de> for CombatTurnMessage {
                 A: EnumAccess<'de>,
             {
                 match data.variant()? {
-                    (Field::CommandPlayed, _) => Ok(CombatTurnMessage::Winner(Combatant1)),
-                    (Field::Winner, _) => Ok(CombatTurnMessage::Winner(Combatant1)),
+                    (Field::CommandPlayed, _) => Ok(CombatTurnMessage::Winner(Player)),
+                    (Field::Winner, _) => Ok(CombatTurnMessage::Winner(Player)),
                 }
             }
         }

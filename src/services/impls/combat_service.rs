@@ -11,16 +11,24 @@ use tracing::error;
 use tracing::log::info;
 
 use crate::events::combat::CombatTurnMessage::PlayerState;
-use crate::events::combat::CombatantIndex::{Combatant1, Combatant2};
 use crate::events::combat::EncounterState;
-use crate::models::cards::{Card, CardType};
+use crate::models::cards::Card;
 use crate::models::hero::Hero;
 use crate::models::npc::{CpuCombatantDecisionMaker, Monster};
+use crate::models::talent::Spell;
 use crate::{
     events::combat::{CombatEncounter, CombatTurnMessage},
-    models::talent::Talent,
     services::{tasks::action_names::Responder, traits::combat_decision_maker::DecisionMaker},
 };
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CombatCommand {
+    EnterBattle(EnterBattleData),
+    AttackHero(Card),
+    UseSpell(String, Spell), // Use a talent: (Talent)
+    PlayCard(Card),
+    EndTurn,
+}
 
 #[derive(Debug)]
 pub enum ControllerMessage {
@@ -223,7 +231,6 @@ impl CombatController {
         let opponent_hp = opponent.get_hp();
         PlayerState {
             me,
-            me_idx: me_idx.clone(),
             opponent_hp,
             opponent,
             turn,
@@ -288,7 +295,7 @@ impl CombatController {
                         }
                     }
 
-                    CombatCommand::UseTalent(opponent_id, talent) => {
+                    CombatCommand::UseSpell(opponent_id, talent) => {
                         println!("UseTalent: {} {:?}", opponent_id, talent);
                     }
                     _ => {}
@@ -487,26 +494,6 @@ impl CombatController {
     ) {
         self.decision_makers.insert(participant_id, decision_maker);
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum CombatCommand {
-    EnterBattle(EnterBattleData),
-    AttackMinion {
-        attacker: Card,
-        #[serde(rename = "defenderId")]
-        defender_id: String,
-    },
-    AttackHero(Card),
-    AttackExchange {
-        attacker_id: String,
-        attacker_damage_taken: i32,
-        defender_damage_taken: i32,
-        defender_id: String,
-    },
-    UseTalent(String, Talent), // Use a talent: (Talent)
-    PlayCard(Card),
-    EndTurn,
 }
 
 #[derive(Debug, Clone)]
