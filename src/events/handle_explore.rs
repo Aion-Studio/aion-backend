@@ -28,7 +28,7 @@ impl ExploreHandler {
 
             info!("hero_explores after stamina cost");
 
-            let action = Infra::repo()
+            let action = Infra::hero_repo()
                 .get_hero(hero_id)
                 .await
                 .map(|hero| ExploreAction::new(hero, hero_region, stamina_cost))

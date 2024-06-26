@@ -8,7 +8,7 @@ use tokio::sync::{
 };
 use tracing::log::info;
 
-use crate::events::combat::{CombatError, CombatantIndex};
+use crate::events::combat::{CombatError, CombatantIndex, CombatantState, PlayerCombatState};
 use crate::models::cards::{Card, Deck};
 use crate::{
     events::combat::CombatTurnMessage,
@@ -21,6 +21,7 @@ use crate::{
 use super::{
     combatant::Combatant,
     hero::Range,
+    resources::Relic,
     talent::{Spell, Talent},
 };
 
@@ -42,7 +43,7 @@ impl CpuCombatantDecisionMaker {
 
         Self {
             monster,
-            player_idx: CombatantIndex::Combatant2,
+            player_idx: CombatantIndex::Npc,
             combat_controller_tx: None,
             shutdown_signal: Some(shutdown_signal),
             shutdown_trigger: Some(shutdown_trigger),
@@ -86,59 +87,51 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                             CombatTurnMessage::Winner(idx) => {
                                 // Do nothing
                             }
-                            CombatTurnMessage::PlayerState{
-                                me,
-                                me_idx,
-                                opponent,
-                                opponent_battle_field,
-                                my_battle_field,
-                                active_effects,
-                                turn,
-                                opponent_hp
-                            }=>{
-                                if turn == idx.clone() {
-                                     let cards_i_can_play = me.get_hand().iter().filter(|c| c.cost <= me.get_mana()).collect::<Vec<_>>();
-                                    if llm_decisions.is_empty() {
-                                        let client = reqwest::Client::new();
-
-                                        let payload = json!({
-
-                                        });
-
-                                        let res = client.post("http://127.0.0.1:5000/message").json(&payload).send().await;
-                                        let body = match res {
-                                            Ok(res) => {
-                                                match res.status() {
-                                                    reqwest::StatusCode::OK => {
-                                                        res.text().await.unwrap()
-                                                    }
-                                                    _ => {
-                                                        println!("Error sending request: {:?}", res.status());
-                                                        "".to_string()
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                println!("Error sending request {:?}", e);
-                                                "".to_string()
-                                            }
-                                        };
-                                        let json_body: serde_json::Value = serde_json::from_str(&body).unwrap();
-
-                                        let actions_list = json_body["actions"].as_array().unwrap();
-                                        if actions_list.is_empty() {
-                                            llm_decisions.push(CombatCommand::EndTurn);
-                                        }
-                                    }
-                                    // take first decision from the local decisions vector and send it to the combat controller
-                                    let command = llm_decisions.remove(0);
-                                    info!("NPC sending command {:?}", command);
-                                    combat_sender
-                                        .clone()
-                                        .send(command)
-                                        .await
-                                        .expect("Failed to send command");
-                                }
+                            CombatTurnMessage::PlayerState(state)=>{
+                                // if turn == idx.clone() {
+                                //      let cards_i_can_play = me.get_hand().iter().filter(|c| c.cost <= me.get_mana()).collect::<Vec<_>>();
+                                //     if llm_decisions.is_empty() {
+                                //         let client = reqwest::Client::new();
+                                //
+                                //         let payload = json!({
+                                //
+                                //         });
+                                //
+                                //         let res = client.post("http://127.0.0.1:5000/message").json(&payload).send().await;
+                                //         let body = match res {
+                                //             Ok(res) => {
+                                //                 match res.status() {
+                                //                     reqwest::StatusCode::OK => {
+                                //                         res.text().await.unwrap()
+                                //                     }
+                                //                     _ => {
+                                //                         println!("Error sending request: {:?}", res.status());
+                                //                         "".to_string()
+                                //                     }
+                                //                 }
+                                //             }
+                                //             Err(e) => {
+                                //                 println!("Error sending request {:?}", e);
+                                //                 "".to_string()
+                                //             }
+                                //         };
+                                //         let json_body: serde_json::Value = serde_json::from_str(&body).unwrap();
+                                //
+                                //         let actions_list = json_body["actions"].as_array().unwrap();
+                                //         if actions_list.is_empty() {
+                                //             llm_decisions.push(CombatCommand::EndTurn);
+                                //         }
+                                //     }
+                                //     // take first decision from the local decisions vector and send it to the combat controller
+                                //     let command = llm_decisions.remove(0);
+                                //     info!("NPC sending command {:?}", command);
+                                //     combat_sender
+                                //         .clone()
+                                //         .send(command)
+                                //         .await
+                                //         .expect("Failed to send command");
+                                // }
+                                unimplemented!()
                             }
                             x => {
                             }
@@ -196,15 +189,29 @@ impl Combatant for Monster {
     fn get_hp(&self) -> i32 {
         self.hit_points
     }
-    fn get_damage(&self) -> i32 {
-        self.damage.roll()
-    }
+
     fn get_mana(&self) -> i32 {
         self.mana
     }
 
+    fn get_player_state(&self) -> CombatantState {
+        CombatantState::Npc {
+            hp: self.get_hp(),
+            max_hp: self.hit_points,
+            spells: self.get_spells(),
+        }
+    }
+
+    fn get_cards_in_discard(&self) -> &Vec<Card> {
+        &self.cards_in_discard
+    }
+
     fn get_spells(&self) -> Vec<Spell> {
         vec![]
+    }
+
+    fn get_zeal(&self) -> i32 {
+        0
     }
 
     fn get_armor(&self) -> i32 {
@@ -234,7 +241,15 @@ impl Combatant for Monster {
     fn spend_mana(&mut self, mana: i32) {
         self.mana -= mana;
     }
-    fn get_hand(&self) -> &Vec<Card> {}
+
+    fn get_hand(&self) -> &Vec<Card> {
+        unimplemented!()
+    }
+
+    fn get_relics(&self) -> Vec<Relic> {
+        unimplemented!()
+    }
+
     fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {
         if let Some(idx) = self.cards_in_hand.iter().position(|c| c.id == card.id) {
             self.cards_in_hand.remove(idx);

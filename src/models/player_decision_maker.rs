@@ -34,7 +34,7 @@ impl PlayerDecisionMaker {
             combat_controller_tx: None,
             id,
             to_ws_tx,
-            player_idx: CombatantIndex::Combatant1,
+            player_idx: CombatantIndex::Player,
             from_ws_tx: None,
             notify_from_ws_tx_set: Arc::new(Notify::new()),
             shutdown_signal: Some(shutdown_signal),

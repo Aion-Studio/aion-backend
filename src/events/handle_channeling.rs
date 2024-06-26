@@ -26,7 +26,7 @@ impl ChannelingHandler {
         resp: Responder<()>,
     ) {
         tokio::spawn(async move {
-            let action = Infra::repo()
+            let action = Infra::hero_repo()
                 .get_hero(hero_id)
                 .await
                 .map(|hero| ChannelingAction::new(hero, &leyline_name, &durations))

@@ -29,11 +29,11 @@ model Hero {
   explore          Int
   crafting         Int
   armor            Int
-  stamina          Stamina?
   relics           Relic[]
   level            Int
   Account          Account?          @relation(fields: [accountId], references: [id])
   accountId        String?
+  stamina          Stamina?
   HeroResources    HeroResource[]
   HeroActions      HeroActions[]
   HeroQuests       HeroQuests[]
@@ -42,16 +42,15 @@ model Hero {
   HeroCards        HeroCard[]
   Decks            Deck[]
   HeroSpells       HeroSpell[]
-  staminaId        String
 }
 
 model Stamina {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   capacity      Int
   amount        Int
-  lastRegenTime DateTime
-  heroId        String   @unique
-  Hero          Hero     @relation(fields: [heroId], references: [id])
+  lastRegenTime DateTime?
+  hero          Hero?     @relation(fields: [heroId], references: [id])
+  heroId        String?   @unique
 }
 
 enum Class {
@@ -69,20 +68,13 @@ model Relic {
 }
 
 model RelicEffect {
-  id       String     @id @default(uuid())
-  type     EffectType // Enum for type of effect
-  value    Int
-  target   TargetType // Target of the effect, e.g., "self" or "enemy"
-  duration Int? // Duration in turns, if applicable
-  relicId  String
-  relic    Relic      @relation(fields: [relicId], references: [id])
-}
-
-enum EffectType {
-  Heal
-  Damage
-  Buff
-  Debuff
+  id          String     @id @default(uuid())
+  effect_type EffectType // Enum for type of effect
+  value       Int
+  target      TargetType // Target of the effect, e.g., "self" or "enemy"
+  duration    Int? // Duration in turns, if applicable
+  relicId     String
+  relic       Relic      @relation(fields: [relicId], references: [id])
 }
 
 model HeroSpell {
@@ -260,22 +252,40 @@ model Npc {
 model Card {
   id       String       @id @default(uuid())
   name     String
+  cardType CardType
   class    Class // e.g., Attack, Weapon Attack, Heal, Armor, Lifesteal
   cost     Int // Cost to play the card
+  zeal     Int // Zeal cost to play the card
   tier     Int // Tier of the card
   effects  CardEffect[] // Relation to CardEffect
   HeroCard HeroCard[]
   imgUrl   String
 }
 
+enum CardType {
+  Attack
+  Defensive
+  Utility
+}
+
+enum StatType {
+  HP
+  Strength
+  Dexterity
+  Intelligence
+  Armor
+}
+
 model CardEffect {
-  id          String     @id @default(uuid())
-  efffectType EffectType // Enum for type of effect
-  value       Int
-  target      TargetType // Target of the effect, e.g., "self" or "enemy"
-  duration    Int? // Duration in turns, if applicable
-  cardId      String
-  card        Card       @relation(fields: [cardId], references: [id])
+  id                 String     @id @default(uuid())
+  effectType         EffectType // Enum for type of effect
+  value              Int
+  target             TargetType // Target of the effect, e.g., "self" or "enemy"
+  duration           Int? // Duration in turns, if applicable
+  cardId             String
+  card               Card       @relation(fields: [cardId], references: [id])
+  statAffected       StatType?
+  percentageModifier Boolean    @default(false)
 }
 
 model HeroCard {
@@ -301,6 +311,21 @@ model Deck {
   heroId String?
   active Boolean @default(false)
   npcId  String?
+}
+
+enum EffectType {
+  Damage
+  Heal
+  BuffStat
+  BuffDamage
+  DebuffStat
+  DebuffDamage
+  ManaGain
+  Draw
+  Armor
+  Silence
+  Poison
+  Initiative
 }
 
 enum TargetType {

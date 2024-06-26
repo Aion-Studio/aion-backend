@@ -2,7 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use lazy_static::lazy_static;
 
-use crate::{repos::repo::Repo, services::impls::tasks::TaskManager};
+use crate::{
+    repos::{hero::HeroRepo, repo::Repo},
+    services::impls::tasks::TaskManager,
+};
 
 pub struct Infrastructure {
     repo: Arc<Repo>,
@@ -11,7 +14,7 @@ pub struct Infrastructure {
 
 impl Infrastructure {
     fn new() -> Self {
-        let repo = Arc::new(Repo::new());
+        let repo = Arc::new(Repo {});
 
         let tasks = Arc::new(TaskManager::new());
 
@@ -59,5 +62,9 @@ impl Infra {
         } else {
             panic!("Infrastructure not initialized!");
         }
+    }
+
+    pub fn hero_repo() -> HeroRepo {
+        HeroRepo {}
     }
 }

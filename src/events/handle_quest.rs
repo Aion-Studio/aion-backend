@@ -61,7 +61,7 @@ impl QuestHandler {
                     }
                 }
                 ActionNames::Raid => {
-                    let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+                    let hero = Infra::hero_repo().get_hero(hero_id.clone()).await.unwrap();
                     let hero_id = hero.get_id();
                     let npc = Infra::repo()
                         .get_npc_by_action_id(&action_id)

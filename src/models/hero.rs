@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::region::RegionName;
-use super::resources::Resource;
+use super::resources::{Relic, Resource};
 use super::talent::{Spell, Talent};
 
 #[allow(dead_code)]
@@ -28,9 +28,9 @@ use super::talent::{Spell, Talent};
 #[serde(rename_all = "camelCase")]
 pub struct Hero {
     pub id: Option<String>,
+    pub hp: i32,
     pub name: String,
     pub class: Class,
-    pub hp: i32,
     pub level: i32,
     pub strength: i32,
     pub armor: i32,
@@ -42,10 +42,23 @@ pub struct Hero {
     pub stamina: Stamina,
     pub decks: Option<Vec<Deck>>,
     pub spells: Vec<Spell>,
+    pub relics: Vec<Relic>,
+}
+
+impl Class {
+    pub fn get_rand() -> Class {
+        let mut rng = thread_rng();
+        match rng.gen_range(0..3) {
+            0 => Class::Ranger,
+            1 => Class::Fighter,
+            _ => Class::Wizard,
+        }
+    }
 }
 
 impl Hero {
     pub fn new(hp: i32, strength: i32, dexterity: i32, class: Class) -> Self {
+        let mut rng = thread_rng();
         Self {
             id: None,
             name: Self::generate_hero_name(),
@@ -55,28 +68,37 @@ impl Hero {
             strength,
             armor: 1,
             dexterity,
-            intelligence: 7,
+            intelligence: rng.gen_range(0..5),
             resources: Resource::randomize_amounts(),
             crafting: 20,
             stamina: Stamina::new(),
             explore: 15,
             decks: None,
             spells: vec![],
+            relics: vec![],
         }
     }
 
     pub fn active_deck(&self) -> Deck {
-        self.decks
+        let deck = match self
+            .decks
             .as_ref()
             .unwrap()
             .into_iter()
             .find(|deck| deck.active)
-            .unwrap()
-            .clone()
+        {
+            Some(deck) => deck.clone(),
+            None => {
+                //take first from decks vec
+                let first_deck = self.decks.as_ref().unwrap().first().unwrap().clone();
+                first_deck
+            }
+        };
+        deck
     }
 
     pub fn to_combatant(&self) -> HeroCombatant {
-        HeroCombatant::new(self.clone(), self.active_deck())
+        HeroCombatant::new(self.clone(), self.active_deck(), self.relics.clone())
     }
 
     pub fn level(&self) -> i32 {
@@ -330,8 +352,17 @@ impl From<hero::Data> for Hero {
                     .map(|spell| Spell::from(spell))
                     .collect::<Vec<Spell>>()
             }),
-            stamina: data.stamina.into(),
+            stamina: data
+                .stamina
+                .map(|stamina| Stamina::from(stamina))
+                .unwrap_or_default(),
             resources,
+            relics: data.relics.map_or(vec![], |relics| {
+                relics
+                    .into_iter()
+                    .map(|relic| Relic::from(relic))
+                    .collect::<Vec<Relic>>()
+            }),
 
             decks: None, // we fill in the deck manually
         }
@@ -361,11 +392,10 @@ impl From<hero_resource::Data> for Resource {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize, Default)]
 pub struct Stamina {
     pub capacity: i32,
     pub amount: i32,
-    pub regen_rate: i32,
     pub last_regen_time: Option<DateTime<Utc>>,
 }
 
@@ -374,7 +404,6 @@ impl Stamina {
         Self {
             capacity: 100,
             amount: 100,
-            regen_rate: 1,
             last_regen_time: None,
         }
     }
@@ -386,8 +415,7 @@ impl From<Option<Box<stamina::Data>>> for Stamina {
             Self {
                 capacity: data.capacity,
                 amount: data.amount,
-                regen_rate: data.regen_rate,
-                last_regen_time: convert_to_utc(Some(data.last_regen_time)),
+                last_regen_time: convert_to_utc(data.last_regen_time),
             }
         } else {
             Stamina::new()

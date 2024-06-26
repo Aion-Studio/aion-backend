@@ -3,22 +3,21 @@ use prisma_client_rust::QueryError;
 use tracing::error;
 use tracing::info;
 
+use crate::db;
 use crate::models::cards::Deck;
+use crate::prisma::card_effect;
 use crate::prisma::deck;
 use crate::prisma::deck_card;
 use crate::{
-    models::cards::{Card, CardEffect, HeroCard},
+    models::cards::{Card, HeroCard},
     prisma::{card, hero, hero_card},
-    webserver::get_prisma_client,
 };
 
 pub struct CardRepo {}
 
 impl CardRepo {
     pub async fn get_all_cards() -> Vec<Card> {
-        let prisma = get_prisma_client();
-
-        let cards = prisma
+        let cards = db!()
             .card()
             .find_many(vec![])
             .exec()
@@ -39,9 +38,7 @@ impl CardRepo {
     }
 
     pub async fn get_hero_decks(hero_id: String) -> Vec<Deck> {
-        let prisma = get_prisma_client();
-
-        let decks = prisma
+        let decks = db!()
             .deck()
             .find_many(vec![deck::hero_id::equals(Some(hero_id.clone()))])
             .exec()
@@ -70,14 +67,9 @@ impl CardRepo {
     }
 
     pub async fn get_all_hero_cards(hero_id: String) -> Vec<HeroCard> {
-        let prisma = get_prisma_client();
-
-        let hero_cards = prisma
+        let hero_cards = db!()
             .hero_card()
-            .find_many(vec![
-                hero_card::hero_id::equals(hero_id),
-                hero_card::deck_card_id::equals(None),
-            ])
+            .find_many(vec![hero_card::hero_id::equals(hero_id)])
             .with(hero_card::card::fetch()) // Only fetch the card data initially
             .exec()
             .await;
@@ -110,8 +102,7 @@ impl CardRepo {
     }
 
     pub async fn get_hero_card_by_card_id(card_id: String) -> Result<hero_card::Data, QueryError> {
-        let prisma = get_prisma_client();
-        let hero_card = prisma
+        let hero_card = db!()
             .hero_card()
             .find_first(vec![hero_card::card_id::equals(card_id)])
             .with(hero_card::card::fetch())
@@ -122,13 +113,22 @@ impl CardRepo {
     }
 
     pub async fn fetch_card_with_effects(card_data: card::Data) -> anyhow::Result<Card> {
+        let card_effects = db!()
+            .card_effect()
+            .find_many(vec![card_effect::card_id::equals(card_data.id.clone())])
+            .exec()
+            .await?
+            .into_iter()
+            .map(|effect| effect.into())
+            .collect();
+
         let card = Card::from((card_data, card_effects));
         Ok(card)
     }
+    // [CardEffect { id: "1dc63207-04ab-4578-bf2a-75d60f953760", card_id: "0ba29bce-51d1-46ee-8fed-469aae5f9952", effect: BuffStat, value: 10, target_type: Itself, stat_affected: Some(Dexterity), is_percentage_modifier: false }, CardEffect { id: "52b8d916-8c8b-45e7-a0ed-64170915ea79", card_id: "0ba29bce-51d1-46ee-8fed-469aae5f9952", effect: Draw, value: 1, target_type: Itself, stat_affected: None, is_percentage_modifier: false }]
 
     pub async fn add_card(hero_id: String, card_id: String) -> Result<String, QueryError> {
-        let prisma = get_prisma_client();
-        let hero_card = prisma
+        let hero_card = db!()
             .hero_card()
             .create(hero::id::equals(hero_id), card::id::equals(card_id), vec![])
             .exec()
@@ -148,10 +148,8 @@ impl CardRepo {
         hero_card_id: String,
         to_deck: bool,
     ) -> Result<(), QueryError> {
-        let prisma = get_prisma_client();
-
         if to_deck {
-            prisma
+            db!()
                 .deck_card()
                 .create(
                     deck_id,
@@ -162,7 +160,7 @@ impl CardRepo {
                 .exec()
                 .await?;
         } else {
-            prisma
+            db!()
                 .deck_card()
                 .delete_many(vec![
                     deck_card::deck_id::equals(deck_id),
@@ -176,8 +174,7 @@ impl CardRepo {
     }
 
     pub async fn remove_hero_card_by_id(deck_card_id: String) -> Result<String, QueryError> {
-        let prisma = get_prisma_client();
-        let hero_card = prisma
+        let hero_card = db!()
             .hero_card()
             .delete(hero_card::id::equals(deck_card_id))
             .exec()
@@ -192,8 +189,7 @@ impl CardRepo {
     }
 
     pub async fn deck_cards_by_deck_id(deck_id: String) -> Vec<Card> {
-        let prisma = get_prisma_client();
-        let deck_cards = prisma
+        let deck_cards = db!()
             .deck_card()
             .find_many(vec![deck_card::deck_id::equals(deck_id.clone())])
             .with(deck_card::hero_card::fetch().with(hero_card::card::fetch()))
@@ -224,8 +220,7 @@ impl CardRepo {
     }
 
     pub async fn create_deck(hero_id: String, deck_name: String) -> Result<Deck, QueryError> {
-        let prisma = get_prisma_client();
-        let deck = prisma
+        let deck = db!()
             .deck()
             .create(vec![
                 deck::name::set(deck_name),

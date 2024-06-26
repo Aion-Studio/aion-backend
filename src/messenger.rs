@@ -65,27 +65,8 @@ impl MessageManager {
                         quest_id,
                         resp,
                     } => {
-                        let quest = Infra::repo()
-                            .get_quest_by_id(quest_id.clone())
-                            .await
-                            .unwrap();
-                        let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
-                        let has_sufficient_shards = match hero.resources.get(&Resource::StormShard)
-                        {
-                            Some(shards) => *shards >= quest.cost,
-                            None => false,
-                        };
-
-                        if !has_sufficient_shards {
-                            if let Err(e) = resp.send(Err(anyhow::Error::msg("not enough shards")))
-                            {
-                                warn!("Failed to send response: {:?}", e);
-                            }
-                            None
-                        } else {
-                            QuestHandler::quest_accepted(hero_id.clone(), quest_id.clone(), resp);
-                            Some(TaskAction::QuestAccepted(hero_id.clone(), quest_id))
-                        }
+                        QuestHandler::quest_accepted(hero_id.clone(), quest_id.clone(), resp);
+                        Some(TaskAction::QuestAccepted(hero_id.clone(), quest_id))
                     }
 
                     QuestAction {

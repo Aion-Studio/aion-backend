@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use prisma_client_rust::chrono;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -11,7 +10,7 @@ use tracing::error;
 use tracing::log::info;
 
 use crate::events::combat::CombatTurnMessage::PlayerState;
-use crate::events::combat::EncounterState;
+use crate::events::combat::{CombatantState, EncounterState};
 use crate::models::cards::Card;
 use crate::models::hero::Hero;
 use crate::models::npc::{CpuCombatantDecisionMaker, Monster};
@@ -20,6 +19,8 @@ use crate::{
     events::combat::{CombatEncounter, CombatTurnMessage},
     services::{tasks::action_names::Responder, traits::combat_decision_maker::DecisionMaker},
 };
+
+use super::redis_storage::RedisStorage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CombatCommand {
@@ -67,14 +68,13 @@ pub enum ControllerMessage {
         combatant_id: String,
     },
     SendMsgsToPlayer {
-        encounter_state: EncounterState,
         combatant_id: String,
         result: CombatTurnMessage,
     },
 }
 
 pub struct CombatController {
-    encounters: HashMap<String, Arc<Mutex<CombatEncounter>>>,
+    storage: RedisStorage,
     message_sender: Sender<ControllerMessage>, // New, for internal use
     decision_makers: HashMap<String, Arc<Mutex<dyn DecisionMaker + Send + Sync>>>,
     result_senders: HashMap<String, Sender<CombatTurnMessage>>, // decision_maker_id / combatant_id to result sender
@@ -82,9 +82,9 @@ pub struct CombatController {
 }
 
 impl CombatController {
-    pub fn new(message_sender: Sender<ControllerMessage>) -> Self {
+    pub fn new(message_sender: Sender<ControllerMessage>, redis_uri: &str) -> Self {
         CombatController {
-            encounters: HashMap::new(),
+            storage: RedisStorage::new(redis_uri),
             message_sender,
             decision_makers: HashMap::new(),
             result_senders: HashMap::new(),
@@ -92,29 +92,24 @@ impl CombatController {
         }
     }
 
-    // This function now returns the encounter's ID instead of a reference
-    async fn encounter_id_by_combatant(&self, combatant_id: &str) -> Option<String> {
-        for (id, encounter) in self.encounters.iter() {
-            let encounter_lock = encounter.lock().await;
-            if encounter_lock.has_combatant(combatant_id) {
-                return Some(id.clone());
-            }
-        }
-        None
+    async fn get_encounter(&self, encounter_id: &str) -> Option<CombatEncounter> {
+        self.storage.get_encounter(encounter_id).await
     }
 
-    async fn encounter_by_combatant_id(
-        &self,
-        combatant_id: &str,
-    ) -> Option<Arc<Mutex<CombatEncounter>>> {
-        for (_, encounter) in self.encounters.iter() {
-            let encounter_lock = encounter.lock().await;
-            if encounter_lock.has_combatant(combatant_id) {
-                return Some(Arc::clone(encounter));
-            }
-        }
-        None
+    async fn set_encounter(&self, encounter: &CombatEncounter) -> Result<(), redis::RedisError> {
+        self.storage.store_encounter(encounter).await
     }
+
+    async fn remove_encounter(&self, encounter_id: &str) -> Result<(), redis::RedisError> {
+        self.storage.remove_encounter(encounter_id).await
+    }
+
+    async fn encounter_by_combatant_id(&self, combatant_id: &str) -> Option<CombatEncounter> {
+        self.storage.get_encounter_by_combatant(combatant_id).await
+    }
+
+    // This function now returns the encounter's ID instead of a reference
+
     async fn start_encounter_for_combatant(&mut self, combatant_id: &str) {
         let shutdown_signal = Arc::new(Notify::new());
         self.shutdown_signals
@@ -126,18 +121,20 @@ impl CombatController {
                 .encounter_by_combatant_id(combatant_id)
                 .await
                 .unwrap()
-                .lock()
-                .await
                 .get_combatant_idx(combatant_id)
                 .unwrap();
+
             let mut decision_maker_guard = decision_maker.lock().await;
             let result_sender = decision_maker_guard.start(command_sender.clone(), idx);
             self.result_senders
                 .insert(combatant_id.to_string(), result_sender.clone());
 
             let controller_sender = self.message_sender.clone();
-            let encounter_clone =
-                Arc::clone(&self.encounter_by_combatant_id(combatant_id).await.unwrap());
+            let mut encounter = self
+                .encounter_by_combatant_id(combatant_id)
+                .await
+                .unwrap()
+                .clone();
 
             let combatant_id = combatant_id.to_string();
             tokio::spawn(async move {
@@ -152,7 +149,6 @@ impl CombatController {
                         while let Some(command) = command_receiver.recv().await {
                            let sender = result_sender.clone();
 
-                            let mut encounter = encounter_clone.lock().await;
                             match encounter.process_combat_turn(command, &combatant_id) {
                                 Ok(result) => {
                                     controller_sender.send(
@@ -164,7 +160,6 @@ impl CombatController {
                                      if !matches!(result, Winner(_)) {
 
                                         controller_sender.send(SendMsgsToPlayer{
-                                            encounter_state: encounter.request_state(),
                                             combatant_id: combatant_id.to_string(),
                                             result: result.clone()
                                             }).await.unwrap();
@@ -205,43 +200,11 @@ impl CombatController {
     async fn construct_player_state(
         &self,
         combatant_id: &str,
-        encounter_state: &EncounterState, // Assuming EncounterState is the type of `state`
         encounter: &CombatEncounter,
-    ) -> CombatTurnMessage {
-        let (me_idx, opponent_idx) =
-            if encounter.get_combatant_idx(combatant_id).unwrap() == Combatant1 {
-                (Combatant1, Combatant2)
-            } else {
-                (Combatant2, Combatant1)
-            };
-
-        let (me, opponent) = if *combatant_id == encounter_state.combatant_1.get_id() {
-            (
-                encounter_state.combatant_1.clone_box(),
-                encounter_state.combatant_2.clone_box(),
-            )
-        } else {
-            (
-                encounter_state.combatant_2.clone_box(),
-                encounter_state.combatant_1.clone_box(),
-            )
-        };
-
-        let turn = encounter_state.turn.clone();
-        let opponent_hp = opponent.get_hp();
-        PlayerState {
-            me,
-            opponent_hp,
-            opponent,
-            turn,
-            active_effects: encounter_state.active_effects.clone(),
-            my_battle_field: encounter_state.battle_fields.get(&me_idx).unwrap().clone(),
-            opponent_battle_field: encounter_state
-                .battle_fields
-                .get(&opponent_idx)
-                .unwrap()
-                .clone(),
-        }
+    ) -> CombatantState {
+        let player = encounter.get_combatant_by_id(combatant_id).unwrap();
+        let state = player.as_combatant().get_player_state();
+        state
     }
 
     pub async fn run(&mut self, mut message_receiver: mpsc::Receiver<ControllerMessage>) {
@@ -251,7 +214,12 @@ impl CombatController {
 
             match message {
                 ControllerMessage::RemoveEncounter { encounter_id } => {
-                    self.encounters.remove(&encounter_id);
+                    match self.remove_encounter(&encounter_id).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("Error removing encounter: {:?}", e);
+                        }
+                    }
                 }
                 ControllerMessage::Combat((command, from_id, _)) => match command {
                     CombatCommand::EnterBattle(battle_data) => {
@@ -262,9 +230,8 @@ impl CombatController {
                             {
                                 let encounter =
                                     self.encounter_by_combatant_id(&from_id).await.unwrap();
-                                let encounter_guard = encounter.lock().await;
-                                let opponent_guard = encounter_guard.get_opponent(&from_id);
-                                let opponent = opponent_guard.lock().unwrap();
+                                let opponent_guard = encounter.get_opponent(&from_id);
+                                let opponent = opponent_guard.as_combatant();
                                 opponent_id = {
                                     opponent.get_id().clone() // Example of cloning data out
                                 };
@@ -276,7 +243,7 @@ impl CombatController {
                                         let npc_decision_maker =
                                             Arc::new(Mutex::new(CpuCombatantDecisionMaker::new(
                                                 npc.clone(),
-                                                encounter_guard.get_id(),
+                                                encounter.get_id(),
                                             )));
                                         // Add the decision maker here
                                         self.add_decision_maker(
@@ -303,8 +270,8 @@ impl CombatController {
 
                 ControllerMessage::RemoveDecisionMakers { encounter_id, resp } => {
                     // Perform cleanup logic here...
-                    let encounter = self.encounters.get(&encounter_id).unwrap();
-                    let combatant_ids = encounter.lock().await.get_combatant_ids();
+                    let encounter = self.get_encounter(&encounter_id).await.unwrap();
+                    let combatant_ids = encounter.get_combatant_ids();
                     // shuts down listeners to each decision maker
                     for combatant_id in combatant_ids {
                         self.message_sender
@@ -375,9 +342,7 @@ impl CombatController {
                     });
                 }
                 ControllerMessage::AddEncounter { encounter } => {
-                    let encounter_id = encounter.get_id();
-                    self.encounters
-                        .insert(encounter_id, Arc::new(Mutex::new(encounter)));
+                    self.add_encounter(encounter).await.unwrap();
                 }
                 ControllerMessage::CreateNpcEncounter {
                     hero,
@@ -386,7 +351,7 @@ impl CombatController {
                 } => {
                     let mut encounter = CombatEncounter::new(hero.to_combatant(), npc);
                     encounter.set_action_id(action_id);
-                    self.add_encounter(encounter);
+                    self.add_encounter(encounter).await.unwrap();
                 }
                 ControllerMessage::AddDecisionMaker {
                     participant_id,
@@ -396,24 +361,30 @@ impl CombatController {
                 }
 
                 ControllerMessage::RequestState { combatant_id, tx } => {
-                    let encounter_id = self.encounter_id_by_combatant(&combatant_id).await;
-                    match encounter_id {
-                        Some(id) => {
-                            let mut encounter = self.encounters.get(&id).unwrap().lock().await;
-                            let mut state = encounter.request_state();
-                            let combatant_idx = encounter.get_combatant_idx(&combatant_id).unwrap();
-                            if state.battle_fields.get(&combatant_idx).is_none() {
-                                // initialize the deck for this combatant -- will only run the first time request state is called
-                                encounter
-                                    .initialize(&combatant_id)
-                                    .expect("Failed to initialize deck");
-                                state = encounter.request_state();
-                            };
-                            let action_id = encounter.action_id.clone();
-                            let player_state = self
-                                .construct_player_state(&combatant_id, &state, &encounter)
+                    let encounter = self.encounter_by_combatant_id(&combatant_id).await;
+                    info!(
+                        "requested state...ecnounter exists? {:?}",
+                        encounter.is_some()
+                    );
+                    match encounter {
+                        Some(enc) => {
+                            let action_id = enc.action_id.clone();
+                            let player_state =
+                                self.construct_player_state(&combatant_id, &enc).await;
+                            let npc_state = self
+                                .construct_player_state(
+                                    &enc.get_opponent(&combatant_id).as_combatant().get_id(),
+                                    &enc,
+                                )
                                 .await;
-                            tx.send((Some(player_state), action_id)).unwrap();
+                            let encounter_state = EncounterState {
+                                player_state,
+                                npc_state,
+                                turn: enc.whos_turn(),
+                                round: enc.round,
+                            };
+                            tx.send((Some(EncounterData(encounter_state)), action_id))
+                                .unwrap();
                         }
                         None => {
                             tx.send((None, None)).unwrap();
@@ -424,27 +395,20 @@ impl CombatController {
                     message,
                     sender: (id, sender),
                 } => {
-                    let opponent = self
-                        .encounter_by_combatant_id(&id)
-                        .await
-                        .unwrap()
-                        .lock()
-                        .await
-                        .get_opponent(&id);
-                    let opponent_id = opponent.lock().unwrap().get_id();
+                    let encounter = self.encounter_by_combatant_id(&id).await.unwrap();
+                    let opponent = encounter.get_opponent(&id);
+                    let player_state = self.construct_player_state(&id, &encounter).await;
+                    let npc_state = self
+                        .construct_player_state(
+                            &encounter.get_opponent(&id).as_combatant().get_id(),
+                            &encounter,
+                        )
+                        .await;
+
+                    let opponent_id = opponent.as_combatant().get_id();
                     let opponent_sender = self.result_senders.get(&opponent_id);
                     let (player_message, opponent_message) = match message {
-                        EncounterState(state) => {
-                            let encounter_mut = self.encounter_by_combatant_id(&id).await.unwrap();
-                            let encounter = encounter_mut.lock().await;
-
-                            let player_message =
-                                self.construct_player_state(&id, &state, &encounter).await;
-                            let opponent_message = self
-                                .construct_player_state(&opponent_id, &state, &encounter)
-                                .await;
-                            (player_message, opponent_message)
-                        }
+                        EncounterData(_) => (PlayerState(player_state), PlayerState(npc_state)),
                         _ => (message.clone(), message.clone()),
                     };
                     let (_, _) = join!(
@@ -454,26 +418,16 @@ impl CombatController {
                 }
                 // Use this to construct as many msgs to send to client based on the result of a combat turn
                 ControllerMessage::SendMsgsToPlayer {
-                    encounter_state,
                     combatant_id,
                     result,
                 } => {
-                    use CombatTurnMessage::*;
-
                     let sender = self.result_senders.get(&combatant_id).unwrap();
                     let controller_sender = self.message_sender.clone();
-
-                    if let CombatTurnMessage::CommandPlayed(CombatCommand::PlayCard(card)) = &result
-                    {
-                        if card.card_type == CardType::Spell {
-                            tokio::time::sleep(Duration::from_secs(1)).await;
-                        }
-                    }
 
                     controller_sender
                         .clone()
                         .send(ControllerMessage::NotifyPlayers {
-                            message: EncounterState(encounter_state),
+                            message: result,
                             sender: (combatant_id.to_string(), sender.clone()),
                         })
                         .await
@@ -483,10 +437,13 @@ impl CombatController {
         }
     }
 
-    pub fn add_encounter(&mut self, encounter: CombatEncounter) {
-        self.encounters
-            .insert(encounter.get_id(), Arc::new(Mutex::new(encounter)));
+    pub async fn add_encounter(
+        &mut self,
+        encounter: CombatEncounter,
+    ) -> Result<(), redis::RedisError> {
+        self.set_encounter(&encounter).await
     }
+
     pub fn add_decision_maker(
         &mut self,
         participant_id: String,

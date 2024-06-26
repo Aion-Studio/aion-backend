@@ -12,14 +12,16 @@ use actix_web::web::{self, Data, Path};
 use actix_web::{get, post, App, HttpResponse, HttpServer, Responder};
 use actix_web_lab::middleware::from_fn;
 use alloy_primitives::Address;
-use once_cell::sync::OnceCell;
+use lazy_static::lazy_static;
+use once_cell::sync::{Lazy, OnceCell};
 use secrecy::{ExposeSecret, Secret};
 use serde_json::json;
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::authentication::reject_anonymous_users;
 use crate::configuration::{get_durations, DurationType, Settings};
+use crate::db_client::initialize_db;
 use crate::endpoints::auth::login;
 use crate::endpoints::cards::{
     add_card, add_to_deck, create_deck, get_cards, get_hero_cards, get_hero_decks, remove_card,
@@ -84,15 +86,6 @@ fn run_prisma_migrations(config: &Settings) -> Result<(), std::io::Error> {
     }
 }
 
-pub static PRISMA_CLIENT: OnceCell<Arc<PrismaClient>> = OnceCell::new();
-
-pub fn get_prisma_client() -> Arc<PrismaClient> {
-    PRISMA_CLIENT
-        .get()
-        .expect("Prisma client has not been initialized")
-        .clone()
-}
-
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
         let url = format!(
@@ -103,15 +96,12 @@ impl Application {
         let redis_uri = configuration.redis_uri.clone();
         let hmac_key = configuration.hmac_secret_key.clone();
 
-        let prisma_client = PrismaClient::_builder()
-            .with_url(url)
-            .build()
-            .await
-            .expect("Failed to connect to database");
+        match initialize_db(url).await {
+            Ok(_) => info!("Prisma client initialized"),
+            Err(e) => error!("Prisma client failed to initialize: {:?}", e),
+        }
 
-        PRISMA_CLIENT
-            .set(Arc::new(prisma_client))
-            .expect("Failed to set the global Prisma client");
+        Infra::initialize();
 
         let address = format!(
             "{}:{}",
@@ -151,6 +141,7 @@ async fn run(
     // initialize the messenger
     let _ = MESSENGER;
 
+    let redis_store = RedisSessionStore::new(redis_uri.clone()).await?;
     // Subscribe the task management service to the HeroExplored event
 
     // let store = Arc::new(Mutex::new(MemoryStore::new()));
@@ -158,7 +149,7 @@ async fn run(
     let (tx, rx) = mpsc::channel(1000);
     info!("___created new combat_tx____");
 
-    let mut combat_controller = CombatController::new(tx.clone()); // Use RwLock here
+    let mut combat_controller = CombatController::new(tx.clone(), &redis_uri); // Use RwLock here
 
     // our combat runner
     tokio::spawn(async move {
@@ -177,29 +168,27 @@ async fn run(
 
     let secret_key = Key::from(hmac_key.expose_secret().as_bytes());
     info!("connecting redis for session storage...{:?}", redis_uri);
-    let redis_store = RedisSessionStore::new(redis_uri).await?;
     info!("connected to redis for session storage.");
-
-    Infra::initialize();
 
     let server = HttpServer::new(move || {
         let cors = Cors::permissive()
-            .supports_credentials() // This allows all origins. Adjust as needed.
-            .allowed_origin("http://localhost:9000")
+            .allow_any_origin()
+            // .supports_credentials() // This allows all origins. Adjust as needed.
+            // .allowed_origin("http://localhost:9000")
             .max_age(3600);
 
         let app = App::new()
             .wrap(cors)
-            .service(login)
-            .wrap(SessionMiddleware::new(
-                redis_store.clone(),
-                secret_key.clone(),
-            ))
-            .service(logout)
-            .service(validate_session)
+            // .service(login)
+            // .wrap(SessionMiddleware::new(
+            //     redis_store.clone(),
+            //     secret_key.clone(),
+            // ))
+            // .service(logout)
+            // .service(validate_session)
             .service(
                 web::scope("/api")
-                    .wrap(from_fn(reject_anonymous_users))
+                    // .wrap(from_fn(reject_anonymous_users))
                     .app_data(app_state.clone())
                     .service(health_check)
                     .service(create_hero_endpoint)
@@ -271,7 +260,7 @@ async fn npc(path: Path<String>) -> impl Responder {
 
 #[get("/all-heroes")]
 async fn get_heroes() -> impl Responder {
-    let heroes = Infra::repo().get_all_heroes().await.unwrap();
+    let heroes = Infra::hero_repo().get_all_heroes().await.unwrap();
     HttpResponse::Ok().json(heroes)
 }
 

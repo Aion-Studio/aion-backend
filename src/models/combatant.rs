@@ -2,9 +2,14 @@ use core::fmt;
 use std::any::Any;
 use std::fmt::Formatter;
 
-use crate::events::combat::CombatError;
+use serde::{Deserialize, Serialize};
+
+use crate::events::combat::{CombatError, CombatantState, PlayerCombatState};
 use crate::models::cards::Card;
 
+use super::hero_combatant::HeroCombatant;
+use super::npc::Monster;
+use super::resources::Relic;
 use super::talent::Spell;
 
 // pub trait Combatant: Send + Sync {
@@ -12,22 +17,25 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn get_id(&self) -> String;
     fn get_name(&self) -> &str;
     fn get_hp(&self) -> i32;
-    fn get_damage(&self) -> i32;
     fn get_mana(&self) -> i32;
     fn get_spells(&self) -> Vec<Spell>;
 
     fn get_armor(&self) -> i32;
     fn get_level(&self) -> i32;
+    fn get_player_state(&self) -> CombatantState;
 
     // fn attack(&self, other: &mut dyn Combatant);
     fn take_damage(&mut self, amount: i32);
     fn shuffle_deck(&mut self);
     fn draw_cards(&mut self); // goes from deck to hand
     fn add_to_discard(&mut self, card: Card);
+    fn get_cards_in_discard(&self) -> &Vec<Card>;
+    fn get_zeal(&self) -> i32;
     /// Sets the hero's mana to the amount
     fn add_mana(&mut self);
     fn spend_mana(&mut self, mana: i32);
     fn get_hand(&self) -> &Vec<Card>;
+    fn get_relics(&self) -> Vec<Relic>;
     /// Removes a card from hand.
     /// Caller is responsible for moving card to battlefield
     fn play_card(&mut self, card: &Card) -> Result<(), CombatError>;
@@ -50,5 +58,28 @@ where
 {
     fn clone_box(&self) -> Box<dyn Combatant> {
         Box::new(self.clone())
+    }
+}
+
+// Define an enum to represent different types of combatants
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum CombatantType {
+    Hero(HeroCombatant),
+    Monster(Monster),
+}
+
+impl CombatantType {
+    pub fn as_combatant(&self) -> &dyn Combatant {
+        match self {
+            CombatantType::Hero(hero) => hero,
+            CombatantType::Monster(monster) => monster,
+        }
+    }
+
+    pub fn as_combatant_mut(&mut self) -> &mut dyn Combatant {
+        match self {
+            CombatantType::Hero(hero) => hero,
+            CombatantType::Monster(monster) => monster,
+        }
     }
 }

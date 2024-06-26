@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::prisma::{self, Class, EffectType, TargetType};
+use crate::prisma::{self, CardType, Class, EffectType, StatType, TargetType};
 
 use crate::prisma::{card, deck};
 
@@ -27,9 +27,12 @@ pub struct HeroCard {
 pub struct Card {
     pub id: String,
     pub class: Class,
+    pub card_type: CardType,
     pub name: String,
     pub img_url: String,
     pub cost: i32,
+    pub zeal: i32,
+    pub tier: i32,
     pub effects: Vec<CardEffect>, // Updated to use card_effects
     pub last_attack_round: Option<i32>,
 }
@@ -44,6 +47,9 @@ impl Default for Card {
             class: Class::Fighter,
             last_attack_round: None,
             effects: Vec::new(),
+            zeal: 0,
+            tier: 0,
+            card_type: CardType::Attack,
         }
     }
 }
@@ -57,28 +63,24 @@ impl From<(card::Data, Vec<CardEffect>)> for Card {
             cost: data.cost,
             effects,
             img_url: data.img_url,
+            zeal: data.zeal,
+            tier: data.tier,
+            card_type: data.card_type,
             last_attack_round: None,
         }
     }
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct CardEffect {
     pub id: String,
     pub card_id: String,
     pub effect: EffectType, // Updated to use the EffectType enum
     pub value: i32,
     pub target_type: TargetType,
-}
-
-impl Serialize for CardEffect {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // serialize self.effect and just return that
-        self.effect.serialize(serializer)
-    }
+    pub stat_affected: Option<StatType>,
+    pub is_percentage_modifier: bool,
 }
 
 impl From<prisma::card_effect::Data> for CardEffect {
@@ -86,143 +88,13 @@ impl From<prisma::card_effect::Data> for CardEffect {
         CardEffect {
             id: data.id,
             card_id: data.card_id,
-            effect: data.efffect_type,
+            effect: data.effect_type,
             value: data.value,
             target_type: data.target,
+            stat_affected: data.stat_affected,
+            is_percentage_modifier: data.percentage_modifier,
         }
     }
-}
-
-// --------------------------              SPELL EFFECTS                ---------------------------
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct DamageEffect {
-    pub id: String,
-    // pub amount: i32,
-    pub damage: Vec<i32>, // pub damage_type: DamageType,
-                          // pub target_type: TargetType,
-}
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BattleCryEffect {
-    pub id: String,
-    pub amount: i32,
-}
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct CowardiceCurseEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct PhantomTouchEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct SprayOfKnivesEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct HealEffect {
-    pub id: String,
-    pub amount: i32,
-    pub target_type: TargetType,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct ArmorEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct ResilienceEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct PoisonEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct InitiativeEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct StunEffect {
-    pub id: String,
-}
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct SummonEffect {
-    pub id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct DazeEffect {
-    pub id: String,
-}
-// --------------------------              MINION EFFECTS                ---------------------------
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct TauntEffect {
-    pub id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct ChargeEffect {
-    pub id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct LifestealEffect {
-    pub id: String,
-    pub percentage: f64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct PickupEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct EtherealEffect {
-    pub id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct TwinEffect {
-    pub id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct CleanseEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BlockEffect {
-    pub id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct RoarAuraEffect {
-    pub id: String,
-    pub amount: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct DyingWishHealEffect {
-    pub id: String,
-    pub amount: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

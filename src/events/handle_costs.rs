@@ -2,9 +2,8 @@ use serde_json::json;
 use tracing::info;
 
 use crate::{
-    infra::Infra,
     logger::log,
-    repos::helpers::update_hero_db,
+    repos::{helpers::update_hero_db, hero::HeroRepo},
     services::tasks::action_names::{ActionNames, TaskAction},
 };
 
@@ -13,10 +12,11 @@ pub struct CostHandler {}
 
 impl CostHandler {
     pub fn deduct_action_costs(action: TaskAction) {
+        let repo = HeroRepo {};
         match action {
             TaskAction::Explore(action) => {
                 tokio::spawn(async move {
-                    let mut hero = Infra::repo().get_hero(action.hero.get_id()).await.unwrap();
+                    let mut hero = repo.get_hero(action.hero.get_id()).await.unwrap();
 
                     hero.deduct_stamina(action.stamina_cost);
                     info!("hero should now have {:?} stamina", hero.stamina);
@@ -39,11 +39,11 @@ impl CostHandler {
             TaskAction::QuestAccepted(hero_id, quest_id) => {
                 tokio::spawn(async move {
                     info!("paying shards to do quest for hero {}", hero_id);
-                    let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
-                    let quest = Infra::repo()
-                        .get_quest_by_id(quest_id.clone())
-                        .await
-                        .unwrap();
+                    let mut hero = repo.get_hero(hero_id.clone()).await.unwrap();
+                    // let quest = Infra::repo()
+                    //     .get_quest_by_id(quest_id.clone())
+                    //     .await
+                    //     .unwrap();
 
                     update_hero_db(hero).await;
                 });

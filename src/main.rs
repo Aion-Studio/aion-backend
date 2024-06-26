@@ -3,8 +3,8 @@ use aion_server::webserver::Application;
 use tokio::task::JoinError;
 
 use derive_more::{Display, Error};
-use tracing::{error, info};
 use tracing::log::warn;
+use tracing::{error, info};
 
 extern crate aion_server;
 
@@ -26,13 +26,16 @@ async fn main() -> anyhow::Result<()> {
     if !aion_server::tracing_subscribe() {
         warn!("no tracing subscriber");
     }
+    info!("Starting API server");
     let configuration = get_configuration().expect("Failed to read configuration.");
+    info!("got connnnfig");
     let application = Application::build(configuration).await?;
+    info!("built application");
     let application_task = tokio::spawn(application.run_until_stopped());
+    info!("spawned application task");
     tokio::select! {
         o = application_task => report_exit("API", o),
-    }
-    ;
+    };
 
     Ok(())
 }

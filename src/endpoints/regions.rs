@@ -18,7 +18,7 @@ use crate::{infra::Infra, webserver::AppState};
 #[get("/region/explore/{hero_id}")]
 pub async fn explore_region(path: Path<String>) -> impl Responder {
     let hero_id = path.into_inner();
-    let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+    let hero = Infra::hero_repo().get_hero(hero_id.clone()).await.unwrap();
 
     let active_tasks = Infra::tasks().get_current_task(hero_id.as_ref());
 
@@ -52,7 +52,7 @@ pub async fn explore_region(path: Path<String>) -> impl Responder {
 #[get("/region/channel/{leyline_name}/{hero_id}")]
 pub async fn channel_leyline(path: Path<(String, String)>, app: Data<AppState>) -> impl Responder {
     let (leyline_name, hero_id) = path.into_inner();
-    let hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+    let hero = Infra::hero_repo().get_hero(hero_id.clone()).await.unwrap();
 
     if !hero.can_channel(&leyline_name).await {
         return HttpResponse::Forbidden().json(ApiResponse {

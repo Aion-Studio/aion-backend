@@ -10,9 +10,11 @@ use tracing::error;
 
 use crate::events::game::ActionCompleted;
 use crate::infra::Infra;
-use crate::models::hero::{Attributes, BaseStats, Hero, Range};
+use crate::models::hero::{Hero, Range};
 use crate::models::quest::Quest;
 use crate::models::region::{HeroRegion, Leyline};
+use crate::prisma::Class;
+use crate::repos::hero::HeroRepo;
 use crate::services::impls::combat_service::ControllerMessage;
 use crate::services::tasks::action_names::{ActionNames, TaskAction};
 use crate::services::tasks::channel::ChannelingAction;
@@ -30,48 +32,23 @@ struct HeroResponse {
 #[allow(unused_assignments, unused_mut)]
 async fn create_hero_endpoint() -> impl Responder {
     let mut rng = rand::thread_rng();
-    let mut hp = rng.gen_range(475..725);
-    let damage_min = rng.gen_range(21..28); // Adjusted for "low end" specification
-    let damage_max = rng.gen_range(26..49); // Adjusted for "high end" specification
-    let mut armor = rng.gen_range(2..6);
-    let mut strength = rng.gen_range(15..26);
-    let mut intelligence = rng.gen_range(15..20); // Adjusted upper bound to 20 for inclusivity
-    let mut agility = rng.gen_range(10..25);
-    let mut exploration = rng.gen_range(1..20);
-    let mut crafting = rng.gen_range(1..20);
-    // Determine category based on HP
-    let hero = Hero::new(
-        BaseStats {
-            id: None,
-            level: 1,
-            xp: 0,
-            damage: Range {
-                min: damage_min,
-                max: damage_max,
-            },
-            resilience: 1,
-            hit_points: hp,
-            armor,
-        },
-        Attributes {
-            id: None,
-            strength,
-            agility,
-            intelligence,
-            exploration,
-            crafting,
-        },
-        rng.gen_range(80..120),
-        0,
-    );
-    let created_hero = Infra::repo().insert_hero(hero).await;
+    let mut hp = rng.gen_range(70..110);
+    let mut strength = rng.gen_range(2..6);
+    let dexterity = rng.gen_range(0..4); // Adjusted upper bound to 20 for inclusivity
+                                         // Determine category based on HP
+    let repo = HeroRepo {};
+    let hero = Hero::new(hp, strength, dexterity, Class::get_rand());
+    let created_hero = repo.insert_hero(hero).await;
 
     match created_hero {
         Ok(hero) => {
             let hero_and_region = HeroResponse { hero };
             HttpResponse::Created().json(hero_and_region)
         }
-        Err(e) => return HttpResponse::InternalServerError().json(e.to_string()),
+        Err(e) => {
+            error!("Error creating hero: {}", e);
+            return HttpResponse::InternalServerError().json(e.to_string());
+        }
     }
 }
 
@@ -94,7 +71,7 @@ pub struct HeroStateResponse {
 #[get("/heroes/{id}")]
 async fn hero_state(path: Path<String>, app_state: Data<AppState>) -> impl Responder {
     let hero_id = path.into_inner();
-    let hero = Infra::repo().get_hero(hero_id.clone()).await;
+    let hero = Infra::hero_repo().get_hero(hero_id.clone()).await;
 
     let app_state = app_state.get_ref().clone();
     let combat_tx = app_state.combat_tx.clone();

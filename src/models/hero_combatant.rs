@@ -3,11 +3,12 @@ use std::cmp::max;
 
 use serde::{Deserialize, Serialize};
 
-use crate::events::combat::CombatError;
+use crate::events::combat::{CombatError, CombatantState, PlayerCombatState};
 use crate::models::cards::{Card, Deck};
 use crate::models::combatant::Combatant;
 
 use super::hero::Hero;
+use super::resources::Relic;
 use super::talent::Spell;
 
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -19,11 +20,12 @@ pub struct HeroCombatant {
     cards_in_discard: Vec<Card>,
     cards_in_hand: Vec<Card>,
     deck: Deck,
-    gauge: i32,
+    zeal: i32,
+    relics: Vec<Relic>,
 }
 
 impl HeroCombatant {
-    pub fn new(hero: Hero, deck: Deck) -> Self {
+    pub fn new(hero: Hero, deck: Deck, relics: Vec<Relic>) -> Self {
         HeroCombatant {
             id: hero.id.clone().unwrap(),
             hero,
@@ -31,11 +33,29 @@ impl HeroCombatant {
             cards_in_hand: vec![],
             deck,
             mana: 0,
-            gauge: 0,
+            zeal: 0,
+            relics,
         }
     }
 }
+
 impl Combatant for HeroCombatant {
+    fn get_player_state(&self) -> CombatantState {
+        CombatantState::Player {
+            max_hp: self.hero.hp,
+            hp: self.get_hp(),
+            mana: self.mana,
+            zeal: self.zeal,
+            armor: self.get_armor(),
+            strength: self.hero.strength,
+            intelligence: self.hero.intelligence,
+            dexterity: self.hero.dexterity,
+            spells: self.get_spells(),
+            relics: self.get_relics(),
+            drawn_cards: self.cards_in_hand.clone(),
+            cards_in_discard: self.cards_in_discard.clone(),
+        }
+    }
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -43,16 +63,25 @@ impl Combatant for HeroCombatant {
     fn get_name(&self) -> &str {
         &self.hero.name
     }
+
+    fn get_cards_in_discard(&self) -> &Vec<Card> {
+        &self.cards_in_discard
+    }
+
+    fn get_zeal(&self) -> i32 {
+        self.zeal
+    }
+
     fn get_hp(&self) -> i32 {
         self.hero.hp
     }
 
-    fn get_damage(&self) -> i32 {
-        self.hero.strength
-    }
-
     fn get_spells(&self) -> Vec<Spell> {
         self.hero.spells.clone()
+    }
+
+    fn get_relics(&self) -> Vec<Relic> {
+        self.relics.clone()
     }
 
     fn get_armor(&self) -> i32 {

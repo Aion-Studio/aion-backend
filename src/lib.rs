@@ -11,11 +11,14 @@ pub mod webserver;
 
 pub mod fp_macros;
 // pub mod storable;
+mod db_client;
+
+pub use db_client::*;
+
 pub mod telemetry;
 
 #[allow(warnings, unused)]
 pub mod prisma;
-
 #[allow(dead_code)]
 #[allow(unused_variables)]
 mod models {
@@ -58,9 +61,8 @@ mod events {
 
 mod services {
     pub mod impls {
-
         pub mod combat_service;
-        pub mod items_service;
+        pub mod redis_storage;
         pub mod tasks;
     }
 

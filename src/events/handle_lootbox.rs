@@ -32,7 +32,7 @@ impl LootBoxHandler {
     pub async fn create_lootbox_quest_action(quest_action: TaskAction) {
         if let TaskAction::QuestAction(hero_id, action_id) = quest_action {
             let action = Infra::repo().get_action_by_id(&action_id).await.unwrap();
-            let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+            let mut hero = Infra::hero_repo().get_hero(hero_id.clone()).await.unwrap();
             let lootbox = match action.generate_loot_box(Some(hero_id)) {
                 Ok(loot_box) => loot_box,
                 Err(err) => {
@@ -55,7 +55,7 @@ impl LootBoxHandler {
             _ => return,
         };
         let hero_id = action.clone().hero.id.unwrap();
-        let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+        let mut hero = Infra::hero_repo().get_hero(hero_id.clone()).await.unwrap();
 
         let hero_region = Infra::repo()
             .get_current_hero_region(&hero.get_id())
@@ -118,7 +118,10 @@ impl LootBoxHandler {
         tokio::spawn(async move {
             if let Ok(Channel(result)) = action.generate_loot_box(None) {
                 info!("Channeling completed, generating lootbox...");
-                let mut hero = Infra::repo().get_hero(action.hero.get_id()).await.unwrap();
+                let mut hero = Infra::hero_repo()
+                    .get_hero(action.hero.get_id())
+                    .await
+                    .unwrap();
                 hero.equip_loot(Channel(result.clone()));
                 if let Err(e) = Infra::repo()
                     .store_action_completed(ActionCompleted::new(
@@ -131,7 +134,7 @@ impl LootBoxHandler {
                     error!("Error storing action completed: {}", e);
                 }
                 // update hero in db
-                if let Err(e) = Infra::repo().update_hero(hero).await {
+                if let Err(e) = Infra::hero_repo().update_hero(hero).await {
                     error!("Error updating hero: {}", e);
                 }
 
@@ -154,7 +157,7 @@ impl LootBoxHandler {
                 hero_id,
             );
             if let Ok(TaskLootBox::Quest(result)) = quest.generate_loot_box(Some(hero_id.clone())) {
-                let mut hero = Infra::repo().get_hero(hero_id.clone()).await.unwrap();
+                let mut hero = Infra::hero_repo().get_hero(hero_id.clone()).await.unwrap();
                 hero.equip_loot(TaskLootBox::Quest(result.clone()));
                 if let Err(e) = Infra::repo()
                     .store_action_completed(ActionCompleted::new(
@@ -167,7 +170,7 @@ impl LootBoxHandler {
                     error!("Error storing action completed: {}", e);
                 }
 
-                if let Err(e) = Infra::repo().update_hero(hero).await {
+                if let Err(e) = Infra::hero_repo().update_hero(hero).await {
                     error!("Error updating hero: {}", e);
                 }
 
@@ -221,7 +224,7 @@ impl LootBoxGenerator<String> for Quest {
 impl GeneratesResources<()> for Quest {
     fn generate_resources(&self, _: Option<()>) -> HashMap<Resource, i32> {
         let mut res = HashMap::new();
-        res.insert(Resource::NexusOrb, rand::thread_rng().gen_range(5..20));
+        res.insert(Resource::Flux, rand::thread_rng().gen_range(5..20));
         res
     }
 }
@@ -230,7 +233,7 @@ impl GeneratesResources<()> for Quest {
 impl GeneratesResources<f64> for ExploreAction {
     fn generate_resources(&self, _: Option<f64>) -> HashMap<Resource, i32> {
         let mut loot = HashMap::new();
-        loot.insert(Resource::StormShard, rand::thread_rng().gen_range(5..20));
+        loot.insert(Resource::Gem, rand::thread_rng().gen_range(5..20));
         info!("generated loot {:?}", loot);
         loot
     }
@@ -240,7 +243,7 @@ impl LootBoxGenerator<f64> for ExploreAction {
     fn generate_loot_box(&self, region_discovery: Option<f64>) -> Result<TaskLootBox> {
         let hero = self.hero.clone();
         let hero_id = hero.id.as_ref().unwrap();
-        let boost_factor = self.calculate_boost_factor(self.hero.attributes.exploration.clone());
+        let boost_factor = self.calculate_boost_factor(self.hero.explore);
         let discovery_increase = round(self.discovery_level as f64 * boost_factor, 2);
         info!(
             "discovery level of action {} and boost factor {} , final result {}",
@@ -257,6 +260,7 @@ impl LootBoxGenerator<f64> for ExploreAction {
         Ok(TaskLootBox::Region(result))
     }
 }
+// TODO: fix this, valor no longer applies
 // a static constant variable that maps npc monster's level to amount of valor resource to give, lvl 1-10 of monster, each level gives 35% more valor than previous  starting with 8
 const VALOR: [i32; 10] = [8, 11, 15, 20, 27, 36, 49, 66, 89, 120];
 impl GeneratesResources<()> for Action {
@@ -265,7 +269,7 @@ impl GeneratesResources<()> for Action {
         if let ActionNames::Raid = self.name {
             let valor = VALOR[npc_level as usize - 1];
             let mut res = HashMap::new();
-            res.insert(Resource::Valor, valor);
+            res.insert(Resource::Gem, valor);
             return res;
         }
         let res = HashMap::new();

@@ -3,23 +3,19 @@ use std::fmt;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
-use crate::models::card_effect::{ActiveEffect, ActiveEffectType};
+use crate::models::card_effect::ActiveEffect;
 use crate::models::cards::Card;
+use crate::models::combatant::CombatantType;
 use crate::models::hero_combatant::HeroCombatant;
-use crate::models::talent::Effect;
+use crate::models::resources::Relic;
+use crate::models::talent::{Effect, Spell};
 use crate::{
     models::{combatant::Combatant, npc::Monster},
     services::impls::combat_service::CombatCommand,
 };
 use actix::Message;
-use serde::ser::SerializeMap;
-use serde::{
-    de::{EnumAccess, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
-use serde_json::json;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tracing::log::info;
-use tracing::{error, warn};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub enum CombatantIndex {
@@ -29,12 +25,49 @@ pub enum CombatantIndex {
 
 use CombatantIndex::*;
 
+#[derive(Serialize, Deserialize)]
+pub struct SerializableCombatEncounter {
+    id: String,
+    player_combatant: HeroCombatant,
+    npc_combatant: Monster,
+    round: i32,
+    action_id: Option<String>,
+    active_effects: Vec<ActiveEffect>,
+    current_turn: CombatantIndex,
+    status_effects: HashMap<String, Vec<Effect>>,
+    started: bool,
+    initial_hps: (i32, i32),
+}
+
+trait CombatantExt {
+    fn clone_as_hero_combatant(&self) -> HeroCombatant;
+    fn clone_as_monster(&self) -> Monster;
+}
+
+impl CombatantExt for dyn Combatant {
+    fn clone_as_hero_combatant(&self) -> HeroCombatant {
+        if let Some(hero) = self.as_any().downcast_ref::<HeroCombatant>() {
+            hero.clone()
+        } else {
+            panic!("Expected HeroCombatant")
+        }
+    }
+
+    fn clone_as_monster(&self) -> Monster {
+        if let Some(monster) = self.as_any().downcast_ref::<Monster>() {
+            monster.clone()
+        } else {
+            panic!("Expected Monster")
+        }
+    }
+}
+
 type CombatantId = String;
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CombatEncounter {
     id: String,
-    pub player_combatant: Arc<Mutex<dyn Combatant>>,
-    pub npc_combatant: Arc<Mutex<dyn Combatant>>,
+    pub player_combatant: CombatantType,
+    pub npc_combatant: CombatantType,
     pub round: i32,
     pub action_id: Option<String>,
     active_effects: Vec<ActiveEffect>,
@@ -45,13 +78,11 @@ pub struct CombatEncounter {
 }
 
 impl CombatEncounter {
-    pub fn new<T: Combatant + 'static>(hero: HeroCombatant, npc: T) -> Self {
+    pub fn new(hero: HeroCombatant, npc: Monster) -> Self {
         let hero_hp = hero.get_hp();
         let monster_hp = npc.get_hp();
-        let player_combatant = Arc::new(Mutex::new(hero));
-        let npc_combatant = Arc::new(Mutex::new(npc));
-        player_combatant.lock().unwrap().add_mana(1);
-        npc_combatant.lock().unwrap().add_mana(1);
+        let player_combatant = CombatantType::Hero(hero);
+        let npc_combatant = CombatantType::Monster(npc);
 
         CombatEncounter {
             id: uuid::Uuid::new_v4().to_string(),
@@ -76,14 +107,14 @@ impl CombatEncounter {
 
     pub fn get_combatant_ids(&self) -> Vec<String> {
         vec![
-            self.player_combatant.lock().unwrap().get_id(),
-            self.npc_combatant.lock().unwrap().get_id(),
+            self.player_combatant.as_combatant().get_id(),
+            self.npc_combatant.as_combatant().get_id(),
         ]
     }
 
     pub fn has_combatant(&self, combatant_id: &str) -> bool {
-        self.player_combatant.lock().unwrap().get_id() == combatant_id
-            || self.npc_combatant.lock().unwrap().get_id() == combatant_id
+        self.player_combatant.as_combatant().get_id() == combatant_id
+            || self.npc_combatant.as_combatant().get_id() == combatant_id
     }
 
     pub fn whos_turn(&self) -> CombatantIndex {
@@ -93,7 +124,7 @@ impl CombatEncounter {
         &self,
         index: &CombatantIndex,
         is_opponent: Option<bool>,
-    ) -> Arc<Mutex<dyn Combatant>> {
+    ) -> CombatantType {
         match index {
             Player => {
                 if is_opponent.unwrap_or(false) {
@@ -112,8 +143,8 @@ impl CombatEncounter {
         }
     }
 
-    pub fn get_combatant_by_id(&self, combatant_id: &str) -> Option<Arc<Mutex<dyn Combatant>>> {
-        let player_combatant_id = self.player_combatant.lock().unwrap().get_id();
+    pub fn get_combatant_by_id(&self, combatant_id: &str) -> Option<CombatantType> {
+        let player_combatant_id = self.player_combatant.as_combatant().get_id();
         if combatant_id == player_combatant_id {
             Some(self.player_combatant.clone())
         } else {
@@ -121,8 +152,8 @@ impl CombatEncounter {
         }
     }
 
-    pub fn get_opponent(&self, combatant_id: &str) -> Arc<Mutex<dyn Combatant>> {
-        let player_combatant_id = self.player_combatant.lock().unwrap().get_id();
+    pub fn get_opponent(&self, combatant_id: &str) -> CombatantType {
+        let player_combatant_id = self.player_combatant.as_combatant().get_id();
         if combatant_id == player_combatant_id {
             self.npc_combatant.clone()
         } else {
@@ -131,9 +162,9 @@ impl CombatEncounter {
     }
 
     pub fn get_combatant_idx(&self, combatant_id: &str) -> Option<CombatantIndex> {
-        if combatant_id == self.player_combatant.lock().unwrap().get_id() {
+        if combatant_id == self.player_combatant.as_combatant().get_id() {
             Some(Player)
-        } else if combatant_id == self.npc_combatant.lock().unwrap().get_id() {
+        } else if combatant_id == self.npc_combatant.as_combatant().get_id() {
             Some(Npc)
         } else {
             None
@@ -142,25 +173,16 @@ impl CombatEncounter {
 
     // shuffles deck and draws 5 cards
     pub fn initialize(&mut self, combatant_id: &str) -> anyhow::Result<()> {
-        let combatant = self.get_combatant(&Player, None);
-        let mut locked = combatant.lock().unwrap();
+        let mut combatant_type = self.get_combatant(&Player, None);
+        let combatant = combatant_type.as_combatant_mut();
 
-        if locked.get_hand().is_empty() {
-            locked.shuffle_deck();
-            locked.draw_cards();
+        if combatant.get_hand().is_empty() {
+            combatant.shuffle_deck();
+            combatant.draw_cards();
         }
         Ok(())
     }
 
-    pub fn request_state(&self) -> EncounterState {
-        EncounterState {
-            combatant_1: self.player_combatant.lock().unwrap().clone_box(),
-            combatant_2: self.npc_combatant.lock().unwrap().clone_box(),
-            turn: self.current_turn.clone(),
-            round: self.round,
-            active_effects: self.active_effects.clone(),
-        }
-    }
     // fn handle_attack(
     //     &mut self,
     //     attacker_idx: CombatantIndex,
@@ -209,52 +231,6 @@ impl CombatEncounter {
     // }
 
     // Utility function to find a card by ID and clone it
-    fn find_and_clone_card(&self, idx: &CombatantIndex, card_id: &str) -> Option<Card> {
-        self.battle_fields
-            .get(idx)?
-            .iter()
-            .find(|card| card.id == card_id)
-            .cloned() // Clones the found card
-    }
-
-    // Utility function to update a card in the battle field
-    // This replaces the card with a new version
-    fn update_card_in_battle_field(
-        &mut self,
-        idx: &CombatantIndex,
-        updated_card: &Card,
-    ) -> Result<(), CombatError> {
-        let cards = self
-            .battle_fields
-            .get_mut(idx)
-            .ok_or(CombatError::CardNotFound)?;
-        if let Some(pos) = cards.iter().position(|card| card.id == updated_card.id) {
-            cards[pos] = updated_card.clone(); // Replace the old card with the updated one
-        } else {
-            return Err(CombatError::CardNotFound);
-        }
-        Ok(())
-    }
-
-    fn remove_card(&mut self, idx: &CombatantIndex, card_id: &str) {
-        let card_option = {
-            // Directly remove the card from the battle_fields by iterating with enumeration, which allows us to remove by index
-            let cards = self.battle_fields.get_mut(idx).unwrap(); // Safely unwrapped assuming idx is always valid
-            let card_pos = cards.iter().position(|card| card.id == card_id);
-            card_pos.map(|pos| cards.remove(pos)) // Remove the card at the found position, returns Option<Card>
-        };
-
-        if let Some(card) = card_option {
-            // If the card was found and removed, now add it to the combatant's discard pile
-            let combatant = self.get_combatant(idx, None);
-            let mut guard = combatant.lock().unwrap();
-            guard.add_to_discard(card);
-        } else {
-            // Handle the error case where the card was not found
-            error!("Card not found but tried to remove from battle field");
-            return;
-        }
-    }
 
     pub fn process_combat_turn(
         &mut self,
@@ -262,46 +238,44 @@ impl CombatEncounter {
         combatant_id: &str, // the ID of the combatant making the move
     ) -> Result<CombatTurnMessage, CombatError> {
         use CombatCommand::*;
-        let idx = self.get_combatant_idx(combatant_id).unwrap();
-        let opponent_idx = match idx {
-            player_combatant => CombatantIndex::Npc,
-            CombatantIndex::Npc => Player,
+        let (idx, opponent_idx) = match self.get_combatant_idx(combatant_id) {
+            Some(Player) => (Player, Npc),
+            Some(Npc) => (Npc, Player),
+            None => return Err(CombatError::CardNotFound),
         };
         let is_valid_turn = self.current_turn == idx;
         if !is_valid_turn {
             return Err(CombatError::OutOfTurnAction);
         }
-        let arc = self.get_combatant_by_id(combatant_id).unwrap();
+        let combatant = self
+            .get_combatant_by_id(combatant_id)
+            .unwrap()
+            .as_combatant();
         let result = match cmd.clone() {
             AttackHero(card) => {
                 // TODO: FIll in
                 Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
             }
             PlayCard(mut card) => {
-                let mut combatant = arc.lock().unwrap();
-
                 // TODO FIll in
+                todo!();
 
                 drop(combatant);
                 Ok(CombatTurnMessage::CommandPlayed(cmd.clone()))
             }
             EndTurn => {
-                self.current_turn = match self.current_turn {
-                    player_combatant => CombatantIndex::Npc,
-                    CombatantIndex::Npc => Player,
+                self.current_turn = match idx {
+                    Player => CombatantIndex::Npc,
+                    Npc => Player,
                 };
 
                 // increment round draws cards for combatant 1, else statement draws for combatant 2
                 if self.current_turn == Player {
                     self.increment_round();
                 } else {
-                    let mutex = self.get_combatant(&CombatantIndex::Npc, None);
-                    let mut combatant = mutex.lock().unwrap();
-                    info!(
-                        "----drawing 1 card for combatant {:?}",
-                        combatant.get_name()
-                    );
-                    combatant.draw_cards(1);
+                    let mut combatant_type = self.get_combatant(&CombatantIndex::Npc, None);
+                    let combatant = combatant_type.as_combatant_mut();
+                    combatant.draw_cards();
                 }
 
                 if let Some(_) = self.check_skip_turn_effects() {
@@ -318,32 +292,6 @@ impl CombatEncounter {
         result
     }
 
-    fn oppo_idx(&self) -> CombatantIndex {
-        match self.current_turn {
-            Player => Npc,
-            Npc => Player,
-        }
-    }
-
-    /// Applies damage over time to opponent on your turn
-    fn apply_dots(&self) {
-        let turn = self.oppo_idx();
-        for active_effect in &self.active_effects {
-            if active_effect.combatant_id
-                == self.get_combatant(&turn, None).lock().unwrap().get_id()
-            {
-                match active_effect.effect {
-                    ActiveEffectType::Poison { amount } => {
-                        let combatant = self.get_combatant(&turn, None);
-                        let mut combatant = combatant.lock().unwrap();
-                        combatant.take_damage(amount);
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
     fn check_skip_turn_effects(&mut self) -> Option<()> {
         unimplemented!()
     }
@@ -352,46 +300,61 @@ impl CombatEncounter {
         info!("Ending Round");
         self.round += 1;
         {
-            let mut player_combatant = self.player_combatant.lock().unwrap();
+            let player_combatant = self.player_combatant.as_combatant_mut();
             player_combatant.add_mana();
             player_combatant.draw_cards();
         }
         {
-            let mut npc_combatant = self.npc_combatant.lock().unwrap();
+            let npc_combatant = self.npc_combatant.as_combatant_mut();
             npc_combatant.add_mana();
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PlayerCombatState {}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum CombatTurnMessage {
     CommandPlayed(CombatCommand),
     // Command played , result of the defender
     PlayerTurn(CombatantIndex),
     PlayerMissesTurn,
-    YourTurn(Box<dyn Combatant>), // only sent to the next turn player to show him cooldowns
     Winner(CombatantIndex),
-    PlayerState {
-        player_combatant: Box<dyn Combatant>,
-        me_idx: CombatantIndex,
-        turn: CombatantIndex,
-        my_battle_field: Vec<Card>,
-        opponent_battle_field: Vec<Card>,
-        opponent: Box<dyn Combatant>,
-        opponent_hp: i32,
-        active_effects: Vec<ActiveEffect>,
-    },
-    EncounterState(EncounterState), // Requested state
+    PlayerState(CombatantState),
+    EncounterData(EncounterState), // Requested state
     Temp,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum CombatantState {
+    Player {
+        max_hp: i32,
+        hp: i32,
+        mana: i32,
+        armor: i32,
+        zeal: i32,
+        strength: i32,
+        intelligence: i32,
+        dexterity: i32,
+        spells: Vec<Spell>,
+        relics: Vec<Relic>,
+        drawn_cards: Vec<Card>,
+        cards_in_discard: Vec<Card>,
+    },
+    Npc {
+        max_hp: i32,
+        hp: i32,
+        spells: Vec<Spell>,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EncounterState {
     pub turn: CombatantIndex,
     pub round: i32,
-    pub combatant_1: Box<dyn Combatant>,
-    pub combatant_2: Box<dyn Combatant>,
-    pub active_effects: Vec<ActiveEffect>,
+    pub player_state: CombatantState,
+    pub npc_state: CombatantState,
 }
 
 impl Clone for CombatEncounter {
@@ -418,178 +381,8 @@ enum CombatantData {
     Hero(HeroCombatant),
 }
 
-impl Clone for CombatTurnMessage {
-    fn clone(&self) -> Self {
-        match self {
-            CombatTurnMessage::CommandPlayed(cmd) => CombatTurnMessage::CommandPlayed(cmd.clone()),
-            CombatTurnMessage::YourTurn(combatant) => {
-                CombatTurnMessage::YourTurn(combatant.clone_box())
-            }
-            CombatTurnMessage::PlayerMissesTurn => CombatTurnMessage::PlayerMissesTurn,
-            CombatTurnMessage::PlayerTurn(index) => CombatTurnMessage::PlayerTurn(index.clone()),
-            CombatTurnMessage::Winner(idx) => CombatTurnMessage::Winner(idx.clone()),
-            CombatTurnMessage::EncounterState(state) => {
-                CombatTurnMessage::EncounterState(EncounterState {
-                    round: state.round,
-                    turn: state.turn.clone(),
-                    combatant_1: state.combatant_1.clone_box(),
-                    combatant_2: state.combatant_2.clone_box(),
-                    active_effects: state.active_effects.clone(),
-                })
-            }
-            CombatTurnMessage::PlayerState {
-                me,
-                me_idx,
-                turn,
-                my_battle_field,
-                active_effects,
-                opponent_battle_field,
-                opponent,
-                opponent_hp,
-            } => CombatTurnMessage::PlayerState {
-                me: me.clone_box(),
-                me_idx: me_idx.clone(),
-                opponent: opponent.clone_box(),
-                turn: turn.clone(),
-                active_effects: active_effects.clone(),
-                my_battle_field: my_battle_field.clone(),
-                opponent_battle_field: opponent_battle_field.clone(),
-                opponent_hp: *opponent_hp,
-            },
-            _ => {
-                todo!()
-            }
-        }
-    }
-}
-
 impl Message for CombatTurnMessage {
     type Result = ();
-}
-
-impl Serialize for CombatTurnMessage {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match self {
-            CombatTurnMessage::CommandPlayed(cmd) => {
-                let mut map = serializer.serialize_map(Some(4))?;
-                map.serialize_entry("type", "CommandPlayed")?;
-                map.serialize_entry("value", &json!(cmd))?;
-                map.end()
-            }
-            CombatTurnMessage::Winner(idx) => {
-                let mut map = serializer.serialize_map(Some(2))?;
-                map.serialize_entry("type", "Winner")?;
-                map.serialize_entry("value", &idx)?;
-                map.end()
-            }
-            CombatTurnMessage::PlayerTurn(idx) => {
-                let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("type", "PlayerTurn")?;
-                map.serialize_entry("value", &idx)?;
-                map.end()
-            }
-            CombatTurnMessage::YourTurn(combatant) => {
-                let mut map = serializer.serialize_map(Some(3))?;
-                map.serialize_entry("type", "YourTurn")?;
-                map.serialize_entry("spells", &combatant.get_spells())?;
-                map.end()
-            }
-            CombatTurnMessage::PlayerState {
-                my_battle_field,
-                me_idx,
-                me,
-                opponent_battle_field,
-                opponent_hp,
-                opponent,
-                active_effects,
-                turn,
-            } => {
-                let mut map = serializer.serialize_map(None)?;
-                let my_hand = me.get_hand();
-                map.serialize_entry("type", "PlayerState")?;
-                map.serialize_entry("turn", &turn)
-                    .expect("TODO: panic message");
-                map.serialize_entry("my_battle_field", my_battle_field)
-                    .expect("TODO: panic message");
-                map.serialize_entry("opponent_battle_field", opponent_battle_field)
-                    .expect("TODO: panic message");
-                map.serialize_entry("hand", my_hand)
-                    .expect("TODO: panic message");
-                map.serialize_entry("opponent_hp", opponent_hp)
-                    .expect("TODO: panic message");
-                map.serialize_entry("active_effects", active_effects)
-                    .expect("TODO: panic message");
-                let me = json!({
-                    "hp": me.get_hp(),
-                    "name": me.get_name(),
-                    "mana": me.get_mana(),
-                    "armor": me.get_armor(),
-                    "idx": me_idx
-                });
-                let oppo = json!({
-                    "hp": opponent_hp,
-                    "name": opponent.get_name(),
-                    "mana": opponent.get_mana(),
-                    "armor": opponent.get_armor(),
-                });
-                map.serialize_entry("opponent", &oppo)
-                    .expect("TODO: panic message");
-                map.serialize_entry("me", &me).expect("TODO: panic message");
-                map.end()
-            }
-            CombatTurnMessage::PlayerMissesTurn => {
-                let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("type", "PlayerMissesTurn")?;
-                map.end()
-            }
-            _ => {
-                warn!("attempted to serialize a message not meant to be sent to the client");
-                let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("type", "Invalid")?;
-                map.end()
-            }
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for CombatTurnMessage {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "lowercase")]
-        enum Field {
-            CommandPlayed,
-            Winner,
-        }
-
-        struct CombatTurnMessageVisitor;
-
-        impl<'de> Visitor<'de> for CombatTurnMessageVisitor {
-            type Value = CombatTurnMessage;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("enum CombatTurnMessage")
-            }
-
-            fn visit_enum<A>(self, data: A) -> Result<CombatTurnMessage, A::Error>
-            where
-                A: EnumAccess<'de>,
-            {
-                match data.variant()? {
-                    (Field::CommandPlayed, _) => Ok(CombatTurnMessage::Winner(Player)),
-                    (Field::Winner, _) => Ok(CombatTurnMessage::Winner(Player)),
-                }
-            }
-        }
-
-        const FIELDS: &'static [&'static str] = &["commandplayed", "winner"];
-        deserializer.deserialize_enum("CombatTurnMessage", FIELDS, CombatTurnMessageVisitor)
-    }
 }
 
 #[derive(Debug)]
@@ -612,5 +405,3 @@ impl Display for CombatError {
         }
     }
 }
-
-// `?` couldn't convert the error to `events::combat::CombatError` [E0277] Note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait Help: the following other types implement trait `std::ops::FromResidual<R>`: <std::result::Result<T, F> as std::ops::FromResidual<std::ops::Yeet<E>>> <std::result::Result<T, F> as std::ops::FromResidual<std::result::Result<std::convert::Infallible, E>>> Note: required for `std::result::Result<events::combat::CombatTurnMessage, events::combat::CombatError>` to implement `std::ops::FromResidual<std::result::Result<std::convert::Infallible, anyhow::Error>>`

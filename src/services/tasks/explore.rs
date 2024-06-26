@@ -7,8 +7,8 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::configuration::get_explore_durations;
-use crate::models::hero::{Attributes, BaseStats, Range};
 use crate::models::region::HeroRegion;
+use crate::prisma::Class;
 use crate::{
     models::{hero::Hero, region::RegionName},
     services::traits::async_task::{BaseTask, Task, TaskExecReturn, TaskStatus},
@@ -33,31 +33,7 @@ pub struct ExploreAction {
 
 impl Default for ExploreAction {
     fn default() -> Self {
-        let mut rng = rand::thread_rng();
-        let hero = Hero::new(
-            BaseStats {
-                id: None,
-                level: 1,
-                xp: 0,
-                damage: Range {
-                    min: rng.gen_range(1..5),
-                    max: rng.gen_range(5..10),
-                },
-                resilience: rng.gen_range(0..1),
-                hit_points: 30,
-                armor: rng.gen_range(0..=10),
-            },
-            Attributes {
-                id: None,
-                strength: rng.gen_range(1..20),
-                agility: rng.gen_range(1..20),
-                intelligence: rng.gen_range(1..20),
-                exploration: rng.gen_range(1..20),
-                crafting: rng.gen_range(1..20),
-            },
-            rng.gen_range(80..120),
-            0,
-        );
+        let hero = Hero::new(100, 4, 3, Class::Ranger);
         ExploreAction::without_cost(hero, RegionName::Forest)
     }
 }
@@ -87,7 +63,7 @@ impl ExploreAction {
         let mut action = Self::without_cost(hero.clone(), hero_region.region_name.clone());
         action.stamina_cost = stamina_cost;
 
-        if (hero.stamina - stamina_cost) < 0 {
+        if (hero.stamina.amount - stamina_cost) < 0 {
             warn!(
                 "hero stamina is {:?} but cost to do action is {:?}",
                 hero.stamina, stamina_cost
