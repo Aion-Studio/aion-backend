@@ -271,7 +271,7 @@ pub async fn get_hero_status(
             // check if combat in play
             let (tx, rx) = oneshot::channel();
 
-            let msg = ControllerMessage::RequestState {
+            let msg = ControllerMessage::EncounterCheck {
                 combatant_id: hero.get_id().clone(),
                 tx,
             };
@@ -282,8 +282,8 @@ pub async fn get_hero_status(
                 }
             }
             let is_in_combat = match rx.await {
-                Ok(res) => res.0.is_some(),
-                Err(e) => false,
+                Ok(res) => res,
+                Err(_) => false,
             };
 
             Ok(HeroStateResponse {

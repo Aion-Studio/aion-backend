@@ -289,28 +289,31 @@ model CardEffect {
 }
 
 model HeroCard {
-  id       String     @id @default(uuid())
+  id       String    @id @default(uuid())
   heroId   String
   cardId   String
-  hero     Hero       @relation(fields: [heroId], references: [id])
-  card     Card       @relation(fields: [cardId], references: [id])
-  DeckCard DeckCard[]
+  hero     Hero      @relation(fields: [heroId], references: [id])
+  card     Card      @relation(fields: [cardId], references: [id])
+  DeckCard DeckCard?
+  inDeck   Boolean   @default(false)
 }
 
 model DeckCard {
-  id         String    @id @default(uuid())
+  id         String   @id @default(uuid())
   deckId     String
-  HeroCard   HeroCard? @relation(fields: [heroCardId], references: [id])
-  heroCardId String?
+  deck       Deck     @relation(fields: [deckId], references: [id])
+  heroCard   HeroCard @relation(fields: [heroCardId], references: [id])
+  heroCardId String   @unique
 }
 
 model Deck {
-  id     String  @id @default(uuid())
-  name   String  @default("my deck")
-  Hero   Hero?   @relation(fields: [heroId], references: [id])
-  heroId String?
-  active Boolean @default(false)
-  npcId  String?
+  id       String     @id @default(uuid())
+  name     String     @default("my deck")
+  hero     Hero?      @relation(fields: [heroId], references: [id])
+  heroId   String?
+  active   Boolean    @default(false)
+  npcId    String?
+  DeckCard DeckCard[]
 }
 
 enum EffectType {

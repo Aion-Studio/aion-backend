@@ -18,7 +18,7 @@ pub struct PlayerDecisionMaker {
     // provided by combat controller
     pub player_idx: CombatantIndex,
     to_ws_tx: Sender<CombatTurnMessage>,
-    from_ws_tx: Option<Sender<CombatCommand>>,
+    pub from_ws_tx: Option<Sender<CombatCommand>>,
     pub notify_from_ws_tx_set: Arc<Notify>,
     shutdown_signal: Option<oneshot::Receiver<()>>,
     shutdown_trigger: Option<oneshot::Sender<()>>,

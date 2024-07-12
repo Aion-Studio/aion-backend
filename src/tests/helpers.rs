@@ -1,20 +1,34 @@
 use std::{
     process::Command,
-    sync::{Arc, Mutex},
+    sync::{Arc, Once},
 };
 
 use crate::{
-    models::hero::{Attributes, BaseStats, Hero, Range},
+    events::combat::CombatEncounter,
+    models::{
+        combatant::Combatant,
+        hero::Hero,
+        hero_combatant::HeroCombatant,
+        npc::{CpuCombatantDecisionMaker, Monster},
+        player_decision_maker::PlayerDecisionMaker,
+    },
     prisma::PrismaClient,
+    services::{
+        impls::combat_service::{
+            CombatCommand, CombatController, ControllerMessage, EnterBattleData,
+        },
+        traits::combat_decision_maker::DecisionMaker,
+    },
 };
 use actix_web::web::Data;
+use futures::channel::oneshot;
 use prisma_client_rust::raw;
-use rand::Rng;
 
 use lazy_static::lazy_static;
+use tokio::sync::{mpsc, Mutex};
 
 lazy_static! {
-    static ref SETUP_DONE: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    static ref SETUP_DONE: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
 }
 
 lazy_static! {
@@ -101,32 +115,7 @@ async fn seed_database(client: &PrismaClient) -> Result<bool, Box<dyn std::error
 }
 
 pub fn random_hero() -> Hero {
-    let mut rng = rand::thread_rng();
-
-    Hero::new(
-        BaseStats {
-            id: None,
-            level: 1,
-            xp: 0,
-            damage: Range {
-                min: rng.gen_range(1..5),
-                max: rng.gen_range(5..10),
-            },
-            hit_points: rng.gen_range(90..110),
-            armor: rng.gen_range(5..15),
-        },
-        Attributes {
-            id: None,
-            strength: rng.gen_range(1..20),
-            resilience: rng.gen_range(1..20),
-            agility: rng.gen_range(1..20),
-            intelligence: rng.gen_range(1..20),
-            exploration: rng.gen_range(1..20),
-            crafting: rng.gen_range(1..20),
-        },
-        rng.gen_range(80..120),
-        0,
-    )
+    Hero::default()
 }
 
 //  example
@@ -135,3 +124,90 @@ pub fn random_hero() -> Hero {
 //         PrismaValue::Boolean(false),
 //         PrismaValue::String("A Title".to_string())
 //     ))
+
+struct TestRedis {
+    url: String,
+}
+
+impl TestRedis {
+    fn new() -> Self {
+        let url = "redis://localhost:6380".to_string(); // Connect to the test Redis instance
+        TestRedis { url }
+    }
+}
+
+lazy_static! {
+    static ref TEST_REDIS: Mutex<Option<TestRedis>> = Mutex::new(None);
+    static ref INIT: Once = Once::new();
+}
+
+pub async fn init_test_redis() -> String {
+    INIT.call_once(|| {}); // Ensure initialization happens only once
+
+    let mut redis_guard = TEST_REDIS.lock().await;
+    if redis_guard.is_none() {
+        let redis = TestRedis::new();
+        let url = redis.url.clone();
+        *redis_guard = Some(redis);
+        url
+    } else {
+        redis_guard.as_ref().unwrap().url.clone()
+    }
+}
+
+pub async fn init_test_combat(
+    hero: HeroCombatant,
+    monster: Monster,
+) -> (
+    mpsc::Sender<CombatCommand>,
+    mpsc::Sender<ControllerMessage>,
+    String,
+) {
+    let redis_url = init_test_redis().await;
+
+    let (controller_tx, controller_rx) = mpsc::channel(100);
+    let mut combat_controller = CombatController::new(controller_tx.clone(), &redis_url);
+
+    // Start the controller
+    tokio::spawn(async move {
+        combat_controller.run(controller_rx).await;
+    });
+
+    let hero_id = hero.get_id();
+
+    // Create the encounter
+    let encounter = CombatEncounter::new(hero, monster.clone());
+    let encounter_id = encounter.get_id();
+
+    // Set up PlayerDecisionMaker
+    let (player_tx, mut player_rx) = mpsc::channel(10);
+    let decision_maker =
+        PlayerDecisionMaker::new(hero_id.clone(), player_tx, Some("test_action".to_string()));
+
+    let player_decision_maker_arc = Arc::new(Mutex::new(decision_maker));
+    let cloned = player_decision_maker_arc.clone();
+
+    // Set up CpuCombatantDecisionMaker
+
+    // Add decision makers to the controller
+    controller_tx
+        .send(ControllerMessage::AddEncounter { encounter })
+        .await
+        .unwrap();
+
+    // Enter battle always runs before getting player decision maker tx
+    controller_tx
+        .send(ControllerMessage::Combat((
+            CombatCommand::EnterBattle(EnterBattleData(Some(player_decision_maker_arc))),
+            hero_id,
+        )))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let mutex_locked = cloned.lock().await;
+    let player_tx = mutex_locked.get_from_ws_tx().expect("from_tx not set");
+
+    (player_tx, controller_tx, encounter_id)
+}

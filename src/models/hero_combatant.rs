@@ -1,9 +1,10 @@
 use std::any::Any;
-use std::cmp::max;
+use std::cmp::{max, min};
 
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
-use crate::events::combat::{CombatError, CombatantState, PlayerCombatState};
+use crate::events::combat::{CombatError, CombatantState};
 use crate::models::cards::{Card, Deck};
 use crate::models::combatant::Combatant;
 
@@ -15,34 +16,46 @@ use super::talent::Spell;
 #[serde(rename_all = "camelCase")]
 pub struct HeroCombatant {
     id: String,
-    mana: i32,
+    pub mana: i32,
     hero: Hero,
-    cards_in_discard: Vec<Card>,
-    cards_in_hand: Vec<Card>,
-    deck: Deck,
+    pub cards_in_discard: Vec<Card>,
+    pub cards_in_hand: Vec<Card>,
+    pub deck: Deck,
     zeal: i32,
+    max_hp: i32,
     relics: Vec<Relic>,
 }
 
 impl HeroCombatant {
     pub fn new(hero: Hero, deck: Deck, relics: Vec<Relic>) -> Self {
+        let max_hp = hero.hp;
         HeroCombatant {
             id: hero.id.clone().unwrap(),
             hero,
             cards_in_discard: vec![],
             cards_in_hand: vec![],
             deck,
-            mana: 0,
+            mana: 3,
             zeal: 0,
             relics,
+            max_hp,
         }
+    }
+}
+
+impl Default for HeroCombatant {
+    fn default() -> Self {
+        let hero = Hero::default();
+        let deck = Deck::default();
+        let relics = vec![];
+        HeroCombatant::new(hero, deck, relics)
     }
 }
 
 impl Combatant for HeroCombatant {
     fn get_player_state(&self) -> CombatantState {
         CombatantState::Player {
-            max_hp: self.hero.hp,
+            max_hp: self.max_hp,
             hp: self.get_hp(),
             mana: self.mana,
             zeal: self.zeal,
@@ -56,6 +69,11 @@ impl Combatant for HeroCombatant {
             cards_in_discard: self.cards_in_discard.clone(),
         }
     }
+
+    fn heal(&mut self, amount: i32) {
+        self.hero.hp = min(self.max_hp, self.hero.hp + amount);
+    }
+
     fn get_id(&self) -> String {
         self.id.clone()
     }
@@ -105,12 +123,14 @@ impl Combatant for HeroCombatant {
         self.mana += 3;
     }
 
+    // put back remaining in-hand cards + discard pile back to deck and shuffle
     fn shuffle_deck(&mut self) {
+        self.deck.cards_in_deck.append(&mut self.cards_in_hand);
+        self.deck.cards_in_deck.append(&mut self.cards_in_discard);
+        self.cards_in_hand.clear();
+        self.cards_in_discard.clear();
+
         let deck = &mut self.deck;
-        if self.cards_in_discard.len() > 0 {
-            deck.cards_in_deck.append(&mut self.cards_in_discard);
-            self.cards_in_discard.clear();
-        }
         use rand::seq::SliceRandom;
         use rand::thread_rng;
 
@@ -127,17 +147,22 @@ impl Combatant for HeroCombatant {
         if self.deck.cards_in_deck.is_empty() {
             return;
         }
-        self.cards_in_hand.append(
-            &mut self
-                .deck
-                .cards_in_deck
-                .drain(0..num_cards_to_draw as usize)
-                .collect::<Vec<Card>>(),
-        );
+        let mut random_cards_from_deck = (0..num_cards_to_draw)
+            .map(|_| {
+                let random_index = rand::random::<usize>() % self.deck.cards_in_deck.len();
+                let card = self.deck.cards_in_deck.remove(random_index);
+                card
+            })
+            .collect::<Vec<Card>>();
+
+        self.cards_in_hand.append(&mut random_cards_from_deck);
+        println!("drew cards for hero");
     }
 
     fn add_to_discard(&mut self, card: Card) {
+        let card_id = card.id.clone();
         self.cards_in_discard.push(card);
+        self.cards_in_hand.retain(|c| c.id != card_id);
     }
     /// Sets the hero's mana to the amount
 
@@ -152,7 +177,7 @@ impl Combatant for HeroCombatant {
     fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {
         if let Some(idx) = self.cards_in_hand.iter().position(|c| c.id == card.id) {
             self.cards_in_hand.remove(idx);
-            // self.add_to_discard(card.clone());
+            self.add_to_discard(card.clone());
             Ok(())
         } else {
             Err(CombatError::CardNotInHand)

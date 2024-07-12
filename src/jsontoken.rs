@@ -13,7 +13,7 @@ pub struct CombatClaims {
 #[allow(deprecated)]
 pub fn create_combat_token(combatant_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = chrono::Utc::now()
-        .checked_add_signed(chrono::Duration::hours(1))
+        .checked_add_signed(chrono::Duration::hours(300))
         .expect("valid timestamp")
         .timestamp() as usize;
 

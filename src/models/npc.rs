@@ -8,7 +8,7 @@ use tokio::sync::{
 };
 use tracing::log::info;
 
-use crate::events::combat::{CombatError, CombatantIndex, CombatantState, PlayerCombatState};
+use crate::events::combat::{CombatError, CombatantIndex, CombatantState};
 use crate::models::cards::{Card, Deck};
 use crate::{
     events::combat::CombatTurnMessage,
@@ -83,11 +83,14 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                         match result {
                             CombatTurnMessage::PlayerTurn(turn_idx) => {
                                 // Do nothing
+                                    info!("NPC player turn {:?}", turn_idx);
                             }
                             CombatTurnMessage::Winner(idx) => {
                                 // Do nothing
                             }
+
                             CombatTurnMessage::PlayerState(state)=>{
+                                    info!("NPC player state {:?}", state);
                                 // if turn == idx.clone() {
                                 //      let cards_i_can_play = me.get_hand().iter().filter(|c| c.cost <= me.get_mana()).collect::<Vec<_>>();
                                 //     if llm_decisions.is_empty() {
@@ -134,6 +137,7 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
                                 unimplemented!()
                             }
                             x => {
+                                    info!("NPC xx {:?}", x);
                             }
                         };
                     }
@@ -169,6 +173,7 @@ pub struct Monster {
     name: String,
     pub damage: Range<i32>,
     pub hit_points: i32,
+    pub max_hp: i32,
     pub armor: i32,
     pub level: i32,
     pub mana: i32,
@@ -176,6 +181,27 @@ pub struct Monster {
     cards_in_hand: Vec<Card>,
     monster_type: Option<String>,
     pub talents: Vec<Talent>,
+}
+
+impl Default for Monster {
+    fn default() -> Self {
+        let hp = rand::random::<i32>() % 20 + 20;
+        Monster {
+            id: "1".to_string(),
+            name: "Goblin".to_string(),
+            damage: Range { min: 1, max: 3 },
+            // random between 20-40
+            hit_points: hp,
+            max_hp: hp,
+            armor: 0,
+            level: 1,
+            mana: 0,
+            cards_in_discard: vec![],
+            cards_in_hand: vec![],
+            monster_type: None,
+            talents: vec![],
+        }
+    }
 }
 
 impl Combatant for Monster {
@@ -194,10 +220,14 @@ impl Combatant for Monster {
         self.mana
     }
 
+    fn heal(&mut self, amount: i32) {
+        self.hit_points = max(self.hit_points, self.hit_points + amount);
+    }
+
     fn get_player_state(&self) -> CombatantState {
         CombatantState::Npc {
             hp: self.get_hp(),
-            max_hp: self.hit_points,
+            max_hp: self.max_hp,
             spells: self.get_spells(),
         }
     }
@@ -243,11 +273,11 @@ impl Combatant for Monster {
     }
 
     fn get_hand(&self) -> &Vec<Card> {
-        unimplemented!()
+        &self.cards_in_hand
     }
 
     fn get_relics(&self) -> Vec<Relic> {
-        unimplemented!()
+        vec![]
     }
 
     fn play_card(&mut self, card: &Card) -> Result<(), CombatError> {
@@ -275,6 +305,7 @@ impl From<npc::Data> for Monster {
             },
             level: data.level,
             hit_points: data.hp,
+            max_hp: data.hp,
             armor: data.armor,
             monster_type: None,
             mana: 0,

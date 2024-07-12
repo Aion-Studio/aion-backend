@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 
 use serde::{Deserialize, Serialize};
 
-use crate::events::combat::{CombatError, CombatantState, PlayerCombatState};
+use crate::events::combat::{CombatError, CombatantState};
 use crate::models::cards::Card;
 
 use super::hero_combatant::HeroCombatant;
@@ -19,6 +19,7 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn get_hp(&self) -> i32;
     fn get_mana(&self) -> i32;
     fn get_spells(&self) -> Vec<Spell>;
+    fn heal(&mut self, amount: i32);
 
     fn get_armor(&self) -> i32;
     fn get_level(&self) -> i32;

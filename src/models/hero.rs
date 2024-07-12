@@ -79,6 +79,27 @@ impl Hero {
         }
     }
 
+    pub fn default() -> Self {
+        Self {
+            id: Some(uuid::Uuid::new_v4().to_string()),
+            name: Self::generate_hero_name(),
+            hp: 100,
+            class: Class::Ranger,
+            level: 1,
+            strength: rand::random::<i32>() % 10,
+            armor: rand::random::<i32>() % 2,
+            intelligence: rand::random::<i32>() % 3,
+            dexterity: rand::random::<i32>() % 5,
+            explore: 10,
+            crafting: rand::random::<i32>() % 10,
+            resources: Resource::randomize_amounts(),
+            stamina: Stamina::new(),
+            decks: None,
+            spells: vec![],
+            relics: vec![],
+        }
+    }
+
     pub fn active_deck(&self) -> Deck {
         let deck = match self
             .decks

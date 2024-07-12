@@ -152,7 +152,8 @@ impl CardRepo {
             db!()
                 .deck_card()
                 .create(
-                    deck_id,
+                    deck::id::equals(deck_id),
+                    hero_card::id::equals(hero_card_id.clone()),
                     vec![deck_card::hero_card::connect(hero_card::id::equals(
                         hero_card_id.clone(),
                     ))],
@@ -201,7 +202,7 @@ impl CardRepo {
                 let cards_with_effects = cards
                     .into_iter()
                     .map(|deck_card| async move {
-                        let card_data = deck_card.hero_card.unwrap().unwrap().card.unwrap();
+                        let card_data = deck_card.hero_card.unwrap().card.unwrap();
                         CardRepo::fetch_card_with_effects(*card_data).await
                     })
                     .collect::<Vec<_>>();

@@ -14,7 +14,25 @@ pub struct Deck {
     pub active: bool,
 }
 
-impl Deck {}
+impl Default for Deck {
+    fn default() -> Self {
+        // create a deck of 12 cards by calling Card::default, 12 item vector
+        let cards_in_deck: Vec<Card> = (0..12).map(|_| Card::default()).collect();
+        let rand_name = [
+            "Deck of the Gods",
+            "Deck of the Titans",
+            "Deck of the Ancients",
+        ];
+
+        Deck {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: rand_name[rand::random::<usize>() % rand_name.len()].to_string(),
+            hero_id: None,
+            cards_in_deck,
+            active: true,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct HeroCard {
@@ -37,20 +55,152 @@ pub struct Card {
     pub last_attack_round: Option<i32>,
 }
 
+impl Card {
+    pub fn poison() -> Self {
+        Card {
+            id: uuid::Uuid::new_v4().to_string(),
+            class: Class::Fighter,
+            card_type: CardType::Attack,
+            name: "Poison".to_string(),
+            img_url: "".to_string(),
+            cost: 2,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: "".to_string(),
+                effect: EffectType::Poison,
+                value: 1,
+                target_type: TargetType::Opponent,
+                stat_affected: None,
+                duration: Some(2),
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CardEffect {
+    pub id: String,
+    pub card_id: String,
+    pub effect: EffectType, // Updated to use the EffectType enum
+    pub value: i32,
+    pub target_type: TargetType,
+    pub stat_affected: Option<StatType>,
+    pub duration: Option<i32>,
+    pub is_percentage_modifier: bool,
+}
+
+impl CardEffect {
+    pub fn get_random_by_card_type(card_type: CardType) -> Self {
+        match card_type {
+            CardType::Attack => {
+                //random damage between 1-8
+                let damage = rand::random::<i32>() % 8;
+                let effect = CardEffect {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    card_id: "".to_string(),
+                    effect: EffectType::Damage,
+                    value: damage,
+                    target_type: TargetType::Opponent,
+                    stat_affected: None,
+                    duration: None,
+                    is_percentage_modifier: false,
+                };
+                effect
+            }
+            CardType::Defensive => {
+                //random armor between 1-8
+                let armor = rand::random::<i32>() % 8;
+                CardEffect {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    card_id: uuid::Uuid::new_v4().to_string(),
+                    effect: EffectType::Armor,
+                    value: armor,
+                    target_type: TargetType::Itself,
+                    stat_affected: None,
+                    duration: None,
+                    is_percentage_modifier: false,
+                }
+            }
+            CardType::Utility => {
+                //random mana gain between 1-2
+                let mana_gain = rand::random::<i32>() % 2;
+                let effect_types = [
+                    EffectType::ManaGain,
+                    EffectType::Draw,
+                    EffectType::Silence,
+                    EffectType::Poison,
+                    EffectType::Initiative,
+                ];
+                let effect_type = effect_types[rand::random::<usize>() % effect_types.len()];
+                let (target, value, duration) = match effect_type {
+                    EffectType::ManaGain => {
+                        (TargetType::Itself, rand::random::<i32>() % 2, Some(1))
+                    }
+                    EffectType::Draw => (TargetType::Itself, rand::random::<i32>() % 2, Some(1)),
+                    EffectType::Silence => (TargetType::Opponent, 1, Some(1)),
+                    EffectType::Poison => (TargetType::Opponent, 1, Some(2)),
+                    EffectType::Initiative => (TargetType::Itself, 1, Some(1)),
+                    _ => (TargetType::Itself, 1, Some(1)),
+                };
+
+                CardEffect {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    card_id: uuid::Uuid::new_v4().to_string(),
+                    effect: effect_type,
+                    value,
+                    target_type: target,
+                    stat_affected: None,
+                    duration,
+                    is_percentage_modifier: false,
+                }
+            }
+        }
+    }
+}
+
 impl Default for Card {
     fn default() -> Self {
-        Card {
-            id: "".to_string(),
+        //implement a card where cost is between 1-2 , zeal is between 0-10, tier is between 1-3,
+        //card_type is a random selection of the enum variants, class is a random selection of the
+        //enum variants and effects is also created with CardEffect but with random values
+        let card_type = CardType::get_random();
+        let effect = CardEffect::get_random_by_card_type(card_type);
+        let card = Card {
+            id: uuid::Uuid::new_v4().to_string(),
+            class: Class::get_random(),
+            card_type,
             name: "".to_string(),
             img_url: "".to_string(),
-            cost: 0,
-            class: Class::Fighter,
-            last_attack_round: None,
-            effects: Vec::new(),
+            cost: 1,
             zeal: 0,
-            tier: 0,
-            card_type: CardType::Attack,
-        }
+            tier: 1,
+            effects: vec![effect],
+            last_attack_round: None,
+        };
+        card
+    }
+}
+
+impl Class {
+    pub fn get_random() -> Self {
+        use Class::*;
+        let classes = [Fighter, Ranger, Wizard];
+        let index = rand::random::<usize>() % classes.len();
+        classes[index]
+    }
+}
+
+impl CardType {
+    pub fn get_random() -> Self {
+        use CardType::*;
+        let card_types = [Attack, Defensive, Utility];
+        let index = rand::random::<usize>() % card_types.len();
+        card_types[index]
     }
 }
 
@@ -71,18 +221,6 @@ impl From<(card::Data, Vec<CardEffect>)> for Card {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct CardEffect {
-    pub id: String,
-    pub card_id: String,
-    pub effect: EffectType, // Updated to use the EffectType enum
-    pub value: i32,
-    pub target_type: TargetType,
-    pub stat_affected: Option<StatType>,
-    pub is_percentage_modifier: bool,
-}
-
 impl From<prisma::card_effect::Data> for CardEffect {
     fn from(data: prisma::card_effect::Data) -> Self {
         CardEffect {
@@ -92,6 +230,7 @@ impl From<prisma::card_effect::Data> for CardEffect {
             value: data.value,
             target_type: data.target,
             stat_affected: data.stat_affected,
+            duration: data.duration,
             is_percentage_modifier: data.percentage_modifier,
         }
     }

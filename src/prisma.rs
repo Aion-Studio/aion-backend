@@ -30454,26 +30454,10 @@ pub mod hero_card {
             OrderByParam, SetParam, UncheckedSetParam, UniqueWhereParam, WhereParam, WithParam,
         };
         pub const NAME: &str = "DeckCard";
-        pub struct Fetch(pub deck_card::ManyArgs);
+        pub struct Fetch(pub deck_card::UniqueArgs);
         impl Fetch {
             pub fn with(mut self, params: impl Into<deck_card::WithParam>) -> Self {
                 self.0 = self.0.with(params.into());
-                self
-            }
-            pub fn order_by(mut self, param: deck_card::OrderByParam) -> Self {
-                self.0 = self.0.order_by(param);
-                self
-            }
-            pub fn skip(mut self, value: i64) -> Self {
-                self.0 = self.0.skip(value);
-                self
-            }
-            pub fn take(mut self, value: i64) -> Self {
-                self.0 = self.0.take(value);
-                self
-            }
-            pub fn cursor(mut self, value: deck_card::UniqueWhereParam) -> Self {
-                self.0 = self.0.cursor(value.into());
                 self
             }
         }
@@ -30482,37 +30466,34 @@ pub mod hero_card {
                 WithParam::DeckCard(v)
             }
         }
-        pub fn fetch(params: Vec<deck_card::WhereParam>) -> Fetch {
-            Fetch(deck_card::ManyArgs::new(params))
+        pub fn fetch() -> Fetch {
+            Fetch(deck_card::UniqueArgs::new())
         }
-        pub struct Connect(pub Vec<deck_card::UniqueWhereParam>);
+        pub struct Connect(deck_card::UniqueWhereParam);
         impl From<Connect> for SetParam {
             fn from(Connect(v): Connect) -> Self {
                 Self::ConnectDeckCard(v)
             }
         }
-        pub fn connect<T: From<Connect>>(params: Vec<deck_card::UniqueWhereParam>) -> T {
-            Connect(params).into()
+        pub fn connect<T: From<Connect>>(value: deck_card::UniqueWhereParam) -> T {
+            Connect(value).into()
         }
-        pub fn disconnect(params: Vec<deck_card::UniqueWhereParam>) -> SetParam {
-            SetParam::DisconnectDeckCard(params)
+        pub fn disconnect() -> SetParam {
+            SetParam::DisconnectDeckCard
         }
-        pub fn set(params: Vec<deck_card::UniqueWhereParam>) -> SetParam {
-            SetParam::SetDeckCard(params)
+        pub fn is_null() -> WhereParam {
+            WhereParam::DeckCardIsNull
         }
-        pub fn some(value: Vec<deck_card::WhereParam>) -> WhereParam {
-            WhereParam::DeckCardSome(value)
+        pub fn is(value: Vec<deck_card::WhereParam>) -> WhereParam {
+            WhereParam::DeckCardIs(value)
         }
-        pub fn every(value: Vec<deck_card::WhereParam>) -> WhereParam {
-            WhereParam::DeckCardEvery(value)
-        }
-        pub fn none(value: Vec<deck_card::WhereParam>) -> WhereParam {
-            WhereParam::DeckCardNone(value)
+        pub fn is_not(value: Vec<deck_card::WhereParam>) -> WhereParam {
+            WhereParam::DeckCardIsNot(value)
         }
         pub enum Include {
-            Select(deck_card::ManyArgs, Vec<deck_card::SelectParam>),
-            Include(deck_card::ManyArgs, Vec<deck_card::IncludeParam>),
-            Fetch(deck_card::ManyArgs),
+            Select(Vec<deck_card::SelectParam>),
+            Include(Vec<deck_card::IncludeParam>),
+            Fetch,
         }
         impl Into<super::IncludeParam> for Include {
             fn into(self) -> super::IncludeParam {
@@ -30521,40 +30502,32 @@ pub mod hero_card {
         }
         impl Include {
             pub fn to_selection(self) -> ::prisma_client_rust::Selection {
-                let (args, selections) = match self {
-                    Self::Select(args, selections) => (
-                        args.to_graphql().0,
-                        selections.into_iter().map(|s| s.to_selection()).collect(),
-                    ),
-                    Self::Include(args, selections) => (args.to_graphql().0, {
+                let selections = match self {
+                    Self::Select(selections) => {
+                        selections.into_iter().map(|s| s.to_selection()).collect()
+                    }
+                    Self::Include(selections) => {
                         let mut nested_selections = < deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections () ;
                         nested_selections.extend(selections.into_iter().map(|s| s.to_selection()));
                         nested_selections
-                    }),
-                    Self::Fetch(args) => (
-                        args.to_graphql().0,
-                        <deck_card::Types as ::prisma_client_rust::ModelTypes>::scalar_selections(),
-                    ),
+                    }
+                    Self::Fetch => {
+                        <deck_card::Types as ::prisma_client_rust::ModelTypes>::scalar_selections()
+                    }
                 };
-                ::prisma_client_rust::Selection::new(NAME, None, args, selections)
+                ::prisma_client_rust::Selection::new("DeckCard", None, [], selections)
             }
-            pub fn select(
-                args: deck_card::ManyArgs,
-                nested_selections: Vec<deck_card::SelectParam>,
-            ) -> Self {
-                Self::Select(args, nested_selections)
+            pub fn select(nested_selections: Vec<deck_card::SelectParam>) -> Self {
+                Self::Select(nested_selections)
             }
-            pub fn include(
-                args: deck_card::ManyArgs,
-                nested_selections: Vec<deck_card::IncludeParam>,
-            ) -> Self {
-                Self::Include(args, nested_selections)
+            pub fn include(nested_selections: Vec<deck_card::IncludeParam>) -> Self {
+                Self::Include(nested_selections)
             }
         }
         pub enum Select {
-            Select(deck_card::ManyArgs, Vec<deck_card::SelectParam>),
-            Include(deck_card::ManyArgs, Vec<deck_card::IncludeParam>),
-            Fetch(deck_card::ManyArgs),
+            Select(Vec<deck_card::SelectParam>),
+            Include(Vec<deck_card::IncludeParam>),
+            Fetch,
         }
         impl Into<super::SelectParam> for Select {
             fn into(self) -> super::SelectParam {
@@ -30563,34 +30536,79 @@ pub mod hero_card {
         }
         impl Select {
             pub fn to_selection(self) -> ::prisma_client_rust::Selection {
-                let (args, selections) = match self {
-                    Self::Select(args, selections) => (
-                        args.to_graphql().0,
-                        selections.into_iter().map(|s| s.to_selection()).collect(),
-                    ),
-                    Self::Include(args, selections) => (args.to_graphql().0, {
+                let selections = match self {
+                    Self::Select(selections) => {
+                        selections.into_iter().map(|s| s.to_selection()).collect()
+                    }
+                    Self::Include(selections) => {
                         let mut nested_selections = vec![];
                         nested_selections.extend(selections.into_iter().map(|s| s.to_selection()));
                         nested_selections
-                    }),
-                    Self::Fetch(args) => (
-                        args.to_graphql().0,
-                        <deck_card::Types as ::prisma_client_rust::ModelTypes>::scalar_selections(),
-                    ),
+                    }
+                    Self::Fetch => {
+                        <deck_card::Types as ::prisma_client_rust::ModelTypes>::scalar_selections()
+                    }
                 };
-                ::prisma_client_rust::Selection::new(NAME, None, args, selections)
+                ::prisma_client_rust::Selection::new("DeckCard", None, [], selections)
             }
-            pub fn select(
-                args: deck_card::ManyArgs,
-                nested_selections: Vec<deck_card::SelectParam>,
-            ) -> Self {
-                Self::Select(args, nested_selections)
+            pub fn select(nested_selections: Vec<deck_card::SelectParam>) -> Self {
+                Self::Select(nested_selections)
             }
-            pub fn include(
-                args: deck_card::ManyArgs,
-                nested_selections: Vec<deck_card::IncludeParam>,
-            ) -> Self {
-                Self::Include(args, nested_selections)
+            pub fn include(nested_selections: Vec<deck_card::IncludeParam>) -> Self {
+                Self::Include(nested_selections)
+            }
+        }
+    }
+    pub mod in_deck {
+        use super::super::*;
+        use super::_prisma::*;
+        use super::{
+            OrderByParam, SetParam, UncheckedSetParam, UniqueWhereParam, WhereParam, WithParam,
+        };
+        pub const NAME: &str = "inDeck";
+        pub struct Set(pub bool);
+        impl From<Set> for SetParam {
+            fn from(Set(v): Set) -> Self {
+                Self::SetInDeck(v)
+            }
+        }
+        impl From<Set> for UncheckedSetParam {
+            fn from(Set(v): Set) -> Self {
+                Self::InDeck(v)
+            }
+        }
+        pub fn set<T: From<Set>>(value: bool) -> T {
+            Set(value).into()
+        }
+        pub fn order(direction: ::prisma_client_rust::Direction) -> OrderByParam {
+            OrderByParam::InDeck(direction)
+        }
+        pub fn equals(value: bool) -> WhereParam {
+            WhereParam::InDeck(_prisma::read_filters::BoolFilter::Equals(value))
+        }
+        ::prisma_client_rust::scalar_where_param_fns!(_prisma::read_filters::BoolFilter, InDeck, {
+            fn not(_: bool) -> Not;
+        });
+        pub struct Include;
+        impl Into<super::IncludeParam> for Include {
+            fn into(self) -> super::IncludeParam {
+                super::IncludeParam::InDeck(self)
+            }
+        }
+        impl Include {
+            pub fn to_selection(self) -> ::prisma_client_rust::Selection {
+                ::prisma_client_rust::sel(NAME)
+            }
+        }
+        pub struct Select;
+        impl Into<super::SelectParam> for Select {
+            fn into(self) -> super::SelectParam {
+                super::SelectParam::InDeck(self)
+            }
+        }
+        impl Select {
+            pub fn to_selection(self) -> ::prisma_client_rust::Selection {
+                ::prisma_client_rust::sel(NAME)
             }
         }
     }
@@ -30613,7 +30631,7 @@ pub mod hero_card {
         (hero_id, card_id, _params)
     }
     #[macro_export]
-    macro_rules ! _select_hero_card { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: hero_card :: select ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: hero_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn select ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: hero_card :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: hero_card :: select ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: hero_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: hero_card :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , hero_id , card_id , hero , card , deck_card } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { $ (pub $ field : crate :: prisma :: hero_card :: select ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) +] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: hero_card :: $ field :: NAME , & self . $ field) ? ;) * state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: hero_card :: $ field :: NAME) , + ,] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: hero_card :: $ field :: NAME => Ok (Field :: $ field)) , * , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * while let Some (key) = map . next_key () ? { match key { $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: $ field :: NAME)) ? ;) * Ok (Data { $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "heroId" , "cardId" , "hero" , "card" , "DeckCard"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: hero_card :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; id) => { String } ; (@ field_type ; hero_id) => { String } ; (@ field_type ; card_id) => { String } ; (@ field_type ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { hero :: Data } ; (@ field_type ; hero) => { crate :: prisma :: hero :: Data } ; (@ field_type ; card : $ selection_mode : ident { $ ($ selections : tt) + }) => { card :: Data } ; (@ field_type ; card) => { crate :: prisma :: card :: Data } ; (@ field_type ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { Vec < deck_card :: Data > } ; (@ field_type ; deck_card) => { Vec < crate :: prisma :: deck_card :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "HeroCard" , available relations are "id, hero_id, card_id, hero, card, deck_card")) } ; (@ field_module ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: card :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: deck_card :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; id) => { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: id :: Select) } ; (@ selection_field_to_selection_param ; hero_id) => { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: hero_id :: Select) } ; (@ selection_field_to_selection_param ; card_id) => { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: card_id :: Select) } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: hero :: Select :: $ selection_mode (crate :: prisma :: hero :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: hero :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: card :: Select :: $ selection_mode (crate :: prisma :: card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: card :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: deck_card :: Select :: $ selection_mode (crate :: prisma :: deck_card :: ManyArgs :: new (crate :: prisma :: deck_card :: select ! (@ filters_to_args ; $ ($ ($ filters) +) ?)) $ ($ (. $ arg ($ ($ arg_params) *)) *) ? , crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: deck_card :: Select :: Fetch (crate :: prisma :: deck_card :: ManyArgs :: new (crate :: prisma :: deck_card :: select ! (@ filters_to_args ; $ ($ ($ filters) +) ?)) $ ($ (. $ arg ($ ($ arg_params) *)) *) ?) ,) } } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: hero_card :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; hero_id) => { "heroId" } ; (@ field_serde_name ; card_id) => { "cardId" } ; (@ field_serde_name ; hero) => { "hero" } ; (@ field_serde_name ; card) => { "card" } ; (@ field_serde_name ; deck_card) => { "DeckCard" } ; }
+    macro_rules ! _select_hero_card { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: hero_card :: select ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: hero_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn select ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: hero_card :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: hero_card :: select ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: hero_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: hero_card :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , hero_id , card_id , hero , card , deck_card , in_deck } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { $ (pub $ field : crate :: prisma :: hero_card :: select ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) +] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: hero_card :: $ field :: NAME , & self . $ field) ? ;) * state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: hero_card :: $ field :: NAME) , + ,] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: hero_card :: $ field :: NAME => Ok (Field :: $ field)) , * , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * while let Some (key) = map . next_key () ? { match key { $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: $ field :: NAME)) ? ;) * Ok (Data { $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "heroId" , "cardId" , "hero" , "card" , "DeckCard" , "inDeck"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: hero_card :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; id) => { String } ; (@ field_type ; hero_id) => { String } ; (@ field_type ; card_id) => { String } ; (@ field_type ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { hero :: Data } ; (@ field_type ; hero) => { crate :: prisma :: hero :: Data } ; (@ field_type ; card : $ selection_mode : ident { $ ($ selections : tt) + }) => { card :: Data } ; (@ field_type ; card) => { crate :: prisma :: card :: Data } ; (@ field_type ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { Option < deck_card :: Data > } ; (@ field_type ; deck_card) => { Option < crate :: prisma :: deck_card :: Data > } ; (@ field_type ; in_deck) => { bool } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "HeroCard" , available relations are "id, hero_id, card_id, hero, card, deck_card, in_deck")) } ; (@ field_module ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: card :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: deck_card :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; id) => { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: id :: Select) } ; (@ selection_field_to_selection_param ; hero_id) => { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: hero_id :: Select) } ; (@ selection_field_to_selection_param ; card_id) => { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: card_id :: Select) } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: hero :: Select :: $ selection_mode (crate :: prisma :: hero :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: hero :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: card :: Select :: $ selection_mode (crate :: prisma :: card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: card :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: deck_card :: Select :: $ selection_mode (crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: deck_card :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; in_deck) => { Into :: < crate :: prisma :: hero_card :: SelectParam > :: into (crate :: prisma :: hero_card :: in_deck :: Select) } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: hero_card :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; hero_id) => { "heroId" } ; (@ field_serde_name ; card_id) => { "cardId" } ; (@ field_serde_name ; hero) => { "hero" } ; (@ field_serde_name ; card) => { "card" } ; (@ field_serde_name ; deck_card) => { "DeckCard" } ; (@ field_serde_name ; in_deck) => { "inDeck" } ; }
     pub use _select_hero_card as select;
     pub enum SelectParam {
         Id(id::Select),
@@ -30622,6 +30640,7 @@ pub mod hero_card {
         Hero(hero::Select),
         Card(card::Select),
         DeckCard(deck_card::Select),
+        InDeck(in_deck::Select),
     }
     impl SelectParam {
         pub fn to_selection(self) -> ::prisma_client_rust::Selection {
@@ -30632,11 +30651,12 @@ pub mod hero_card {
                 Self::Hero(data) => data.to_selection(),
                 Self::Card(data) => data.to_selection(),
                 Self::DeckCard(data) => data.to_selection(),
+                Self::InDeck(data) => data.to_selection(),
             }
         }
     }
     #[macro_export]
-    macro_rules ! _include_hero_card { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: hero_card :: include ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: hero_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn include ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: hero_card :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: hero_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: hero_card :: include ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: hero_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: hero_card :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: hero_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { hero , card , deck_card } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { pub id : String , pub hero_id : String , pub card_id : String , $ (pub $ field : crate :: prisma :: hero_card :: include ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) + stringify ! (id) , stringify ! (hero_id) , stringify ! (card_id)] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: hero_card :: $ field :: NAME , & self . $ field) ? ;) * state . serialize_field (crate :: prisma :: hero_card :: id :: NAME , & self . id) ? ; state . serialize_field (crate :: prisma :: hero_card :: hero_id :: NAME , & self . hero_id) ? ; state . serialize_field (crate :: prisma :: hero_card :: card_id :: NAME , & self . card_id) ? ; state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , id , hero_id , card_id } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: hero_card :: $ field :: NAME) , + , crate :: prisma :: hero_card :: id :: NAME , crate :: prisma :: hero_card :: hero_id :: NAME , crate :: prisma :: hero_card :: card_id :: NAME] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: hero_card :: $ field :: NAME => Ok (Field :: $ field)) , * , crate :: prisma :: hero_card :: id :: NAME => Ok (Field :: id) , crate :: prisma :: hero_card :: hero_id :: NAME => Ok (Field :: hero_id) , crate :: prisma :: hero_card :: card_id :: NAME => Ok (Field :: card_id) , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * let mut id = None ; let mut hero_id = None ; let mut card_id = None ; while let Some (key) = map . next_key () ? { match key { Field :: id => { if id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: id :: NAME)) ; } id = Some (map . next_value () ?) ; } Field :: hero_id => { if hero_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: hero_id :: NAME)) ; } hero_id = Some (map . next_value () ?) ; } Field :: card_id => { if card_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: card_id :: NAME)) ; } card_id = Some (map . next_value () ?) ; } $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: $ field :: NAME)) ? ;) * let id = id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: id :: NAME)) ? ; let hero_id = hero_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: hero_id :: NAME)) ? ; let card_id = card_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: card_id :: NAME)) ? ; Ok (Data { id , hero_id , card_id , $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "heroId" , "cardId" , "hero" , "card" , "DeckCard"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: hero_card :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { hero :: Data } ; (@ field_type ; hero) => { crate :: prisma :: hero :: Data } ; (@ field_type ; card : $ selection_mode : ident { $ ($ selections : tt) + }) => { card :: Data } ; (@ field_type ; card) => { crate :: prisma :: card :: Data } ; (@ field_type ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { Vec < deck_card :: Data > } ; (@ field_type ; deck_card) => { Vec < crate :: prisma :: deck_card :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "HeroCard" , available relations are "hero, card, deck_card")) } ; (@ field_module ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: card :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: deck_card :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: hero :: Include :: $ selection_mode (crate :: prisma :: hero :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: hero :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: card :: Include :: $ selection_mode (crate :: prisma :: card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: card :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: deck_card :: Include :: $ selection_mode (crate :: prisma :: deck_card :: ManyArgs :: new (crate :: prisma :: deck_card :: include ! (@ filters_to_args ; $ ($ ($ filters) +) ?)) $ ($ (. $ arg ($ ($ arg_params) *)) *) ? , crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: deck_card :: Include :: Fetch (crate :: prisma :: deck_card :: ManyArgs :: new (crate :: prisma :: deck_card :: include ! (@ filters_to_args ; $ ($ ($ filters) +) ?)) $ ($ (. $ arg ($ ($ arg_params) *)) *) ?) ,) } } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: hero_card :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; hero_id) => { "heroId" } ; (@ field_serde_name ; card_id) => { "cardId" } ; (@ field_serde_name ; hero) => { "hero" } ; (@ field_serde_name ; card) => { "card" } ; (@ field_serde_name ; deck_card) => { "DeckCard" } ; }
+    macro_rules ! _include_hero_card { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: hero_card :: include ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: hero_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn include ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: hero_card :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: hero_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: hero_card :: include ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: hero_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: hero_card :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: hero_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { hero , card , deck_card } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { pub id : String , pub hero_id : String , pub card_id : String , pub in_deck : bool , $ (pub $ field : crate :: prisma :: hero_card :: include ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) + stringify ! (id) , stringify ! (hero_id) , stringify ! (card_id) , stringify ! (in_deck)] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: hero_card :: $ field :: NAME , & self . $ field) ? ;) * state . serialize_field (crate :: prisma :: hero_card :: id :: NAME , & self . id) ? ; state . serialize_field (crate :: prisma :: hero_card :: hero_id :: NAME , & self . hero_id) ? ; state . serialize_field (crate :: prisma :: hero_card :: card_id :: NAME , & self . card_id) ? ; state . serialize_field (crate :: prisma :: hero_card :: in_deck :: NAME , & self . in_deck) ? ; state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , id , hero_id , card_id , in_deck } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: hero_card :: $ field :: NAME) , + , crate :: prisma :: hero_card :: id :: NAME , crate :: prisma :: hero_card :: hero_id :: NAME , crate :: prisma :: hero_card :: card_id :: NAME , crate :: prisma :: hero_card :: in_deck :: NAME] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: hero_card :: $ field :: NAME => Ok (Field :: $ field)) , * , crate :: prisma :: hero_card :: id :: NAME => Ok (Field :: id) , crate :: prisma :: hero_card :: hero_id :: NAME => Ok (Field :: hero_id) , crate :: prisma :: hero_card :: card_id :: NAME => Ok (Field :: card_id) , crate :: prisma :: hero_card :: in_deck :: NAME => Ok (Field :: in_deck) , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * let mut id = None ; let mut hero_id = None ; let mut card_id = None ; let mut in_deck = None ; while let Some (key) = map . next_key () ? { match key { Field :: id => { if id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: id :: NAME)) ; } id = Some (map . next_value () ?) ; } Field :: hero_id => { if hero_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: hero_id :: NAME)) ; } hero_id = Some (map . next_value () ?) ; } Field :: card_id => { if card_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: card_id :: NAME)) ; } card_id = Some (map . next_value () ?) ; } Field :: in_deck => { if in_deck . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: in_deck :: NAME)) ; } in_deck = Some (map . next_value () ?) ; } $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: hero_card :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: $ field :: NAME)) ? ;) * let id = id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: id :: NAME)) ? ; let hero_id = hero_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: hero_id :: NAME)) ? ; let card_id = card_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: card_id :: NAME)) ? ; let in_deck = in_deck . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: hero_card :: in_deck :: NAME)) ? ; Ok (Data { id , hero_id , card_id , in_deck , $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "heroId" , "cardId" , "hero" , "card" , "DeckCard" , "inDeck"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: hero_card :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { hero :: Data } ; (@ field_type ; hero) => { crate :: prisma :: hero :: Data } ; (@ field_type ; card : $ selection_mode : ident { $ ($ selections : tt) + }) => { card :: Data } ; (@ field_type ; card) => { crate :: prisma :: card :: Data } ; (@ field_type ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { Option < deck_card :: Data > } ; (@ field_type ; deck_card) => { Option < crate :: prisma :: deck_card :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "HeroCard" , available relations are "hero, card, deck_card")) } ; (@ field_module ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: card :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: deck_card :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: hero :: Include :: $ selection_mode (crate :: prisma :: hero :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: hero :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: card :: Include :: $ selection_mode (crate :: prisma :: card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: card :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: deck_card :: Include :: $ selection_mode (crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: hero_card :: IncludeParam > :: into (crate :: prisma :: hero_card :: deck_card :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: hero_card :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; hero_id) => { "heroId" } ; (@ field_serde_name ; card_id) => { "cardId" } ; (@ field_serde_name ; hero) => { "hero" } ; (@ field_serde_name ; card) => { "card" } ; (@ field_serde_name ; deck_card) => { "DeckCard" } ; (@ field_serde_name ; in_deck) => { "inDeck" } ; }
     pub use _include_hero_card as include;
     pub enum IncludeParam {
         Id(id::Include),
@@ -30645,6 +30665,7 @@ pub mod hero_card {
         Hero(hero::Include),
         Card(card::Include),
         DeckCard(deck_card::Include),
+        InDeck(in_deck::Include),
     }
     impl IncludeParam {
         pub fn to_selection(self) -> ::prisma_client_rust::Selection {
@@ -30655,11 +30676,12 @@ pub mod hero_card {
                 Self::Hero(data) => data.to_selection(),
                 Self::Card(data) => data.to_selection(),
                 Self::DeckCard(data) => data.to_selection(),
+                Self::InDeck(data) => data.to_selection(),
             }
         }
     }
     #[macro_export]
-    macro_rules ! _partial_unchecked_hero_card { ($ struct_name : ident { $ ($ scalar_field : ident) + }) => { :: prisma_client_rust :: macros :: partial_unchecked ! { crate :: prisma :: hero_card struct $ struct_name { # [serde (rename = "id")] pub id : String , # [serde (rename = "heroId")] pub hero_id : String , # [serde (rename = "cardId")] pub card_id : String } [$ ($ scalar_field) , +] } } ; }
+    macro_rules ! _partial_unchecked_hero_card { ($ struct_name : ident { $ ($ scalar_field : ident) + }) => { :: prisma_client_rust :: macros :: partial_unchecked ! { crate :: prisma :: hero_card struct $ struct_name { # [serde (rename = "id")] pub id : String , # [serde (rename = "heroId")] pub hero_id : String , # [serde (rename = "cardId")] pub card_id : String , # [serde (rename = "inDeck")] pub in_deck : bool } [$ ($ scalar_field) , +] } } ; }
     pub use _partial_unchecked_hero_card as partial_unchecked;
     #[derive(Debug, Clone, :: serde :: Serialize, :: serde :: Deserialize)]
     pub struct Data {
@@ -30673,8 +30695,15 @@ pub mod hero_card {
         pub hero: Option<Box<super::hero::Data>>,
         #[serde(rename = "card")]
         pub card: Option<Box<super::card::Data>>,
-        #[serde(rename = "DeckCard")]
-        pub deck_card: Option<Vec<super::deck_card::Data>>,
+        #[serde(
+            rename = "DeckCard",
+            default,
+            skip_serializing_if = "Option::is_none",
+            with = "prisma_client_rust::serde::double_option"
+        )]
+        pub deck_card: Option<Option<Box<super::deck_card::Data>>>,
+        #[serde(rename = "inDeck")]
+        pub in_deck: bool,
     }
     impl Data {
         pub fn hero(
@@ -30699,20 +30728,21 @@ pub mod hero_card {
         }
         pub fn deck_card(
             &self,
-        ) -> Result<&Vec<super::deck_card::Data>, ::prisma_client_rust::RelationNotFetchedError>
+        ) -> Result<Option<&super::deck_card::Data>, ::prisma_client_rust::RelationNotFetchedError>
         {
             self.deck_card
                 .as_ref()
                 .ok_or(::prisma_client_rust::RelationNotFetchedError::new(
                     stringify!(deck_card),
                 ))
+                .map(|v| v.as_ref().map(|v| v.as_ref()))
         }
     }
     #[derive(Clone)]
     pub enum WithParam {
         Hero(super::hero::UniqueArgs),
         Card(super::card::UniqueArgs),
-        DeckCard(super::deck_card::ManyArgs),
+        DeckCard(super::deck_card::UniqueArgs),
     }
     impl Into<::prisma_client_rust::Selection> for WithParam {
         fn into(self) -> ::prisma_client_rust::Selection {
@@ -30740,14 +30770,13 @@ pub mod hero_card {
                     ::prisma_client_rust::Selection::new(card::NAME, None, [], selections)
                 }
                 Self::DeckCard(args) => {
-                    let (arguments, mut nested_selections) = args.to_graphql();
-                    nested_selections . extend (< super :: deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()) ;
-                    ::prisma_client_rust::Selection::new(
-                        deck_card::NAME,
-                        None,
-                        arguments,
-                        nested_selections,
-                    )
+                    let mut selections = < super :: deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections () ;
+                    selections.extend(
+                        args.with_params
+                            .into_iter()
+                            .map(Into::<::prisma_client_rust::Selection>::into),
+                    );
+                    ::prisma_client_rust::Selection::new(deck_card::NAME, None, [], selections)
                 }
             }
         }
@@ -30759,9 +30788,9 @@ pub mod hero_card {
         SetCardId(String),
         ConnectHero(super::hero::UniqueWhereParam),
         ConnectCard(super::card::UniqueWhereParam),
-        ConnectDeckCard(Vec<super::deck_card::UniqueWhereParam>),
-        DisconnectDeckCard(Vec<super::deck_card::UniqueWhereParam>),
-        SetDeckCard(Vec<super::deck_card::UniqueWhereParam>),
+        ConnectDeckCard(super::deck_card::UniqueWhereParam),
+        DisconnectDeckCard,
+        SetInDeck(bool),
     }
     impl From<SetParam> for (String, ::prisma_client_rust::PrismaValue) {
         fn from(param: SetParam) -> Self {
@@ -30806,50 +30835,30 @@ pub mod hero_card {
                         ),
                     )]),
                 ),
-                SetParam::ConnectDeckCard(where_params) => (
+                SetParam::ConnectDeckCard(where_param) => (
                     deck_card::NAME.to_string(),
                     ::prisma_client_rust::PrismaValue::Object(vec![(
                         "connect".to_string(),
-                        ::prisma_client_rust::PrismaValue::List(
-                            where_params
+                        ::prisma_client_rust::PrismaValue::Object(
+                            [where_param]
                                 .into_iter()
                                 .map(Into::<super::deck_card::WhereParam>::into)
                                 .map(::prisma_client_rust::WhereInput::serialize)
                                 .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
-                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
                                 .collect(),
                         ),
                     )]),
                 ),
-                SetParam::DisconnectDeckCard(where_params) => (
+                SetParam::DisconnectDeckCard => (
                     deck_card::NAME.to_string(),
                     ::prisma_client_rust::PrismaValue::Object(vec![(
                         "disconnect".to_string(),
-                        ::prisma_client_rust::PrismaValue::List(
-                            where_params
-                                .into_iter()
-                                .map(Into::<super::deck_card::WhereParam>::into)
-                                .map(::prisma_client_rust::WhereInput::serialize)
-                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
-                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
-                                .collect(),
-                        ),
+                        ::prisma_client_rust::PrismaValue::Boolean(true),
                     )]),
                 ),
-                SetParam::SetDeckCard(where_params) => (
-                    deck_card::NAME.to_string(),
-                    ::prisma_client_rust::PrismaValue::Object(vec![(
-                        "set".to_string(),
-                        ::prisma_client_rust::PrismaValue::List(
-                            where_params
-                                .into_iter()
-                                .map(Into::<super::deck_card::WhereParam>::into)
-                                .map(::prisma_client_rust::WhereInput::serialize)
-                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
-                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
-                                .collect(),
-                        ),
-                    )]),
+                SetParam::SetInDeck(value) => (
+                    in_deck::NAME.to_string(),
+                    ::prisma_client_rust::PrismaValue::Boolean(value),
                 ),
             }
         }
@@ -30859,6 +30868,7 @@ pub mod hero_card {
         Id(String),
         HeroId(String),
         CardId(String),
+        InDeck(bool),
     }
     impl From<UncheckedSetParam> for SetParam {
         fn from(param: UncheckedSetParam) -> Self {
@@ -30866,6 +30876,7 @@ pub mod hero_card {
                 UncheckedSetParam::Id(value) => Self::SetId(value),
                 UncheckedSetParam::HeroId(value) => Self::SetHeroId(value),
                 UncheckedSetParam::CardId(value) => Self::SetCardId(value),
+                UncheckedSetParam::InDeck(value) => Self::SetInDeck(value),
             }
         }
     }
@@ -30874,6 +30885,7 @@ pub mod hero_card {
         Id(::prisma_client_rust::Direction),
         HeroId(::prisma_client_rust::Direction),
         CardId(::prisma_client_rust::Direction),
+        InDeck(::prisma_client_rust::Direction),
     }
     impl Into<(String, ::prisma_client_rust::PrismaValue)> for OrderByParam {
         fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
@@ -30888,6 +30900,10 @@ pub mod hero_card {
                 ),
                 Self::CardId(direction) => (
                     card_id::NAME.to_string(),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
+                ),
+                Self::InDeck(direction) => (
+                    in_deck::NAME.to_string(),
                     ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
             }
@@ -30905,9 +30921,10 @@ pub mod hero_card {
         HeroIsNot(Vec<super::hero::WhereParam>),
         CardIs(Vec<super::card::WhereParam>),
         CardIsNot(Vec<super::card::WhereParam>),
-        DeckCardSome(Vec<super::deck_card::WhereParam>),
-        DeckCardEvery(Vec<super::deck_card::WhereParam>),
-        DeckCardNone(Vec<super::deck_card::WhereParam>),
+        DeckCardIsNull,
+        DeckCardIs(Vec<super::deck_card::WhereParam>),
+        DeckCardIsNot(Vec<super::deck_card::WhereParam>),
+        InDeck(_prisma::read_filters::BoolFilter),
     }
     impl ::prisma_client_rust::WhereInput for WhereParam {
         fn serialize(self) -> ::prisma_client_rust::SerializedWhereInput {
@@ -31003,10 +31020,16 @@ pub mod hero_card {
                         ),
                     )]),
                 ),
-                Self::DeckCardSome(where_params) => (
+                Self::DeckCardIsNull => (
+                    deck_card::NAME,
+                    ::prisma_client_rust::SerializedWhereValue::Value(
+                        ::prisma_client_rust::PrismaValue::Null,
+                    ),
+                ),
+                Self::DeckCardIs(where_params) => (
                     deck_card::NAME,
                     ::prisma_client_rust::SerializedWhereValue::Object(vec![(
-                        "some".to_string(),
+                        "is".to_string(),
                         ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
@@ -31016,10 +31039,10 @@ pub mod hero_card {
                         ),
                     )]),
                 ),
-                Self::DeckCardEvery(where_params) => (
+                Self::DeckCardIsNot(where_params) => (
                     deck_card::NAME,
                     ::prisma_client_rust::SerializedWhereValue::Object(vec![(
-                        "every".to_string(),
+                        "isNot".to_string(),
                         ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
@@ -31029,19 +31052,7 @@ pub mod hero_card {
                         ),
                     )]),
                 ),
-                Self::DeckCardNone(where_params) => (
-                    deck_card::NAME,
-                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
-                        "none".to_string(),
-                        ::prisma_client_rust::PrismaValue::Object(
-                            where_params
-                                .into_iter()
-                                .map(::prisma_client_rust::WhereInput::serialize)
-                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
-                                .collect(),
-                        ),
-                    )]),
-                ),
+                Self::InDeck(value) => (in_deck::NAME, value.into()),
             };
             ::prisma_client_rust::SerializedWhereInput::new(name, value.into())
         }
@@ -31084,6 +31095,7 @@ pub mod hero_card {
                 ::prisma_client_rust::sel(id::NAME),
                 ::prisma_client_rust::sel(hero_id::NAME),
                 ::prisma_client_rust::sel(card_id::NAME),
+                ::prisma_client_rust::sel(in_deck::NAME),
             ]
         }
     }
@@ -31322,13 +31334,120 @@ pub mod deck_card {
             }
         }
     }
+    pub mod deck {
+        use super::super::*;
+        use super::_prisma::*;
+        use super::{
+            OrderByParam, SetParam, UncheckedSetParam, UniqueWhereParam, WhereParam, WithParam,
+        };
+        pub const NAME: &str = "deck";
+        pub struct Fetch(pub deck::UniqueArgs);
+        impl Fetch {
+            pub fn with(mut self, params: impl Into<deck::WithParam>) -> Self {
+                self.0 = self.0.with(params.into());
+                self
+            }
+        }
+        impl From<Fetch> for WithParam {
+            fn from(Fetch(v): Fetch) -> Self {
+                WithParam::Deck(v)
+            }
+        }
+        pub fn fetch() -> Fetch {
+            Fetch(deck::UniqueArgs::new())
+        }
+        pub struct Connect(deck::UniqueWhereParam);
+        impl From<Connect> for SetParam {
+            fn from(Connect(v): Connect) -> Self {
+                Self::ConnectDeck(v)
+            }
+        }
+        pub fn connect<T: From<Connect>>(value: deck::UniqueWhereParam) -> T {
+            Connect(value).into()
+        }
+        pub fn is(value: Vec<deck::WhereParam>) -> WhereParam {
+            WhereParam::DeckIs(value)
+        }
+        pub fn is_not(value: Vec<deck::WhereParam>) -> WhereParam {
+            WhereParam::DeckIsNot(value)
+        }
+        pub enum Include {
+            Select(Vec<deck::SelectParam>),
+            Include(Vec<deck::IncludeParam>),
+            Fetch,
+        }
+        impl Into<super::IncludeParam> for Include {
+            fn into(self) -> super::IncludeParam {
+                super::IncludeParam::Deck(self)
+            }
+        }
+        impl Include {
+            pub fn to_selection(self) -> ::prisma_client_rust::Selection {
+                let selections = match self {
+                    Self::Select(selections) => {
+                        selections.into_iter().map(|s| s.to_selection()).collect()
+                    }
+                    Self::Include(selections) => {
+                        let mut nested_selections =
+                            <deck::Types as ::prisma_client_rust::ModelTypes>::scalar_selections();
+                        nested_selections.extend(selections.into_iter().map(|s| s.to_selection()));
+                        nested_selections
+                    }
+                    Self::Fetch => {
+                        <deck::Types as ::prisma_client_rust::ModelTypes>::scalar_selections()
+                    }
+                };
+                ::prisma_client_rust::Selection::new("deck", None, [], selections)
+            }
+            pub fn select(nested_selections: Vec<deck::SelectParam>) -> Self {
+                Self::Select(nested_selections)
+            }
+            pub fn include(nested_selections: Vec<deck::IncludeParam>) -> Self {
+                Self::Include(nested_selections)
+            }
+        }
+        pub enum Select {
+            Select(Vec<deck::SelectParam>),
+            Include(Vec<deck::IncludeParam>),
+            Fetch,
+        }
+        impl Into<super::SelectParam> for Select {
+            fn into(self) -> super::SelectParam {
+                super::SelectParam::Deck(self)
+            }
+        }
+        impl Select {
+            pub fn to_selection(self) -> ::prisma_client_rust::Selection {
+                let selections = match self {
+                    Self::Select(selections) => {
+                        selections.into_iter().map(|s| s.to_selection()).collect()
+                    }
+                    Self::Include(selections) => {
+                        let mut nested_selections = vec![];
+                        nested_selections.extend(selections.into_iter().map(|s| s.to_selection()));
+                        nested_selections
+                    }
+                    Self::Fetch => {
+                        <deck::Types as ::prisma_client_rust::ModelTypes>::scalar_selections()
+                    }
+                };
+                ::prisma_client_rust::Selection::new("deck", None, [], selections)
+            }
+            pub fn select(nested_selections: Vec<deck::SelectParam>) -> Self {
+                Self::Select(nested_selections)
+            }
+            pub fn include(nested_selections: Vec<deck::IncludeParam>) -> Self {
+                Self::Include(nested_selections)
+            }
+        }
+    }
     pub mod hero_card {
         use super::super::*;
         use super::_prisma::*;
         use super::{
             OrderByParam, SetParam, UncheckedSetParam, UniqueWhereParam, WhereParam, WithParam,
         };
-        pub const NAME: &str = "HeroCard";
+        pub const NAME: &str = "heroCard";
         pub struct Fetch(pub hero_card::UniqueArgs);
         impl Fetch {
             pub fn with(mut self, params: impl Into<hero_card::WithParam>) -> Self {
@@ -31352,12 +31471,6 @@ pub mod deck_card {
         }
         pub fn connect<T: From<Connect>>(value: hero_card::UniqueWhereParam) -> T {
             Connect(value).into()
-        }
-        pub fn disconnect() -> SetParam {
-            SetParam::DisconnectHeroCard
-        }
-        pub fn is_null() -> WhereParam {
-            WhereParam::HeroCardIsNull
         }
         pub fn is(value: Vec<hero_card::WhereParam>) -> WhereParam {
             WhereParam::HeroCardIs(value)
@@ -31390,7 +31503,7 @@ pub mod deck_card {
                         <hero_card::Types as ::prisma_client_rust::ModelTypes>::scalar_selections()
                     }
                 };
-                ::prisma_client_rust::Selection::new("HeroCard", None, [], selections)
+                ::prisma_client_rust::Selection::new("heroCard", None, [], selections)
             }
             pub fn select(nested_selections: Vec<hero_card::SelectParam>) -> Self {
                 Self::Select(nested_selections)
@@ -31424,7 +31537,7 @@ pub mod deck_card {
                         <hero_card::Types as ::prisma_client_rust::ModelTypes>::scalar_selections()
                     }
                 };
-                ::prisma_client_rust::Selection::new("HeroCard", None, [], selections)
+                ::prisma_client_rust::Selection::new("heroCard", None, [], selections)
             }
             pub fn select(nested_selections: Vec<hero_card::SelectParam>) -> Self {
                 Self::Select(nested_selections)
@@ -31441,7 +31554,7 @@ pub mod deck_card {
             OrderByParam, SetParam, UncheckedSetParam, UniqueWhereParam, WhereParam, WithParam,
         };
         pub const NAME: &str = "heroCardId";
-        pub struct Set(pub Option<String>);
+        pub struct Set(pub String);
         impl From<Set> for SetParam {
             fn from(Set(v): Set) -> Self {
                 Self::SetHeroCardId(v)
@@ -31452,17 +31565,17 @@ pub mod deck_card {
                 Self::HeroCardId(v)
             }
         }
-        pub fn set<T: From<Set>>(value: Option<String>) -> T {
+        pub fn set<T: From<Set>>(value: String) -> T {
             Set(value).into()
         }
         pub fn order(direction: ::prisma_client_rust::Direction) -> OrderByParam {
             OrderByParam::HeroCardId(direction)
         }
-        pub fn equals(value: Option<String>) -> WhereParam {
-            WhereParam::HeroCardId(_prisma::read_filters::StringNullableFilter::Equals(value))
+        pub fn equals<T: From<UniqueWhereParam>>(value: String) -> T {
+            UniqueWhereParam::HeroCardIdEquals(value).into()
         }
         ::prisma_client_rust::scalar_where_param_fns!(
-            _prisma::read_filters::StringNullableFilter,
+            _prisma::read_filters::StringFilter,
             HeroCardId,
             {
                 fn in_vec(_: Vec<String>) -> InVec;
@@ -31475,7 +31588,7 @@ pub mod deck_card {
                 fn starts_with(_: String) -> StartsWith;
                 fn ends_with(_: String) -> EndsWith;
                 fn mode(_: super::super::QueryMode) -> Mode;
-                fn not(_: Option<String>) -> Not;
+                fn not(_: String) -> Not;
             }
         );
         pub struct Include;
@@ -31501,18 +31614,31 @@ pub mod deck_card {
             }
         }
     }
-    pub fn create(deck_id: String, _params: Vec<SetParam>) -> (String, Vec<SetParam>) {
-        (deck_id, _params)
+    pub fn create(
+        deck: super::deck::UniqueWhereParam,
+        hero_card: super::hero_card::UniqueWhereParam,
+        _params: Vec<SetParam>,
+    ) -> (
+        super::deck::UniqueWhereParam,
+        super::hero_card::UniqueWhereParam,
+        Vec<SetParam>,
+    ) {
+        (deck, hero_card, _params)
     }
-    pub fn create_unchecked(deck_id: String, _params: Vec<SetParam>) -> (String, Vec<SetParam>) {
-        (deck_id, _params)
+    pub fn create_unchecked(
+        deck_id: String,
+        hero_card_id: String,
+        _params: Vec<SetParam>,
+    ) -> (String, String, Vec<SetParam>) {
+        (deck_id, hero_card_id, _params)
     }
     #[macro_export]
-    macro_rules ! _select_deck_card { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: deck_card :: select ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn select ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: deck_card :: select ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , deck_id , hero_card , hero_card_id } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { $ (pub $ field : crate :: prisma :: deck_card :: select ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) +] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: deck_card :: $ field :: NAME , & self . $ field) ? ;) * state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: deck_card :: $ field :: NAME) , + ,] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: deck_card :: $ field :: NAME => Ok (Field :: $ field)) , * , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * while let Some (key) = map . next_key () ? { match key { $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: $ field :: NAME)) ? ;) * Ok (Data { $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "deckId" , "HeroCard" , "heroCardId"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: deck_card :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; id) => { String } ; (@ field_type ; deck_id) => { String } ; (@ field_type ; hero_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { Option < hero_card :: Data > } ; (@ field_type ; hero_card) => { Option < crate :: prisma :: hero_card :: Data > } ; (@ field_type ; hero_card_id) => { Option < String > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "DeckCard" , available relations are "id, deck_id, hero_card, hero_card_id")) } ; (@ field_module ; hero_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero_card :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; id) => { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: id :: Select) } ; (@ selection_field_to_selection_param ; deck_id) => { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: deck_id :: Select) } ; (@ selection_field_to_selection_param ; hero_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: hero_card :: Select :: $ selection_mode (crate :: prisma :: hero_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: hero_card :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; hero_card_id) => { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: hero_card_id :: Select) } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: deck_card :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; deck_id) => { "deckId" } ; (@ field_serde_name ; hero_card) => { "HeroCard" } ; (@ field_serde_name ; hero_card_id) => { "heroCardId" } ; }
+    macro_rules ! _select_deck_card { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: deck_card :: select ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn select ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: deck_card :: select ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , deck_id , deck , hero_card , hero_card_id } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { $ (pub $ field : crate :: prisma :: deck_card :: select ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) +] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: deck_card :: $ field :: NAME , & self . $ field) ? ;) * state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: deck_card :: $ field :: NAME) , + ,] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: deck_card :: $ field :: NAME => Ok (Field :: $ field)) , * , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * while let Some (key) = map . next_key () ? { match key { $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: $ field :: NAME)) ? ;) * Ok (Data { $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "deckId" , "deck" , "heroCard" , "heroCardId"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: deck_card :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; id) => { String } ; (@ field_type ; deck_id) => { String } ; (@ field_type ; deck : $ selection_mode : ident { $ ($ selections : tt) + }) => { deck :: Data } ; (@ field_type ; deck) => { crate :: prisma :: deck :: Data } ; (@ field_type ; hero_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { hero_card :: Data } ; (@ field_type ; hero_card) => { crate :: prisma :: hero_card :: Data } ; (@ field_type ; hero_card_id) => { String } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "DeckCard" , available relations are "id, deck_id, deck, hero_card, hero_card_id")) } ; (@ field_module ; deck : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: deck :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; hero_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero_card :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; id) => { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: id :: Select) } ; (@ selection_field_to_selection_param ; deck_id) => { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: deck_id :: Select) } ; (@ selection_field_to_selection_param ; deck $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: deck :: Select :: $ selection_mode (crate :: prisma :: deck :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; deck $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: deck :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; hero_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: hero_card :: Select :: $ selection_mode (crate :: prisma :: hero_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: hero_card :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; hero_card_id) => { Into :: < crate :: prisma :: deck_card :: SelectParam > :: into (crate :: prisma :: deck_card :: hero_card_id :: Select) } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: deck_card :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; deck_id) => { "deckId" } ; (@ field_serde_name ; deck) => { "deck" } ; (@ field_serde_name ; hero_card) => { "heroCard" } ; (@ field_serde_name ; hero_card_id) => { "heroCardId" } ; }
     pub use _select_deck_card as select;
     pub enum SelectParam {
         Id(id::Select),
         DeckId(deck_id::Select),
+        Deck(deck::Select),
         HeroCard(hero_card::Select),
         HeroCardId(hero_card_id::Select),
     }
@@ -31521,17 +31647,19 @@ pub mod deck_card {
             match self {
                 Self::Id(data) => data.to_selection(),
                 Self::DeckId(data) => data.to_selection(),
+                Self::Deck(data) => data.to_selection(),
                 Self::HeroCard(data) => data.to_selection(),
                 Self::HeroCardId(data) => data.to_selection(),
             }
         }
     }
     #[macro_export]
-    macro_rules ! _include_deck_card { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: deck_card :: include ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn include ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: deck_card :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: deck_card :: include ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: deck_card :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { hero_card } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { pub id : String , pub deck_id : String , pub hero_card_id : Option < String > , $ (pub $ field : crate :: prisma :: deck_card :: include ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) + stringify ! (id) , stringify ! (deck_id) , stringify ! (hero_card_id)] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: deck_card :: $ field :: NAME , & self . $ field) ? ;) * state . serialize_field (crate :: prisma :: deck_card :: id :: NAME , & self . id) ? ; state . serialize_field (crate :: prisma :: deck_card :: deck_id :: NAME , & self . deck_id) ? ; state . serialize_field (crate :: prisma :: deck_card :: hero_card_id :: NAME , & self . hero_card_id) ? ; state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , id , deck_id , hero_card_id } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: deck_card :: $ field :: NAME) , + , crate :: prisma :: deck_card :: id :: NAME , crate :: prisma :: deck_card :: deck_id :: NAME , crate :: prisma :: deck_card :: hero_card_id :: NAME] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: deck_card :: $ field :: NAME => Ok (Field :: $ field)) , * , crate :: prisma :: deck_card :: id :: NAME => Ok (Field :: id) , crate :: prisma :: deck_card :: deck_id :: NAME => Ok (Field :: deck_id) , crate :: prisma :: deck_card :: hero_card_id :: NAME => Ok (Field :: hero_card_id) , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * let mut id = None ; let mut deck_id = None ; let mut hero_card_id = None ; while let Some (key) = map . next_key () ? { match key { Field :: id => { if id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: id :: NAME)) ; } id = Some (map . next_value () ?) ; } Field :: deck_id => { if deck_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: deck_id :: NAME)) ; } deck_id = Some (map . next_value () ?) ; } Field :: hero_card_id => { if hero_card_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: hero_card_id :: NAME)) ; } hero_card_id = Some (map . next_value () ?) ; } $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: $ field :: NAME)) ? ;) * let id = id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: id :: NAME)) ? ; let deck_id = deck_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: deck_id :: NAME)) ? ; let hero_card_id = hero_card_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: hero_card_id :: NAME)) ? ; Ok (Data { id , deck_id , hero_card_id , $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "deckId" , "HeroCard" , "heroCardId"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: deck_card :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; hero_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { Option < hero_card :: Data > } ; (@ field_type ; hero_card) => { Option < crate :: prisma :: hero_card :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "DeckCard" , available relations are "hero_card")) } ; (@ field_module ; hero_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero_card :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; hero_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck_card :: IncludeParam > :: into (crate :: prisma :: deck_card :: hero_card :: Include :: $ selection_mode (crate :: prisma :: hero_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck_card :: IncludeParam > :: into (crate :: prisma :: deck_card :: hero_card :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: deck_card :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; deck_id) => { "deckId" } ; (@ field_serde_name ; hero_card) => { "HeroCard" } ; (@ field_serde_name ; hero_card_id) => { "heroCardId" } ; }
+    macro_rules ! _include_deck_card { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: deck_card :: include ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn include ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: deck_card :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: deck_card :: include ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck_card :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: deck_card :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { deck , hero_card } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { pub id : String , pub deck_id : String , pub hero_card_id : String , $ (pub $ field : crate :: prisma :: deck_card :: include ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) + stringify ! (id) , stringify ! (deck_id) , stringify ! (hero_card_id)] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: deck_card :: $ field :: NAME , & self . $ field) ? ;) * state . serialize_field (crate :: prisma :: deck_card :: id :: NAME , & self . id) ? ; state . serialize_field (crate :: prisma :: deck_card :: deck_id :: NAME , & self . deck_id) ? ; state . serialize_field (crate :: prisma :: deck_card :: hero_card_id :: NAME , & self . hero_card_id) ? ; state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , id , deck_id , hero_card_id } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: deck_card :: $ field :: NAME) , + , crate :: prisma :: deck_card :: id :: NAME , crate :: prisma :: deck_card :: deck_id :: NAME , crate :: prisma :: deck_card :: hero_card_id :: NAME] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: deck_card :: $ field :: NAME => Ok (Field :: $ field)) , * , crate :: prisma :: deck_card :: id :: NAME => Ok (Field :: id) , crate :: prisma :: deck_card :: deck_id :: NAME => Ok (Field :: deck_id) , crate :: prisma :: deck_card :: hero_card_id :: NAME => Ok (Field :: hero_card_id) , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * let mut id = None ; let mut deck_id = None ; let mut hero_card_id = None ; while let Some (key) = map . next_key () ? { match key { Field :: id => { if id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: id :: NAME)) ; } id = Some (map . next_value () ?) ; } Field :: deck_id => { if deck_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: deck_id :: NAME)) ; } deck_id = Some (map . next_value () ?) ; } Field :: hero_card_id => { if hero_card_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: hero_card_id :: NAME)) ; } hero_card_id = Some (map . next_value () ?) ; } $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck_card :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: $ field :: NAME)) ? ;) * let id = id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: id :: NAME)) ? ; let deck_id = deck_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: deck_id :: NAME)) ? ; let hero_card_id = hero_card_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck_card :: hero_card_id :: NAME)) ? ; Ok (Data { id , deck_id , hero_card_id , $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "deckId" , "deck" , "heroCard" , "heroCardId"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: deck_card :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; deck : $ selection_mode : ident { $ ($ selections : tt) + }) => { deck :: Data } ; (@ field_type ; deck) => { crate :: prisma :: deck :: Data } ; (@ field_type ; hero_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { hero_card :: Data } ; (@ field_type ; hero_card) => { crate :: prisma :: hero_card :: Data } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "DeckCard" , available relations are "deck, hero_card")) } ; (@ field_module ; deck : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: deck :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; hero_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero_card :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; deck $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck_card :: IncludeParam > :: into (crate :: prisma :: deck_card :: deck :: Include :: $ selection_mode (crate :: prisma :: deck :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; deck $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck_card :: IncludeParam > :: into (crate :: prisma :: deck_card :: deck :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; hero_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck_card :: IncludeParam > :: into (crate :: prisma :: deck_card :: hero_card :: Include :: $ selection_mode (crate :: prisma :: hero_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck_card :: IncludeParam > :: into (crate :: prisma :: deck_card :: hero_card :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: deck_card :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; deck_id) => { "deckId" } ; (@ field_serde_name ; deck) => { "deck" } ; (@ field_serde_name ; hero_card) => { "heroCard" } ; (@ field_serde_name ; hero_card_id) => { "heroCardId" } ; }
     pub use _include_deck_card as include;
     pub enum IncludeParam {
         Id(id::Include),
         DeckId(deck_id::Include),
+        Deck(deck::Include),
         HeroCard(hero_card::Include),
         HeroCardId(hero_card_id::Include),
     }
@@ -31540,13 +31668,14 @@ pub mod deck_card {
             match self {
                 Self::Id(data) => data.to_selection(),
                 Self::DeckId(data) => data.to_selection(),
+                Self::Deck(data) => data.to_selection(),
                 Self::HeroCard(data) => data.to_selection(),
                 Self::HeroCardId(data) => data.to_selection(),
             }
         }
     }
     #[macro_export]
-    macro_rules ! _partial_unchecked_deck_card { ($ struct_name : ident { $ ($ scalar_field : ident) + }) => { :: prisma_client_rust :: macros :: partial_unchecked ! { crate :: prisma :: deck_card struct $ struct_name { # [serde (rename = "id")] pub id : String , # [serde (rename = "deckId")] pub deck_id : String , # [serde (rename = "heroCardId")] # [serde (default , with = "::prisma_client_rust::serde::double_option")] pub hero_card_id : Option < String > } [$ ($ scalar_field) , +] } } ; }
+    macro_rules ! _partial_unchecked_deck_card { ($ struct_name : ident { $ ($ scalar_field : ident) + }) => { :: prisma_client_rust :: macros :: partial_unchecked ! { crate :: prisma :: deck_card struct $ struct_name { # [serde (rename = "id")] pub id : String , # [serde (rename = "deckId")] pub deck_id : String , # [serde (rename = "heroCardId")] pub hero_card_id : String } [$ ($ scalar_field) , +] } } ; }
     pub use _partial_unchecked_deck_card as partial_unchecked;
     #[derive(Debug, Clone, :: serde :: Serialize, :: serde :: Deserialize)]
     pub struct Data {
@@ -31554,36 +31683,55 @@ pub mod deck_card {
         pub id: String,
         #[serde(rename = "deckId")]
         pub deck_id: String,
-        #[serde(
-            rename = "HeroCard",
-            default,
-            skip_serializing_if = "Option::is_none",
-            with = "prisma_client_rust::serde::double_option"
-        )]
-        pub hero_card: Option<Option<Box<super::hero_card::Data>>>,
+        #[serde(rename = "deck")]
+        pub deck: Option<Box<super::deck::Data>>,
+        #[serde(rename = "heroCard")]
+        pub hero_card: Option<Box<super::hero_card::Data>>,
         #[serde(rename = "heroCardId")]
-        pub hero_card_id: Option<String>,
+        pub hero_card_id: String,
     }
     impl Data {
+        pub fn deck(
+            &self,
+        ) -> Result<&super::deck::Data, ::prisma_client_rust::RelationNotFetchedError> {
+            self.deck
+                .as_ref()
+                .ok_or(::prisma_client_rust::RelationNotFetchedError::new(
+                    stringify!(deck),
+                ))
+                .map(|v| v.as_ref())
+        }
         pub fn hero_card(
             &self,
-        ) -> Result<Option<&super::hero_card::Data>, ::prisma_client_rust::RelationNotFetchedError>
+        ) -> Result<&super::hero_card::Data, ::prisma_client_rust::RelationNotFetchedError>
         {
             self.hero_card
                 .as_ref()
                 .ok_or(::prisma_client_rust::RelationNotFetchedError::new(
                     stringify!(hero_card),
                 ))
-                .map(|v| v.as_ref().map(|v| v.as_ref()))
+                .map(|v| v.as_ref())
         }
     }
     #[derive(Clone)]
     pub enum WithParam {
+        Deck(super::deck::UniqueArgs),
         HeroCard(super::hero_card::UniqueArgs),
     }
     impl Into<::prisma_client_rust::Selection> for WithParam {
         fn into(self) -> ::prisma_client_rust::Selection {
             match self {
+                Self::Deck(args) => {
+                    let mut selections =
+                        <super::deck::Types as ::prisma_client_rust::ModelTypes>::scalar_selections(
+                        );
+                    selections.extend(
+                        args.with_params
+                            .into_iter()
+                            .map(Into::<::prisma_client_rust::Selection>::into),
+                    );
+                    ::prisma_client_rust::Selection::new(deck::NAME, None, [], selections)
+                }
                 Self::HeroCard(args) => {
                     let mut selections = < super :: hero_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections () ;
                     selections.extend(
@@ -31600,9 +31748,9 @@ pub mod deck_card {
     pub enum SetParam {
         SetId(String),
         SetDeckId(String),
+        ConnectDeck(super::deck::UniqueWhereParam),
         ConnectHeroCard(super::hero_card::UniqueWhereParam),
-        DisconnectHeroCard,
-        SetHeroCardId(Option<String>),
+        SetHeroCardId(String),
     }
     impl From<SetParam> for (String, ::prisma_client_rust::PrismaValue) {
         fn from(param: SetParam) -> Self {
@@ -31614,6 +31762,20 @@ pub mod deck_card {
                 SetParam::SetDeckId(value) => (
                     deck_id::NAME.to_string(),
                     ::prisma_client_rust::PrismaValue::String(value),
+                ),
+                SetParam::ConnectDeck(where_param) => (
+                    deck::NAME.to_string(),
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
+                        "connect".to_string(),
+                        ::prisma_client_rust::PrismaValue::Object(
+                            [where_param]
+                                .into_iter()
+                                .map(Into::<super::deck::WhereParam>::into)
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .collect(),
+                        ),
+                    )]),
                 ),
                 SetParam::ConnectHeroCard(where_param) => (
                     hero_card::NAME.to_string(),
@@ -31629,18 +31791,9 @@ pub mod deck_card {
                         ),
                     )]),
                 ),
-                SetParam::DisconnectHeroCard => (
-                    hero_card::NAME.to_string(),
-                    ::prisma_client_rust::PrismaValue::Object(vec![(
-                        "disconnect".to_string(),
-                        ::prisma_client_rust::PrismaValue::Boolean(true),
-                    )]),
-                ),
                 SetParam::SetHeroCardId(value) => (
                     hero_card_id::NAME.to_string(),
-                    value
-                        .map(|value| ::prisma_client_rust::PrismaValue::String(value))
-                        .unwrap_or_else(|| ::prisma_client_rust::PrismaValue::Null),
+                    ::prisma_client_rust::PrismaValue::String(value),
                 ),
             }
         }
@@ -31649,7 +31802,7 @@ pub mod deck_card {
     pub enum UncheckedSetParam {
         Id(String),
         DeckId(String),
-        HeroCardId(Option<String>),
+        HeroCardId(String),
     }
     impl From<UncheckedSetParam> for SetParam {
         fn from(param: UncheckedSetParam) -> Self {
@@ -31691,10 +31844,11 @@ pub mod deck_card {
         And(Vec<WhereParam>),
         Id(_prisma::read_filters::StringFilter),
         DeckId(_prisma::read_filters::StringFilter),
-        HeroCardIsNull,
+        DeckIs(Vec<super::deck::WhereParam>),
+        DeckIsNot(Vec<super::deck::WhereParam>),
         HeroCardIs(Vec<super::hero_card::WhereParam>),
         HeroCardIsNot(Vec<super::hero_card::WhereParam>),
-        HeroCardId(_prisma::read_filters::StringNullableFilter),
+        HeroCardId(_prisma::read_filters::StringFilter),
     }
     impl ::prisma_client_rust::WhereInput for WhereParam {
         fn serialize(self) -> ::prisma_client_rust::SerializedWhereInput {
@@ -31737,11 +31891,31 @@ pub mod deck_card {
                 ),
                 Self::Id(value) => (id::NAME, value.into()),
                 Self::DeckId(value) => (deck_id::NAME, value.into()),
-                Self::HeroCardIsNull => (
-                    hero_card::NAME,
-                    ::prisma_client_rust::SerializedWhereValue::Value(
-                        ::prisma_client_rust::PrismaValue::Null,
-                    ),
+                Self::DeckIs(where_params) => (
+                    deck::NAME,
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                        "is".to_string(),
+                        ::prisma_client_rust::PrismaValue::Object(
+                            where_params
+                                .into_iter()
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .collect(),
+                        ),
+                    )]),
+                ),
+                Self::DeckIsNot(where_params) => (
+                    deck::NAME,
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                        "isNot".to_string(),
+                        ::prisma_client_rust::PrismaValue::Object(
+                            where_params
+                                .into_iter()
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .collect(),
+                        ),
+                    )]),
                 ),
                 Self::HeroCardIs(where_params) => (
                     hero_card::NAME,
@@ -31776,11 +31950,15 @@ pub mod deck_card {
     }
     #[derive(Clone)]
     pub enum UniqueWhereParam {
+        HeroCardIdEquals(String),
         IdEquals(String),
     }
     impl From<UniqueWhereParam> for WhereParam {
         fn from(value: UniqueWhereParam) -> Self {
             match value {
+                UniqueWhereParam::HeroCardIdEquals(value) => {
+                    Self::HeroCardId(_prisma::read_filters::StringFilter::Equals(value))
+                }
                 UniqueWhereParam::IdEquals(value) => {
                     Self::Id(_prisma::read_filters::StringFilter::Equals(value))
                 }
@@ -31842,23 +32020,29 @@ pub mod deck_card {
         pub fn find_many(self, _where: Vec<WhereParam>) -> FindMany<'a> {
             FindMany::new(self.client, _where)
         }
-        pub fn create(self, deck_id: String, mut _params: Vec<SetParam>) -> Create<'a> {
-            _params.extend([deck_id::set(deck_id)]);
+        pub fn create(
+            self,
+            deck: super::deck::UniqueWhereParam,
+            hero_card: super::hero_card::UniqueWhereParam,
+            mut _params: Vec<SetParam>,
+        ) -> Create<'a> {
+            _params.extend([deck::connect(deck), hero_card::connect(hero_card)]);
             Create::new(self.client, _params)
         }
         pub fn create_unchecked(
             self,
             deck_id: String,
+            hero_card_id: String,
             mut _params: Vec<UncheckedSetParam>,
         ) -> Create<'a> {
-            _params.extend([deck_id::set(deck_id)]);
+            _params.extend([deck_id::set(deck_id), hero_card_id::set(hero_card_id)]);
             Create::new(self.client, _params.into_iter().map(Into::into).collect())
         }
-        pub fn create_many(self, data: Vec<(String, Vec<SetParam>)>) -> CreateMany<'a> {
+        pub fn create_many(self, data: Vec<(String, String, Vec<SetParam>)>) -> CreateMany<'a> {
             let data = data
                 .into_iter()
-                .map(|(deck_id, mut _params)| {
-                    _params.extend([deck_id::set(deck_id)]);
+                .map(|(deck_id, hero_card_id, mut _params)| {
+                    _params.extend([deck_id::set(deck_id), hero_card_id::set(hero_card_id)]);
                     _params
                 })
                 .collect();
@@ -31889,10 +32073,14 @@ pub mod deck_card {
         pub fn upsert(
             self,
             _where: UniqueWhereParam,
-            (deck_id, mut _params): (String, Vec<SetParam>),
+            (deck, hero_card, mut _params): (
+                super::deck::UniqueWhereParam,
+                super::hero_card::UniqueWhereParam,
+                Vec<SetParam>,
+            ),
             _update: Vec<SetParam>,
         ) -> Upsert<'a> {
-            _params.extend([deck_id::set(deck_id)]);
+            _params.extend([deck::connect(deck), hero_card::connect(hero_card)]);
             Upsert::new(self.client, _where.into(), _params, _update)
         }
         pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
@@ -32042,7 +32230,7 @@ pub mod deck {
         use super::{
             OrderByParam, SetParam, UncheckedSetParam, UniqueWhereParam, WhereParam, WithParam,
         };
-        pub const NAME: &str = "Hero";
+        pub const NAME: &str = "hero";
         pub struct Fetch(pub hero::UniqueArgs);
         impl Fetch {
             pub fn with(mut self, params: impl Into<hero::WithParam>) -> Self {
@@ -32105,7 +32293,7 @@ pub mod deck {
                         <hero::Types as ::prisma_client_rust::ModelTypes>::scalar_selections()
                     }
                 };
-                ::prisma_client_rust::Selection::new("Hero", None, [], selections)
+                ::prisma_client_rust::Selection::new("hero", None, [], selections)
             }
             pub fn select(nested_selections: Vec<hero::SelectParam>) -> Self {
                 Self::Select(nested_selections)
@@ -32139,7 +32327,7 @@ pub mod deck {
                         <hero::Types as ::prisma_client_rust::ModelTypes>::scalar_selections()
                     }
                 };
-                ::prisma_client_rust::Selection::new("Hero", None, [], selections)
+                ::prisma_client_rust::Selection::new("hero", None, [], selections)
             }
             pub fn select(nested_selections: Vec<hero::SelectParam>) -> Self {
                 Self::Select(nested_selections)
@@ -32336,6 +32524,153 @@ pub mod deck {
             }
         }
     }
+    pub mod deck_card {
+        use super::super::*;
+        use super::_prisma::*;
+        use super::{
+            OrderByParam, SetParam, UncheckedSetParam, UniqueWhereParam, WhereParam, WithParam,
+        };
+        pub const NAME: &str = "DeckCard";
+        pub struct Fetch(pub deck_card::ManyArgs);
+        impl Fetch {
+            pub fn with(mut self, params: impl Into<deck_card::WithParam>) -> Self {
+                self.0 = self.0.with(params.into());
+                self
+            }
+            pub fn order_by(mut self, param: deck_card::OrderByParam) -> Self {
+                self.0 = self.0.order_by(param);
+                self
+            }
+            pub fn skip(mut self, value: i64) -> Self {
+                self.0 = self.0.skip(value);
+                self
+            }
+            pub fn take(mut self, value: i64) -> Self {
+                self.0 = self.0.take(value);
+                self
+            }
+            pub fn cursor(mut self, value: deck_card::UniqueWhereParam) -> Self {
+                self.0 = self.0.cursor(value.into());
+                self
+            }
+        }
+        impl From<Fetch> for WithParam {
+            fn from(Fetch(v): Fetch) -> Self {
+                WithParam::DeckCard(v)
+            }
+        }
+        pub fn fetch(params: Vec<deck_card::WhereParam>) -> Fetch {
+            Fetch(deck_card::ManyArgs::new(params))
+        }
+        pub struct Connect(pub Vec<deck_card::UniqueWhereParam>);
+        impl From<Connect> for SetParam {
+            fn from(Connect(v): Connect) -> Self {
+                Self::ConnectDeckCard(v)
+            }
+        }
+        pub fn connect<T: From<Connect>>(params: Vec<deck_card::UniqueWhereParam>) -> T {
+            Connect(params).into()
+        }
+        pub fn disconnect(params: Vec<deck_card::UniqueWhereParam>) -> SetParam {
+            SetParam::DisconnectDeckCard(params)
+        }
+        pub fn set(params: Vec<deck_card::UniqueWhereParam>) -> SetParam {
+            SetParam::SetDeckCard(params)
+        }
+        pub fn some(value: Vec<deck_card::WhereParam>) -> WhereParam {
+            WhereParam::DeckCardSome(value)
+        }
+        pub fn every(value: Vec<deck_card::WhereParam>) -> WhereParam {
+            WhereParam::DeckCardEvery(value)
+        }
+        pub fn none(value: Vec<deck_card::WhereParam>) -> WhereParam {
+            WhereParam::DeckCardNone(value)
+        }
+        pub enum Include {
+            Select(deck_card::ManyArgs, Vec<deck_card::SelectParam>),
+            Include(deck_card::ManyArgs, Vec<deck_card::IncludeParam>),
+            Fetch(deck_card::ManyArgs),
+        }
+        impl Into<super::IncludeParam> for Include {
+            fn into(self) -> super::IncludeParam {
+                super::IncludeParam::DeckCard(self)
+            }
+        }
+        impl Include {
+            pub fn to_selection(self) -> ::prisma_client_rust::Selection {
+                let (args, selections) = match self {
+                    Self::Select(args, selections) => (
+                        args.to_graphql().0,
+                        selections.into_iter().map(|s| s.to_selection()).collect(),
+                    ),
+                    Self::Include(args, selections) => (args.to_graphql().0, {
+                        let mut nested_selections = < deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections () ;
+                        nested_selections.extend(selections.into_iter().map(|s| s.to_selection()));
+                        nested_selections
+                    }),
+                    Self::Fetch(args) => (
+                        args.to_graphql().0,
+                        <deck_card::Types as ::prisma_client_rust::ModelTypes>::scalar_selections(),
+                    ),
+                };
+                ::prisma_client_rust::Selection::new(NAME, None, args, selections)
+            }
+            pub fn select(
+                args: deck_card::ManyArgs,
+                nested_selections: Vec<deck_card::SelectParam>,
+            ) -> Self {
+                Self::Select(args, nested_selections)
+            }
+            pub fn include(
+                args: deck_card::ManyArgs,
+                nested_selections: Vec<deck_card::IncludeParam>,
+            ) -> Self {
+                Self::Include(args, nested_selections)
+            }
+        }
+        pub enum Select {
+            Select(deck_card::ManyArgs, Vec<deck_card::SelectParam>),
+            Include(deck_card::ManyArgs, Vec<deck_card::IncludeParam>),
+            Fetch(deck_card::ManyArgs),
+        }
+        impl Into<super::SelectParam> for Select {
+            fn into(self) -> super::SelectParam {
+                super::SelectParam::DeckCard(self)
+            }
+        }
+        impl Select {
+            pub fn to_selection(self) -> ::prisma_client_rust::Selection {
+                let (args, selections) = match self {
+                    Self::Select(args, selections) => (
+                        args.to_graphql().0,
+                        selections.into_iter().map(|s| s.to_selection()).collect(),
+                    ),
+                    Self::Include(args, selections) => (args.to_graphql().0, {
+                        let mut nested_selections = vec![];
+                        nested_selections.extend(selections.into_iter().map(|s| s.to_selection()));
+                        nested_selections
+                    }),
+                    Self::Fetch(args) => (
+                        args.to_graphql().0,
+                        <deck_card::Types as ::prisma_client_rust::ModelTypes>::scalar_selections(),
+                    ),
+                };
+                ::prisma_client_rust::Selection::new(NAME, None, args, selections)
+            }
+            pub fn select(
+                args: deck_card::ManyArgs,
+                nested_selections: Vec<deck_card::SelectParam>,
+            ) -> Self {
+                Self::Select(args, nested_selections)
+            }
+            pub fn include(
+                args: deck_card::ManyArgs,
+                nested_selections: Vec<deck_card::IncludeParam>,
+            ) -> Self {
+                Self::Include(args, nested_selections)
+            }
+        }
+    }
     pub fn create(_params: Vec<SetParam>) -> (Vec<SetParam>) {
         (_params)
     }
@@ -32343,7 +32678,7 @@ pub mod deck {
         (_params)
     }
     #[macro_export]
-    macro_rules ! _select_deck { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: deck :: select ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn select ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: deck :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: deck :: select ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: deck :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , name , hero , hero_id , active , npc_id } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { $ (pub $ field : crate :: prisma :: deck :: select ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) +] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: deck :: $ field :: NAME , & self . $ field) ? ;) * state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: deck :: $ field :: NAME) , + ,] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: deck :: $ field :: NAME => Ok (Field :: $ field)) , * , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * while let Some (key) = map . next_key () ? { match key { $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: $ field :: NAME)) ? ;) * Ok (Data { $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "name" , "Hero" , "heroId" , "active" , "npcId"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: deck :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; id) => { String } ; (@ field_type ; name) => { String } ; (@ field_type ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { Option < hero :: Data > } ; (@ field_type ; hero) => { Option < crate :: prisma :: hero :: Data > } ; (@ field_type ; hero_id) => { Option < String > } ; (@ field_type ; active) => { bool } ; (@ field_type ; npc_id) => { Option < String > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "Deck" , available relations are "id, name, hero, hero_id, active, npc_id")) } ; (@ field_module ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; id) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: id :: Select) } ; (@ selection_field_to_selection_param ; name) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: name :: Select) } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: hero :: Select :: $ selection_mode (crate :: prisma :: hero :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: hero :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; hero_id) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: hero_id :: Select) } ; (@ selection_field_to_selection_param ; active) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: active :: Select) } ; (@ selection_field_to_selection_param ; npc_id) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: npc_id :: Select) } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: deck :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; name) => { "name" } ; (@ field_serde_name ; hero) => { "Hero" } ; (@ field_serde_name ; hero_id) => { "heroId" } ; (@ field_serde_name ; active) => { "active" } ; (@ field_serde_name ; npc_id) => { "npcId" } ; }
+    macro_rules ! _select_deck { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: deck :: select ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn select ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: deck :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: deck :: select ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: SelectType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: deck :: select ! (@ selections_to_params ; : select { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () ,] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , name , hero , hero_id , active , npc_id , deck_card } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { $ (pub $ field : crate :: prisma :: deck :: select ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) +] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: deck :: $ field :: NAME , & self . $ field) ? ;) * state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: deck :: $ field :: NAME) , + ,] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: deck :: $ field :: NAME => Ok (Field :: $ field)) , * , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * while let Some (key) = map . next_key () ? { match key { $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: $ field :: NAME)) ? ;) * Ok (Data { $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "name" , "hero" , "heroId" , "active" , "npcId" , "DeckCard"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: deck :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; id) => { String } ; (@ field_type ; name) => { String } ; (@ field_type ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { Option < hero :: Data > } ; (@ field_type ; hero) => { Option < crate :: prisma :: hero :: Data > } ; (@ field_type ; hero_id) => { Option < String > } ; (@ field_type ; active) => { bool } ; (@ field_type ; npc_id) => { Option < String > } ; (@ field_type ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { Vec < deck_card :: Data > } ; (@ field_type ; deck_card) => { Vec < crate :: prisma :: deck_card :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "Deck" , available relations are "id, name, hero, hero_id, active, npc_id, deck_card")) } ; (@ field_module ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: deck_card :: select ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; id) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: id :: Select) } ; (@ selection_field_to_selection_param ; name) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: name :: Select) } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: hero :: Select :: $ selection_mode (crate :: prisma :: hero :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: hero :: Select :: Fetch) } } ; (@ selection_field_to_selection_param ; hero_id) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: hero_id :: Select) } ; (@ selection_field_to_selection_param ; active) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: active :: Select) } ; (@ selection_field_to_selection_param ; npc_id) => { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: npc_id :: Select) } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: deck_card :: Select :: $ selection_mode (crate :: prisma :: deck_card :: ManyArgs :: new (crate :: prisma :: deck_card :: select ! (@ filters_to_args ; $ ($ ($ filters) +) ?)) $ ($ (. $ arg ($ ($ arg_params) *)) *) ? , crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck :: SelectParam > :: into (crate :: prisma :: deck :: deck_card :: Select :: Fetch (crate :: prisma :: deck_card :: ManyArgs :: new (crate :: prisma :: deck_card :: select ! (@ filters_to_args ; $ ($ ($ filters) +) ?)) $ ($ (. $ arg ($ ($ arg_params) *)) *) ?) ,) } } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: deck :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; name) => { "name" } ; (@ field_serde_name ; hero) => { "hero" } ; (@ field_serde_name ; hero_id) => { "heroId" } ; (@ field_serde_name ; active) => { "active" } ; (@ field_serde_name ; npc_id) => { "npcId" } ; (@ field_serde_name ; deck_card) => { "DeckCard" } ; }
     pub use _select_deck as select;
     pub enum SelectParam {
         Id(id::Select),
@@ -32352,6 +32687,7 @@ pub mod deck {
         HeroId(hero_id::Select),
         Active(active::Select),
         NpcId(npc_id::Select),
+        DeckCard(deck_card::Select),
     }
     impl SelectParam {
         pub fn to_selection(self) -> ::prisma_client_rust::Selection {
@@ -32362,11 +32698,12 @@ pub mod deck {
                 Self::HeroId(data) => data.to_selection(),
                 Self::Active(data) => data.to_selection(),
                 Self::NpcId(data) => data.to_selection(),
+                Self::DeckCard(data) => data.to_selection(),
             }
         }
     }
     #[macro_export]
-    macro_rules ! _include_deck { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: deck :: include ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn include ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: deck :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: deck :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: deck :: include ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: deck :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: deck :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { hero } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { pub id : String , pub name : String , pub hero_id : Option < String > , pub active : bool , pub npc_id : Option < String > , $ (pub $ field : crate :: prisma :: deck :: include ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) + stringify ! (id) , stringify ! (name) , stringify ! (hero_id) , stringify ! (active) , stringify ! (npc_id)] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: deck :: $ field :: NAME , & self . $ field) ? ;) * state . serialize_field (crate :: prisma :: deck :: id :: NAME , & self . id) ? ; state . serialize_field (crate :: prisma :: deck :: name :: NAME , & self . name) ? ; state . serialize_field (crate :: prisma :: deck :: hero_id :: NAME , & self . hero_id) ? ; state . serialize_field (crate :: prisma :: deck :: active :: NAME , & self . active) ? ; state . serialize_field (crate :: prisma :: deck :: npc_id :: NAME , & self . npc_id) ? ; state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , id , name , hero_id , active , npc_id } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: deck :: $ field :: NAME) , + , crate :: prisma :: deck :: id :: NAME , crate :: prisma :: deck :: name :: NAME , crate :: prisma :: deck :: hero_id :: NAME , crate :: prisma :: deck :: active :: NAME , crate :: prisma :: deck :: npc_id :: NAME] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: deck :: $ field :: NAME => Ok (Field :: $ field)) , * , crate :: prisma :: deck :: id :: NAME => Ok (Field :: id) , crate :: prisma :: deck :: name :: NAME => Ok (Field :: name) , crate :: prisma :: deck :: hero_id :: NAME => Ok (Field :: hero_id) , crate :: prisma :: deck :: active :: NAME => Ok (Field :: active) , crate :: prisma :: deck :: npc_id :: NAME => Ok (Field :: npc_id) , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * let mut id = None ; let mut name = None ; let mut hero_id = None ; let mut active = None ; let mut npc_id = None ; while let Some (key) = map . next_key () ? { match key { Field :: id => { if id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: id :: NAME)) ; } id = Some (map . next_value () ?) ; } Field :: name => { if name . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: name :: NAME)) ; } name = Some (map . next_value () ?) ; } Field :: hero_id => { if hero_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: hero_id :: NAME)) ; } hero_id = Some (map . next_value () ?) ; } Field :: active => { if active . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: active :: NAME)) ; } active = Some (map . next_value () ?) ; } Field :: npc_id => { if npc_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: npc_id :: NAME)) ; } npc_id = Some (map . next_value () ?) ; } $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: $ field :: NAME)) ? ;) * let id = id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: id :: NAME)) ? ; let name = name . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: name :: NAME)) ? ; let hero_id = hero_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: hero_id :: NAME)) ? ; let active = active . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: active :: NAME)) ? ; let npc_id = npc_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: npc_id :: NAME)) ? ; Ok (Data { id , name , hero_id , active , npc_id , $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "name" , "Hero" , "heroId" , "active" , "npcId"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: deck :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { Option < hero :: Data > } ; (@ field_type ; hero) => { Option < crate :: prisma :: hero :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "Deck" , available relations are "hero")) } ; (@ field_module ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck :: IncludeParam > :: into (crate :: prisma :: deck :: hero :: Include :: $ selection_mode (crate :: prisma :: hero :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck :: IncludeParam > :: into (crate :: prisma :: deck :: hero :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: deck :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; name) => { "name" } ; (@ field_serde_name ; hero) => { "Hero" } ; (@ field_serde_name ; hero_id) => { "heroId" } ; (@ field_serde_name ; active) => { "active" } ; (@ field_serde_name ; npc_id) => { "npcId" } ; }
+    macro_rules ! _include_deck { ($ (($ ($ func_arg : ident : $ func_arg_ty : ty) , +) =>) ? $ module_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { # [allow (warnings)] pub mod $ module_name { crate :: prisma :: deck :: include ! (@ definitions ; $ module_name ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; use super :: * ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } pub fn include ($ ($ ($ func_arg : $ func_arg_ty) , +) ?) -> Selection { Selection ([crate :: prisma :: deck :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: deck :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } } ; ({ $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { { crate :: prisma :: deck :: include ! (@ definitions ; ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) +) ; pub struct Selection (Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: IncludeType for Selection { type Data = Data ; type ModelData = crate :: prisma :: deck :: Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } Selection ([crate :: prisma :: deck :: include ! (@ selections_to_params ; : include { $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) + }) . into_iter () . map (| p | p . to_selection ()) . collect :: < Vec < _ >> () , < crate :: prisma :: deck :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()] . into_iter () . flatten () . collect :: < Vec < _ >> ()) } } ; (@ definitions ; $ ($ module_name : ident) ? ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { hero , deck_card } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [allow (warnings)] # [derive (std :: fmt :: Debug , Clone)] pub struct Data { pub id : String , pub name : String , pub hero_id : Option < String > , pub active : bool , pub npc_id : Option < String > , $ (pub $ field : crate :: prisma :: deck :: include ! (@ field_type ; $ field $ (: $ selection_mode { $ ($ selections) + }) ?) ,) + } impl :: serde :: Serialize for Data { fn serialize < S > (& self , serializer : S) -> Result < S :: Ok , S :: Error > where S : :: serde :: Serializer , { use :: serde :: ser :: SerializeStruct ; let mut state = serializer . serialize_struct ("Data" , [$ (stringify ! ($ field) ,) + stringify ! (id) , stringify ! (name) , stringify ! (hero_id) , stringify ! (active) , stringify ! (npc_id)] . len ()) ? ; $ (state . serialize_field (crate :: prisma :: deck :: $ field :: NAME , & self . $ field) ? ;) * state . serialize_field (crate :: prisma :: deck :: id :: NAME , & self . id) ? ; state . serialize_field (crate :: prisma :: deck :: name :: NAME , & self . name) ? ; state . serialize_field (crate :: prisma :: deck :: hero_id :: NAME , & self . hero_id) ? ; state . serialize_field (crate :: prisma :: deck :: active :: NAME , & self . active) ? ; state . serialize_field (crate :: prisma :: deck :: npc_id :: NAME , & self . npc_id) ? ; state . end () } } impl < 'de > :: serde :: Deserialize < 'de > for Data { fn deserialize < D > (deserializer : D) -> Result < Self , D :: Error > where D : :: serde :: Deserializer < 'de > , { # [allow (warnings)] enum Field { $ ($ field) , + , id , name , hero_id , active , npc_id } impl < 'de > :: serde :: Deserialize < 'de > for Field { fn deserialize < D > (deserializer : D) -> Result < Field , D :: Error > where D : :: serde :: Deserializer < 'de > , { struct FieldVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for FieldVisitor { type Value = Field ; fn expecting (& self , formatter : & mut :: std :: fmt :: Formatter) -> :: std :: fmt :: Result { formatter . write_str (& [$ (crate :: prisma :: deck :: $ field :: NAME) , + , crate :: prisma :: deck :: id :: NAME , crate :: prisma :: deck :: name :: NAME , crate :: prisma :: deck :: hero_id :: NAME , crate :: prisma :: deck :: active :: NAME , crate :: prisma :: deck :: npc_id :: NAME] . into_iter () . collect :: < Vec < _ >> () . join (", ")) } fn visit_str < E > (self , value : & str) -> Result < Field , E > where E : :: serde :: de :: Error , { match value { $ (crate :: prisma :: deck :: $ field :: NAME => Ok (Field :: $ field)) , * , crate :: prisma :: deck :: id :: NAME => Ok (Field :: id) , crate :: prisma :: deck :: name :: NAME => Ok (Field :: name) , crate :: prisma :: deck :: hero_id :: NAME => Ok (Field :: hero_id) , crate :: prisma :: deck :: active :: NAME => Ok (Field :: active) , crate :: prisma :: deck :: npc_id :: NAME => Ok (Field :: npc_id) , _ => Err (:: serde :: de :: Error :: unknown_field (value , FIELDS)) , } } } deserializer . deserialize_identifier (FieldVisitor) } } struct DataVisitor ; impl < 'de > :: serde :: de :: Visitor < 'de > for DataVisitor { type Value = Data ; fn expecting (& self , formatter : & mut std :: fmt :: Formatter) -> std :: fmt :: Result { formatter . write_str ("struct Data") } fn visit_map < V > (self , mut map : V) -> Result < Data , V :: Error > where V : :: serde :: de :: MapAccess < 'de > , { $ (let mut $ field = None ;) * let mut id = None ; let mut name = None ; let mut hero_id = None ; let mut active = None ; let mut npc_id = None ; while let Some (key) = map . next_key () ? { match key { Field :: id => { if id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: id :: NAME)) ; } id = Some (map . next_value () ?) ; } Field :: name => { if name . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: name :: NAME)) ; } name = Some (map . next_value () ?) ; } Field :: hero_id => { if hero_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: hero_id :: NAME)) ; } hero_id = Some (map . next_value () ?) ; } Field :: active => { if active . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: active :: NAME)) ; } active = Some (map . next_value () ?) ; } Field :: npc_id => { if npc_id . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: npc_id :: NAME)) ; } npc_id = Some (map . next_value () ?) ; } $ (Field :: $ field => { if $ field . is_some () { return Err (:: serde :: de :: Error :: duplicate_field (crate :: prisma :: deck :: $ field :: NAME)) ; } $ field = Some (map . next_value () ?) ; }) * } } $ (let $ field = $ field . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: $ field :: NAME)) ? ;) * let id = id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: id :: NAME)) ? ; let name = name . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: name :: NAME)) ? ; let hero_id = hero_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: hero_id :: NAME)) ? ; let active = active . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: active :: NAME)) ? ; let npc_id = npc_id . ok_or_else (|| serde :: de :: Error :: missing_field (crate :: prisma :: deck :: npc_id :: NAME)) ? ; Ok (Data { id , name , hero_id , active , npc_id , $ ($ field) , * }) } } const FIELDS : & 'static [& 'static str] = & ["id" , "name" , "hero" , "heroId" , "active" , "npcId" , "DeckCard"] ; deserializer . deserialize_struct ("Data" , FIELDS , DataVisitor) } } $ ($ (pub mod $ field { crate :: prisma :: deck :: $ selection_mode ! (@ field_module ; $ field : $ selection_mode { $ ($ selections) + }) ; }) ?) + } ; (@ field_type ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { Option < hero :: Data > } ; (@ field_type ; hero) => { Option < crate :: prisma :: hero :: Data > } ; (@ field_type ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { Vec < deck_card :: Data > } ; (@ field_type ; deck_card) => { Vec < crate :: prisma :: deck_card :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot include nonexistent relation $ field on model "Deck" , available relations are "hero, deck_card")) } ; (@ field_module ; hero : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: hero :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; deck_card : $ selection_mode : ident { $ ($ selections : tt) + }) => { crate :: prisma :: deck_card :: include ! (@ definitions ; ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck :: IncludeParam > :: into (crate :: prisma :: deck :: hero :: Include :: $ selection_mode (crate :: prisma :: hero :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; hero $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck :: IncludeParam > :: into (crate :: prisma :: deck :: hero :: Include :: Fetch) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? : $ selection_mode : ident { $ ($ selections : tt) + }) => { { Into :: < crate :: prisma :: deck :: IncludeParam > :: into (crate :: prisma :: deck :: deck_card :: Include :: $ selection_mode (crate :: prisma :: deck_card :: ManyArgs :: new (crate :: prisma :: deck_card :: include ! (@ filters_to_args ; $ ($ ($ filters) +) ?)) $ ($ (. $ arg ($ ($ arg_params) *)) *) ? , crate :: prisma :: deck_card :: select ! (@ selections_to_params ; : $ selection_mode { $ ($ selections) + }) . into_iter () . collect ())) } } ; (@ selection_field_to_selection_param ; deck_card $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { Into :: < crate :: prisma :: deck :: IncludeParam > :: into (crate :: prisma :: deck :: deck_card :: Include :: Fetch (crate :: prisma :: deck_card :: ManyArgs :: new (crate :: prisma :: deck_card :: include ! (@ filters_to_args ; $ ($ ($ filters) +) ?)) $ ($ (. $ arg ($ ($ arg_params) *)) *) ?) ,) } } ; (@ selection_field_to_selection_param ; $ ($ tokens : tt) *) => { compile_error ! (stringify ! ($ ($ tokens) *)) } ; (@ selections_to_params ; : $ macro_name : ident { $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ (: $ selection_mode : ident { $ ($ selections : tt) + }) ?) + }) => { [$ (crate :: prisma :: deck :: $ macro_name ! (@ selection_field_to_selection_param ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ (: $ selection_mode { $ ($ selections) + }) ?) ,) +] } ; (@ filters_to_args ;) => { vec ! [] } ; (@ filters_to_args ; $ ($ t : tt) *) => { $ ($ t) * } ; (@ field_serde_name ; id) => { "id" } ; (@ field_serde_name ; name) => { "name" } ; (@ field_serde_name ; hero) => { "hero" } ; (@ field_serde_name ; hero_id) => { "heroId" } ; (@ field_serde_name ; active) => { "active" } ; (@ field_serde_name ; npc_id) => { "npcId" } ; (@ field_serde_name ; deck_card) => { "DeckCard" } ; }
     pub use _include_deck as include;
     pub enum IncludeParam {
         Id(id::Include),
@@ -32375,6 +32712,7 @@ pub mod deck {
         HeroId(hero_id::Include),
         Active(active::Include),
         NpcId(npc_id::Include),
+        DeckCard(deck_card::Include),
     }
     impl IncludeParam {
         pub fn to_selection(self) -> ::prisma_client_rust::Selection {
@@ -32385,6 +32723,7 @@ pub mod deck {
                 Self::HeroId(data) => data.to_selection(),
                 Self::Active(data) => data.to_selection(),
                 Self::NpcId(data) => data.to_selection(),
+                Self::DeckCard(data) => data.to_selection(),
             }
         }
     }
@@ -32398,7 +32737,7 @@ pub mod deck {
         #[serde(rename = "name")]
         pub name: String,
         #[serde(
-            rename = "Hero",
+            rename = "hero",
             default,
             skip_serializing_if = "Option::is_none",
             with = "prisma_client_rust::serde::double_option"
@@ -32410,6 +32749,8 @@ pub mod deck {
         pub active: bool,
         #[serde(rename = "npcId")]
         pub npc_id: Option<String>,
+        #[serde(rename = "DeckCard")]
+        pub deck_card: Option<Vec<super::deck_card::Data>>,
     }
     impl Data {
         pub fn hero(
@@ -32423,10 +32764,21 @@ pub mod deck {
                 ))
                 .map(|v| v.as_ref().map(|v| v.as_ref()))
         }
+        pub fn deck_card(
+            &self,
+        ) -> Result<&Vec<super::deck_card::Data>, ::prisma_client_rust::RelationNotFetchedError>
+        {
+            self.deck_card
+                .as_ref()
+                .ok_or(::prisma_client_rust::RelationNotFetchedError::new(
+                    stringify!(deck_card),
+                ))
+        }
     }
     #[derive(Clone)]
     pub enum WithParam {
         Hero(super::hero::UniqueArgs),
+        DeckCard(super::deck_card::ManyArgs),
     }
     impl Into<::prisma_client_rust::Selection> for WithParam {
         fn into(self) -> ::prisma_client_rust::Selection {
@@ -32442,6 +32794,16 @@ pub mod deck {
                     );
                     ::prisma_client_rust::Selection::new(hero::NAME, None, [], selections)
                 }
+                Self::DeckCard(args) => {
+                    let (arguments, mut nested_selections) = args.to_graphql();
+                    nested_selections . extend (< super :: deck_card :: Types as :: prisma_client_rust :: ModelTypes > :: scalar_selections ()) ;
+                    ::prisma_client_rust::Selection::new(
+                        deck_card::NAME,
+                        None,
+                        arguments,
+                        nested_selections,
+                    )
+                }
             }
         }
     }
@@ -32454,6 +32816,9 @@ pub mod deck {
         SetHeroId(Option<String>),
         SetActive(bool),
         SetNpcId(Option<String>),
+        ConnectDeckCard(Vec<super::deck_card::UniqueWhereParam>),
+        DisconnectDeckCard(Vec<super::deck_card::UniqueWhereParam>),
+        SetDeckCard(Vec<super::deck_card::UniqueWhereParam>),
     }
     impl From<SetParam> for (String, ::prisma_client_rust::PrismaValue) {
         fn from(param: SetParam) -> Self {
@@ -32502,6 +32867,51 @@ pub mod deck {
                     value
                         .map(|value| ::prisma_client_rust::PrismaValue::String(value))
                         .unwrap_or_else(|| ::prisma_client_rust::PrismaValue::Null),
+                ),
+                SetParam::ConnectDeckCard(where_params) => (
+                    deck_card::NAME.to_string(),
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
+                        "connect".to_string(),
+                        ::prisma_client_rust::PrismaValue::List(
+                            where_params
+                                .into_iter()
+                                .map(Into::<super::deck_card::WhereParam>::into)
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
+                                .collect(),
+                        ),
+                    )]),
+                ),
+                SetParam::DisconnectDeckCard(where_params) => (
+                    deck_card::NAME.to_string(),
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
+                        "disconnect".to_string(),
+                        ::prisma_client_rust::PrismaValue::List(
+                            where_params
+                                .into_iter()
+                                .map(Into::<super::deck_card::WhereParam>::into)
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
+                                .collect(),
+                        ),
+                    )]),
+                ),
+                SetParam::SetDeckCard(where_params) => (
+                    deck_card::NAME.to_string(),
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
+                        "set".to_string(),
+                        ::prisma_client_rust::PrismaValue::List(
+                            where_params
+                                .into_iter()
+                                .map(Into::<super::deck_card::WhereParam>::into)
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
+                                .collect(),
+                        ),
+                    )]),
                 ),
             }
         }
@@ -32572,6 +32982,9 @@ pub mod deck {
         HeroId(_prisma::read_filters::StringNullableFilter),
         Active(_prisma::read_filters::BoolFilter),
         NpcId(_prisma::read_filters::StringNullableFilter),
+        DeckCardSome(Vec<super::deck_card::WhereParam>),
+        DeckCardEvery(Vec<super::deck_card::WhereParam>),
+        DeckCardNone(Vec<super::deck_card::WhereParam>),
     }
     impl ::prisma_client_rust::WhereInput for WhereParam {
         fn serialize(self) -> ::prisma_client_rust::SerializedWhereInput {
@@ -32649,6 +33062,45 @@ pub mod deck {
                 Self::HeroId(value) => (hero_id::NAME, value.into()),
                 Self::Active(value) => (active::NAME, value.into()),
                 Self::NpcId(value) => (npc_id::NAME, value.into()),
+                Self::DeckCardSome(where_params) => (
+                    deck_card::NAME,
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                        "some".to_string(),
+                        ::prisma_client_rust::PrismaValue::Object(
+                            where_params
+                                .into_iter()
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .collect(),
+                        ),
+                    )]),
+                ),
+                Self::DeckCardEvery(where_params) => (
+                    deck_card::NAME,
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                        "every".to_string(),
+                        ::prisma_client_rust::PrismaValue::Object(
+                            where_params
+                                .into_iter()
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .collect(),
+                        ),
+                    )]),
+                ),
+                Self::DeckCardNone(where_params) => (
+                    deck_card::NAME,
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                        "none".to_string(),
+                        ::prisma_client_rust::PrismaValue::Object(
+                            where_params
+                                .into_iter()
+                                .map(::prisma_client_rust::WhereInput::serialize)
+                                .map(::prisma_client_rust::SerializedWhereInput::transform_equals)
+                                .collect(),
+                        ),
+                    )]),
+                ),
             };
             ::prisma_client_rust::SerializedWhereInput::new(name, value.into())
         }
@@ -33151,6 +33603,8 @@ pub mod _prisma {
         HeroId,
         #[serde(rename = "cardId")]
         CardId,
+        #[serde(rename = "inDeck")]
+        InDeck,
     }
     impl ToString for HeroCardScalarFieldEnum {
         fn to_string(&self) -> String {
@@ -33158,6 +33612,7 @@ pub mod _prisma {
                 Self::Id => "id".to_string(),
                 Self::HeroId => "heroId".to_string(),
                 Self::CardId => "cardId".to_string(),
+                Self::InDeck => "inDeck".to_string(),
             }
         }
     }

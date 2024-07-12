@@ -40,7 +40,6 @@ pub async fn combat_ws(
             return Ok(HttpResponse::Unauthorized().finish());
         }
     };
-    info!("check combatant_id: {:?}", combatant_id);
     let app_state = app_state.get_ref().clone();
     let (tx, rx) = oneshot::channel();
 
@@ -110,6 +109,22 @@ impl CombatSocket {
             ws_to_player_decision_maker_tx: None,
         }
     }
+
+    pub fn leave_battle(&self) {
+        let app_state = self.app_state.clone();
+        let combatant_id = self.combatant_id.clone();
+
+        tokio::spawn(async move {
+            let combat_tx = app_state.lock().await.combat_tx.clone();
+            combat_tx
+                .send(ControllerMessage::Combat((
+                    CombatCommand::LeaveBattle,
+                    combatant_id,
+                )))
+                .await
+                .unwrap();
+        });
+    }
 }
 
 impl Actor for CombatSocket {
@@ -136,13 +151,11 @@ impl Actor for CombatSocket {
         ctx.spawn(fut::wrap_future(async move {
             let decision_maker = decision_maker_clone.clone();
             let state = app_state.lock().await;
-            let (sender, _) = oneshot::channel();
             let tx = state.combat_tx.clone();
 
             let message = ControllerMessage::Combat((
                 CombatCommand::EnterBattle(EnterBattleData(Some(decision_maker))),
                 id.clone(),
-                sender,
             ));
             let _ = tx.send(message).await;
             notify_handle.notified().await;
@@ -231,6 +244,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for CombatSocket {
 
 impl CombatSocket {
     fn handle_command(&mut self, command: CombatCommand) {
+        if let CombatCommand::LeaveBattle = command {
+            self.leave_battle();
+            return;
+        }
         let _tx = self.ws_to_player_decision_maker_tx.clone();
         tokio::spawn(async move {
             if let Some(tx) = _tx {

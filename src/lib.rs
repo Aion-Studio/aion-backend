@@ -57,6 +57,7 @@ mod events {
     pub mod handle_explore;
     pub mod handle_lootbox;
     pub mod handle_quest;
+    pub mod persistant_wrapper;
 }
 
 mod services {
@@ -78,6 +79,11 @@ mod services {
     }
 }
 
+mod tests {
+    #[cfg(test)]
+    pub mod helpers;
+}
+
 pub mod endpoints {
     pub mod auth;
     pub mod cards;
@@ -96,8 +102,6 @@ pub mod messenger;
 pub mod session_state;
 
 mod logger;
-#[cfg(test)]
-pub mod test_helpers;
 
 const LOG_ENV_VAR: &str = "INDEXER_LOG";
 #[cfg(not(all(tokio_unstable, feature = "debug")))]

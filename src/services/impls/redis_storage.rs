@@ -2,16 +2,22 @@ use std::sync::Arc;
 
 use redis::{AsyncCommands, Commands};
 use tokio::sync::Mutex;
+use tracing::info;
 
 use crate::events::combat::CombatEncounter;
 
+#[derive(Clone)]
 pub struct RedisStorage {
     client: Arc<Mutex<redis::Client>>,
 }
 
 impl RedisStorage {
     pub fn new(redis_url: &str) -> Self {
-        let client = redis::Client::open(redis_url).expect("Failed to create Redis client");
+        let client = redis::Client::open(redis_url).unwrap_or_else(|e| {
+            eprintln!("Failed to create Redis client: {}", e);
+            eprintln!("Redis URL: {}", redis_url);
+            panic!("Redis client creation failed");
+        });
         RedisStorage {
             client: Arc::new(Mutex::new(client)),
         }
@@ -30,6 +36,7 @@ impl RedisStorage {
         &self,
         encounter: &CombatEncounter,
     ) -> Result<(), redis::RedisError> {
+        info!("Storing encounter: {:?}", encounter.get_id());
         let mut conn = self.get_connection().await;
         let encounter_json = serde_json::to_string(encounter).map_err(|e| {
             redis::RedisError::from((
@@ -82,6 +89,7 @@ impl RedisStorage {
         let encounter = self.get_encounter(encounter_id).await;
 
         if let Some(encounter) = encounter {
+            info!("Redis Removing encounter: {:?}", encounter_id);
             // Remove the encounter
             conn.del(format!("encounter:{}", encounter_id)).await?;
 
