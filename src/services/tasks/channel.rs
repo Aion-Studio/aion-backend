@@ -40,10 +40,6 @@ impl Serialize for ChannelingAction {
 #[allow(deprecated)]
 impl ChannelingAction {
     pub fn new(hero: Hero, leyline_name: &str, durations: &ChannelDurations) -> Option<Self> {
-        println!(
-            "channeling in leyline {:?} and durations get {:?}",
-            leyline_name, durations
-        );
         let duration = *durations
             .0
             .get(leyline_name)

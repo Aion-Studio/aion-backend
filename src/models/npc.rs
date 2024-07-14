@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::{
     mpsc::{self, Sender},
-    oneshot,
+    oneshot, watch,
 };
-use tracing::log::info;
+use tracing::{error, log::info};
 
 use crate::events::combat::{CombatError, CombatantIndex, CombatantState};
 use crate::models::cards::{Card, Deck};
@@ -27,20 +27,19 @@ use super::{
 
 #[derive(Debug)]
 pub struct CpuCombatantDecisionMaker {
-    // command_sender: Sender<CombatCommand>,
+    command_sender: Option<Sender<CombatCommand>>,
     // result_receiver: Arc<Mutex<Receiver<CombatTurnMessage>>>,
     monster: Monster,
     player_idx: CombatantIndex,
     combat_controller_tx: Option<Sender<CombatCommand>>,
-    shutdown_signal: Option<oneshot::Receiver<()>>,
-    shutdown_trigger: Option<oneshot::Sender<()>>,
+    shutdown_signal: Option<watch::Receiver<bool>>,
+    shutdown_trigger: Option<watch::Sender<bool>>,
     encounter_id: String,
 }
 
 impl CpuCombatantDecisionMaker {
     pub(crate) fn new(monster: Monster, encounter_id: String) -> Self {
-        let (shutdown_trigger, shutdown_signal) = oneshot::channel();
-
+        let (shutdown_trigger, shutdown_signal) = watch::channel(false);
         Self {
             monster,
             player_idx: CombatantIndex::Npc,
@@ -48,7 +47,11 @@ impl CpuCombatantDecisionMaker {
             shutdown_signal: Some(shutdown_signal),
             shutdown_trigger: Some(shutdown_trigger),
             encounter_id,
+            command_sender: None,
         }
+    }
+    pub fn get_command_tx(&self) -> Option<Sender<CombatCommand>> {
+        self.command_sender.clone()
     }
 }
 
@@ -60,92 +63,71 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
     ) -> Sender<CombatTurnMessage> {
         self.player_idx = idx.clone();
         self.combat_controller_tx = Some(combat_controller_tx.clone());
-        let (command_sender, result_receiver) = mpsc::channel(10);
-        let combat_sender = combat_controller_tx.clone();
+        let (result_sender, mut result_receiver) = mpsc::channel(10);
+
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+
+        let mut shutdown_rx1 = shutdown_rx.clone();
+
         let shutdown_signal = self
             .shutdown_signal
             .take()
             .expect("Shutdown signal must be present when starting.");
 
-        let id = self.encounter_id.clone();
-
-        tokio::spawn(async move {
-            let mut result_receiver = result_receiver;
+        let handle_1 = tokio::spawn(async move {
             let npc_player_idx = idx.clone();
             tokio::select! {
-                _ = shutdown_signal => {
-                    info!("Shutting down signal monster.");
-                },
-                _ = async {
-                    let mut llm_decisions: Vec<CombatCommand> = vec![]; // Initialize a local decisions vector.
+            _ = shutdown_rx1.changed() => {
+                info!("Shutting down signal monster (first task).");
+            },
+            _ = async {
+                let mut llm_decisions: Vec<CombatCommand> = vec![]; // Initialize a local decisions vector.
 
-                    while let Some(result) = result_receiver.recv().await {
-                        match result {
-                            CombatTurnMessage::PlayerTurn(turn_idx) => {
-                                // Do nothing
-                                    info!("NPC player turn {:?}", turn_idx);
-                            }
-                            CombatTurnMessage::Winner(idx) => {
-                                // Do nothing
-                            }
-
-                            CombatTurnMessage::PlayerState(state)=>{
-                                    info!("NPC player state {:?}", state);
-                                // if turn == idx.clone() {
-                                //      let cards_i_can_play = me.get_hand().iter().filter(|c| c.cost <= me.get_mana()).collect::<Vec<_>>();
-                                //     if llm_decisions.is_empty() {
-                                //         let client = reqwest::Client::new();
-                                //
-                                //         let payload = json!({
-                                //
-                                //         });
-                                //
-                                //         let res = client.post("http://127.0.0.1:5000/message").json(&payload).send().await;
-                                //         let body = match res {
-                                //             Ok(res) => {
-                                //                 match res.status() {
-                                //                     reqwest::StatusCode::OK => {
-                                //                         res.text().await.unwrap()
-                                //                     }
-                                //                     _ => {
-                                //                         println!("Error sending request: {:?}", res.status());
-                                //                         "".to_string()
-                                //                     }
-                                //                 }
-                                //             }
-                                //             Err(e) => {
-                                //                 println!("Error sending request {:?}", e);
-                                //                 "".to_string()
-                                //             }
-                                //         };
-                                //         let json_body: serde_json::Value = serde_json::from_str(&body).unwrap();
-                                //
-                                //         let actions_list = json_body["actions"].as_array().unwrap();
-                                //         if actions_list.is_empty() {
-                                //             llm_decisions.push(CombatCommand::EndTurn);
-                                //         }
-                                //     }
-                                //     // take first decision from the local decisions vector and send it to the combat controller
-                                //     let command = llm_decisions.remove(0);
-                                //     info!("NPC sending command {:?}", command);
-                                //     combat_sender
-                                //         .clone()
-                                //         .send(command)
-                                //         .await
-                                //         .expect("Failed to send command");
-                                // }
-                                unimplemented!()
-                            }
-                            x => {
-                                    info!("NPC xx {:?}", x);
-                            }
-                        };
-                    }
-                } => {}
+                while let Some(result) = result_receiver.recv().await {
+                    match result {
+                        CombatTurnMessage::PlayerTurn(turn_idx) => {
+                            // Do nothing
+                                info!("NPC player turn {:?}", turn_idx);
+                        }
+                        _=>{}
+                    };
+                }
+            } => {}
             }
         });
+
+        let (command_tx, mut command_receiver) = mpsc::channel(10);
+
+        self.command_sender = Some(command_tx);
+        let combat_sender = combat_controller_tx.clone();
+
+        let id = self.encounter_id.clone();
+
+        let mut shutdown_rx2 = shutdown_rx.clone();
+        let handle_2 = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(cmd) = command_receiver.recv() => {
+                        if let Err(e) = combat_sender.send(cmd).await {
+                            error!("error in sending command to combat controller");
+                        }
+                    },
+                    _ = tokio::signal::ctrl_c() => {
+                        // Handle Ctrl+C or another termination signal if needed
+                       break;
+                    },
+                    _ = shutdown_rx2.changed() => {
+                        info!("Received internal shutdown signal, terminating command handling task.");
+                        break;
+                    },
+                }
+            }
+        });
+
+        self.shutdown_trigger = Some(shutdown_tx);
+
         info!("returning result sender of monster");
-        command_sender
+        result_sender
     }
     fn get_id(&self) -> String {
         info!(
@@ -157,7 +139,7 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
     }
     fn shutdown(&mut self) {
         if let Some(trigger) = self.shutdown_trigger.take() {
-            let _ = trigger.send(());
+            let _ = trigger.send(true);
         }
     }
 }
@@ -185,7 +167,7 @@ pub struct Monster {
 
 impl Default for Monster {
     fn default() -> Self {
-        let hp = rand::random::<i32>() % 20 + 20;
+        let hp = 50;
         Monster {
             id: "1".to_string(),
             name: "Goblin".to_string(),

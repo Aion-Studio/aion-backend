@@ -21,7 +21,7 @@ pub mod telemetry;
 pub mod prisma;
 #[allow(dead_code)]
 #[allow(unused_variables)]
-mod models {
+pub mod models {
     pub mod card_effect;
     pub mod combatant;
     pub mod date_times;
@@ -38,7 +38,7 @@ mod models {
     pub mod cards;
 }
 
-mod repos {
+pub mod repos {
     // pub mod game_engine_repo;
     // pub mod hero_repo;
     pub mod cards;
@@ -49,7 +49,7 @@ mod repos {
     // pub mod resources_repo;
 }
 
-mod events {
+pub mod events {
     pub mod combat;
     pub mod game;
     pub mod handle_channeling;
@@ -60,8 +60,9 @@ mod events {
     pub mod persistant_wrapper;
 }
 
-mod services {
+pub mod services {
     pub mod impls {
+        pub mod combat_controller_handle;
         pub mod combat_service;
         pub mod redis_storage;
         pub mod tasks;
@@ -79,8 +80,8 @@ mod services {
     }
 }
 
-mod tests {
-    #[cfg(test)]
+pub mod tests {
+    pub mod combat_context;
     pub mod helpers;
 }
 
@@ -101,7 +102,7 @@ pub mod jsontoken;
 pub mod messenger;
 pub mod session_state;
 
-mod logger;
+pub mod logger;
 
 const LOG_ENV_VAR: &str = "INDEXER_LOG";
 #[cfg(not(all(tokio_unstable, feature = "debug")))]

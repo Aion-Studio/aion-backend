@@ -22,13 +22,6 @@ impl PersistentCombatEncounter {
         }
     }
 
-    pub async fn persist(&self) {
-        let encounter = self.encounter.read().await;
-        if let Err(e) = self.storage.store_encounter(&encounter).await {
-            error!("Failed to persist encounter: {:?}", e);
-        }
-    }
-
     pub async fn read(&self) -> tokio::sync::RwLockReadGuard<'_, CombatEncounter> {
         self.encounter.read().await
     }

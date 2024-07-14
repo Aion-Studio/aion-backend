@@ -59,5 +59,9 @@ resolver = "2"
 
 [profile.dev]
 opt-level = 0
-debug = false
-incremental = false
+debug = 0
+strip = "debuginfo"
+incremental = true
+
+[profile.test]
+incremental = true

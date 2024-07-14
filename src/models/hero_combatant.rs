@@ -156,7 +156,6 @@ impl Combatant for HeroCombatant {
             .collect::<Vec<Card>>();
 
         self.cards_in_hand.append(&mut random_cards_from_deck);
-        println!("drew cards for hero");
     }
 
     fn add_to_discard(&mut self, card: Card) {

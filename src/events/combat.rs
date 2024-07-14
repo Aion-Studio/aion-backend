@@ -150,9 +150,7 @@ impl CombatEncounter {
         let combatant_type = self.get_combatant(&Player, None);
         let combatant = combatant_type.as_combatant_mut();
 
-        println!("Initializing combat");
         if combatant.get_hand().is_empty() {
-            info!("Shuffling deck and drawing cards");
             combatant.shuffle_deck();
             combatant.draw_cards();
         }
@@ -246,28 +244,21 @@ impl CombatEncounter {
         combatant_id: &str, // the ID of the combatant making the move
     ) -> Result<CombatTurnMessage, CombatError> {
         use CombatCommand::*;
-        println!("Processing combat turn");
         let idx = self.get_combatant_idx(combatant_id).unwrap();
         let is_valid_turn = self.current_turn == idx;
         if !is_valid_turn {
             return Err(CombatError::OutOfTurnAction);
         }
         let result = match cmd.clone() {
-            PlayCard(card) => {
-                info!("Playing card {:?}", card);
-                println!("Playing card {:?}", card);
-
-                match self.handle_play_card(card, combatant_id) {
-                    Ok(msg) => Ok(msg),
-                    Err(e) => Err(e),
-                }
-            }
+            PlayCard(card) => match self.handle_play_card(card, combatant_id) {
+                Ok(msg) => Ok(msg),
+                Err(e) => Err(e),
+            },
             EndTurn => {
                 self.current_turn = match idx {
                     Player => CombatantIndex::Npc,
                     Npc => Player,
                 };
-                println!("turn ended its now {:?}'s turn", self.current_turn);
 
                 // increment round draws cards for combatant 1, else statement draws for combatant 2
                 if self.current_turn == Player {
@@ -300,7 +291,6 @@ impl CombatEncounter {
             for effect in effects {
                 match effect.effect {
                     EffectType::Poison => {
-                        println!("Poison effect being applied");
                         target.take_damage(effect.value);
                         // decrement duration of effect, if resulting is 0 , add to remove ids vec
                         // and then remove after effects loop
@@ -423,81 +413,5 @@ impl Display for CombatError {
             CombatError::JustPlayedCardError => write!(f, "Just played card"),
             CombatError::CombatantNotFound => write!(f, "Combatant not found"),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use tokio::sync::oneshot;
-
-    use crate::events::combat::{CombatTurnMessage, CombatantIndex};
-    use crate::models::cards::Card;
-    use crate::models::combatant::{Combatant, CombatantType};
-    use crate::models::hero_combatant::HeroCombatant;
-    use crate::models::npc::Monster;
-    use crate::services::impls::combat_service::{
-        CombatCommand, ControllerMessage, EnterBattleData,
-    };
-    use crate::tests::helpers::init_test_combat;
-
-    #[tokio::test]
-    async fn test_combat_encounter() {
-        use ControllerMessage::*;
-        let mut hero = HeroCombatant::default();
-        let monster = Monster::default();
-        let cards_in_deck: Vec<Card> = (0..12).map(|_| Card::poison()).collect();
-        hero.deck.cards_in_deck = cards_in_deck;
-        let (player_tx, controller_tx, encounter_id) =
-            init_test_combat(hero.clone(), monster).await;
-
-        let (tx, rx) = oneshot::channel();
-        controller_tx
-            .send(GetCombatant {
-                combatant_id: hero.get_id(),
-                encounter_id,
-                tx,
-            })
-            .await
-            .unwrap();
-
-        let hero = match rx.await.unwrap().unwrap() {
-            CombatantType::Hero(hero) => hero,
-            _ => panic!("Expected hero combatant"),
-        };
-
-        println!("hero hand {:?}", hero.get_hand());
-
-        // Add the encounter to the controller
-
-        // Simulate player sending a combat turn message
-        let player_command = CombatCommand::PlayCard(hero.get_hand()[0].clone());
-        player_tx.send(player_command).await.unwrap();
-
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        player_tx.send(CombatCommand::EndTurn).await.unwrap();
-        // Wait for a short time to allow messages to be processed
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-
-        // Check the state of the encounter
-        let (tx, rx) = oneshot::channel();
-        controller_tx
-            .send(ControllerMessage::RequestState {
-                combatant_id: hero.get_id(),
-                tx,
-            })
-            .await
-            .unwrap();
-
-        if let (Some(CombatTurnMessage::EncounterData(encounter_state)), _) = rx.await.unwrap() {
-            assert_eq!(encounter_state.turn, CombatantIndex::Npc);
-            assert_eq!(encounter_state.round, 1);
-            println!("{:?}", encounter_state);
-            // Add more assertions based on the expected state after playing a card
-        } else {
-            panic!("Failed to get encounter state");
-        }
-
-        // Clean up the encounter
     }
 }

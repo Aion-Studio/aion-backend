@@ -94,8 +94,6 @@ pub async fn send_new_tasks_to_ws() {
     let tasks = Infra::tasks().get_all_active();
     let tasks_json = serde_json::to_string(&tasks).unwrap();
 
-    println!("addr chceck {:?}", WS_ADDR.lock().unwrap().as_ref());
-
     if let Some(addr) = WS_ADDR.lock().unwrap().as_ref() {
         addr.do_send(TasksUpdate(tasks_json));
     }

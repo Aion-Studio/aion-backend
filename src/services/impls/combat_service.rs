@@ -50,7 +50,7 @@ pub enum ControllerMessage {
         encounter: CombatEncounter,
     },
     AddDecisionMaker {
-        participant_id: String,
+        combatant_id: String,
         decision_maker: Arc<Mutex<dyn DecisionMaker + Send + Sync>>,
     },
     NotifyPlayers {
@@ -77,10 +77,31 @@ pub enum ControllerMessage {
     RemoveSingleDecisionMaker {
         combatant_id: String,
     },
+    StartEncounterForCombatant {
+        combatant_id: String,
+    },
     SendMsgsToPlayer {
         combatant_id: String,
         result: CombatTurnMessage,
     },
+}
+
+pub struct CombatControllerState {
+    storage: RedisStorage,
+    decision_makers: HashMap<String, Arc<Mutex<dyn DecisionMaker + Send + Sync>>>,
+    result_senders: HashMap<String, Sender<CombatTurnMessage>>,
+    shutdown_signals: HashMap<String, Arc<Notify>>,
+}
+
+impl CombatControllerState {
+    pub fn new(redis_uri: &str) -> Self {
+        Self {
+            storage: RedisStorage::new(redis_uri),
+            decision_makers: HashMap::new(),
+            result_senders: HashMap::new(),
+            shutdown_signals: HashMap::new(),
+        }
+    }
 }
 
 pub struct CombatController {
@@ -151,14 +172,12 @@ impl CombatController {
         self.storage.get_encounter_by_combatant(combatant_id).await
     }
 
-    async fn start_encounter_for_combatant(&mut self, combatant_id: &str) {
-        println!("Starting encounter for combatant: {}", combatant_id);
+    pub async fn start_encounter_for_combatant(&mut self, combatant_id: &str) {
         let shutdown_signal = Arc::new(Notify::new());
         self.shutdown_signals
             .insert(combatant_id.to_string(), shutdown_signal.clone());
 
         if let Some(decision_maker) = self.decision_makers.get(&combatant_id.to_string()) {
-            println!("finds decision maker");
             let (command_sender, mut command_receiver) = mpsc::channel(10);
             let encounter = self.encounter_by_combatant_id(combatant_id).await.unwrap();
             let idx = encounter.get_combatant_idx(combatant_id).unwrap();
@@ -186,7 +205,6 @@ impl CombatController {
                         while let Some(command) = command_receiver.recv().await {
                             let mut encounter = storage.get_encounter_by_combatant(&combatant_id).await.unwrap();
 
-                             println!("waiting for ocmbat turn");
                             match encounter.process_combat_turn(command, &combatant_id) {
                                 Ok(result) => {
                                     // Persist the updated encounter
@@ -216,19 +234,6 @@ impl CombatController {
                 }
             });
         }
-    }
-
-    #[allow(dead_code)]
-    async fn update_players_with_msgs(
-        &self,
-        encounter_state: EncounterState,
-        combatant_id: &str,
-        result: &CombatTurnMessage,
-    ) {
-        println!(
-            "Updating players with messages {:?} {:?} {:?}",
-            encounter_state, combatant_id, result
-        );
     }
 
     async fn construct_player_state(
@@ -282,6 +287,9 @@ impl CombatController {
 
                     info!("Removed encounter: {}", encounter_id);
                 }
+                ControllerMessage::StartEncounterForCombatant { combatant_id } => {
+                    self.start_encounter_for_combatant(&combatant_id).await;
+                }
                 ControllerMessage::GetCombatant {
                     encounter_id,
                     combatant_id,
@@ -330,8 +338,7 @@ impl CombatController {
                                 self.start_encounter_for_combatant(&opponent_id).await;
                             }
                             self.start_encounter_for_combatant(&from_id).await;
-                            let mut encounter =
-                                self.encounter_by_combatant_id(&from_id).await.unwrap();
+                            let encounter = self.encounter_by_combatant_id(&from_id).await.unwrap();
 
                             self.initialize_encounter(&encounter.get_id())
                                 .await
@@ -461,10 +468,10 @@ impl CombatController {
                     }
                 }
                 ControllerMessage::AddDecisionMaker {
-                    participant_id,
+                    combatant_id,
                     decision_maker,
                 } => {
-                    self.decision_makers.insert(participant_id, decision_maker);
+                    self.decision_makers.insert(combatant_id, decision_maker);
                 }
 
                 ControllerMessage::RequestState { combatant_id, tx } => {

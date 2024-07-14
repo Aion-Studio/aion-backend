@@ -56,7 +56,7 @@ pub struct Card {
 }
 
 impl Card {
-    pub fn poison() -> Self {
+    pub fn poison(amount: i32, rounds: Option<i32>) -> Self {
         Card {
             id: uuid::Uuid::new_v4().to_string(),
             class: Class::Fighter,
@@ -70,10 +70,53 @@ impl Card {
                 id: uuid::Uuid::new_v4().to_string(),
                 card_id: "".to_string(),
                 effect: EffectType::Poison,
-                value: 1,
+                value: amount,
                 target_type: TargetType::Opponent,
                 stat_affected: None,
-                duration: Some(2),
+                duration: rounds,
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+
+    pub fn attack(value: i32) -> Self {
+        let card_type = CardType::Attack;
+        let effect = CardEffect::get_random_by_card_type(card_type);
+        let mut card = Card {
+            id: uuid::Uuid::new_v4().to_string(),
+            class: Class::get_random(),
+            card_type,
+            name: "".to_string(),
+            img_url: "".to_string(),
+            cost: 1,
+            zeal: 0,
+            tier: 1,
+            effects: vec![effect],
+            last_attack_round: None,
+        };
+        card.effects[0].value = value;
+        card
+    }
+
+    pub fn heal(amount: i32) -> Self {
+        Card {
+            id: uuid::Uuid::new_v4().to_string(),
+            class: Class::Fighter,
+            card_type: CardType::Defensive,
+            name: "Heal".to_string(),
+            img_url: "".to_string(),
+            cost: 2,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: "".to_string(),
+                effect: EffectType::Heal,
+                value: amount,
+                target_type: TargetType::Itself,
+                stat_affected: None,
+                duration: None,
                 is_percentage_modifier: false,
             }],
             last_attack_round: None,

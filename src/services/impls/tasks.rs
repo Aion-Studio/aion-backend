@@ -76,7 +76,6 @@ impl TaskManager {
                     MESSENGER.send(Command::ChannelCompleted(channeling_action.clone()));
                 }
                 TaskAction::Explore(explore_action) => {
-                    println!("hero checker in scheduler {:?}", explore_action.hero);
                     MESSENGER.send(Command::ExploreCompleted(explore_action.clone()));
                 }
                 _ => {}
