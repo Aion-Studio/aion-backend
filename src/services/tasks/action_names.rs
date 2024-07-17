@@ -5,7 +5,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 
 use crate::events::game::RaidResult;
-use crate::services::impls::combat_service::ControllerMessage;
+use crate::services::impls::combat_controller::ControllerMessage;
 use crate::{
     configuration::ChannelDurations,
     events::game::{ChannelResult, ExploreResult, QuestResult},

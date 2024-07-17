@@ -15,7 +15,7 @@ use crate::models::quest::Quest;
 use crate::models::region::{HeroRegion, Leyline};
 use crate::prisma::Class;
 use crate::repos::hero::HeroRepo;
-use crate::services::impls::combat_service::ControllerMessage;
+use crate::services::impls::combat_controller::ControllerMessage;
 use crate::services::tasks::action_names::{ActionNames, TaskAction};
 use crate::services::tasks::channel::ChannelingAction;
 use crate::services::tasks::explore::ExploreAction;

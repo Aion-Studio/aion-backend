@@ -6,6 +6,8 @@ use actix::Message;
 use serde::{Deserialize, Serialize};
 use tracing::log::info;
 
+use std::error::Error;
+
 use CombatantIndex::*;
 
 use crate::models::cards::{Card, CardEffect};
@@ -16,7 +18,7 @@ use crate::models::talent::Spell;
 use crate::prisma::{EffectType, TargetType};
 use crate::{
     models::{combatant::Combatant, npc::Monster},
-    services::impls::combat_service::CombatCommand,
+    services::impls::combat_controller::CombatCommand,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
@@ -58,8 +60,8 @@ impl CombatEncounter {
         }
     }
 
-    pub fn get_player_combatant(&mut self) -> &mut CombatantType {
-        &mut self.player_combatant
+    pub fn get_player_combatant(&mut self) -> &mut HeroCombatant {
+        self.player_combatant.as_hero()
     }
     pub fn set_action_id(&mut self, action_id: String) {
         self.action_id = Some(action_id);
@@ -413,5 +415,13 @@ impl Display for CombatError {
             CombatError::JustPlayedCardError => write!(f, "Just played card"),
             CombatError::CombatantNotFound => write!(f, "Combatant not found"),
         }
+    }
+}
+
+impl Error for CombatError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        // Typically, this would return the underlying error if there is one.
+        // For now, we return None since CombatError has no underlying cause.
+        None
     }
 }

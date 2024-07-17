@@ -39,7 +39,8 @@ use crate::logger::Logger;
 use crate::messenger::MESSENGER;
 use crate::prisma::PrismaClient;
 
-use crate::services::impls::combat_service::{CombatController, ControllerMessage};
+use crate::services::impls::combat_controller::setup_combat_system;
+use crate::services::impls::combat_controller::ControllerMessage;
 use crate::session_state::TypedSession;
 // use crate::storable::MemoryStore;
 
@@ -146,21 +147,21 @@ async fn run(
 
     // let store = Arc::new(Mutex::new(MemoryStore::new()));
 
-    let (tx, rx) = mpsc::channel(1000);
-    info!("___created new combat_tx____");
+    // let (tx, rx) = mpsc::channel(1000);
 
-    let mut combat_controller = CombatController::new(tx.clone(), &redis_uri); // Use RwLock here
+    let (_, sender, mut message_handler) = setup_combat_system(&redis_uri); // Use RwLock here
+                                                                            //
 
     // our combat runner
     tokio::spawn(async move {
         // This scope only needs a write lock briefly to start the `run` method
-        combat_controller.run(rx).await;
+        message_handler.run().await;
         info!("combat run exiting...");
     });
 
     let app_state_s = AppState {
         durations: get_durations(),
-        combat_tx: tx,
+        combat_tx: sender,
         signing_messages: HashMap::new(),
     };
 

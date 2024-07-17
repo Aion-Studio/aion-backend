@@ -1,26 +1,140 @@
-10:26:41 [DEBUG] (1) globset: glob converted to regex: Glob { glob: "**/npm-debug.log*", re: "(?-u)^(?:/?|.*/)npm\\-debug\\.log[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('n'), Literal('p'), Literal('m'), Literal('-'), Literal('d'), Literal('e'), Literal('b'), Literal('u'), Literal('g'), Literal('.'), Literal('l'), Literal('o'), Literal('g'), ZeroOrMore]) }
-10:26:41 [DEBUG] (1) globset: glob converted to regex: Glob { glob: "**/yarn-debug.log*", re: "(?-u)^(?:/?|.*/)yarn\\-debug\\.log[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('y'), Literal('a'), Literal('r'), Literal('n'), Literal('-'), Literal('d'), Literal('e'), Literal('b'), Literal('u'), Literal('g'), Literal('.'), Literal('l'), Literal('o'), Literal('g'), ZeroOrMore]) }
-10:26:41 [DEBUG] (1) globset: glob converted to regex: Glob { glob: "**/yarn-error.log*", re: "(?-u)^(?:/?|.*/)yarn\\-error\\.log[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('y'), Literal('a'), Literal('r'), Literal('n'), Literal('-'), Literal('e'), Literal('r'), Literal('r'), Literal('o'), Literal('r'), Literal('.'), Literal('l'), Literal('o'), Literal('g'), ZeroOrMore]) }
-10:26:41 [DEBUG] (1) globset: built glob set; 6 literals, 4 basenames, 2 extensions, 0 prefixes, 0 suffixes, 1 required extensions, 3 regexes
-10:26:41 [DEBUG] (1) globset: built glob set; 0 literals, 3 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 0 regexes
-10:26:41 [DEBUG] (1) ignore::walk: ignoring ./target: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: "**/target/", actual: "**/target", is_whitelist: false, is_only_dir: true })))
-10:26:41 [DEBUG] (1) ignore::walk: ignoring ./prisma/node_modules: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: "node_modules", actual: "**/node_modules", is_whitelist: false, is_only_dir: false })))
-10:26:41 [DEBUG] (1) ignore::walk: ignoring ./prisma/.env: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: ".env", actual: "**/.env", is_whitelist: false, is_only_dir: false })))
-10:26:41 [DEBUG] (1) ignore::walk: ignoring ./prisma-cli/target: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: "**/target/", actual: "**/target", is_whitelist: false, is_only_dir: true })))
-10:26:41 [DEBUG] (1) ignore::walk: ignoring ./.env: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: ".env", actual: "**/.env", is_whitelist: false, is_only_dir: false })))
-10:26:41 [DEBUG] (1) globset: built glob set; 6 literals, 0 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 0 regexes
-10:26:41 [DEBUG] (1) ignore::walk: ignoring ./.idea/workspace.xml: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.idea/.gitignore"), original: "/workspace.xml", actual: "workspace.xml", is_whitelist: false, is_only_dir: false })))
-10:26:43 [DEBUG] (1) lazytestr: Running selected test
-10:29:38 [DEBUG] (1) lazytestr: Running selected test
-10:30:00 [DEBUG] (1) lazytestr: Running selected test
-10:30:20 [DEBUG] (1) lazytestr: Running selected test
-10:31:02 [DEBUG] (1) lazytestr: Running selected test
-10:31:49 [DEBUG] (1) lazytestr: Running selected test
-10:39:16 [DEBUG] (1) lazytestr: Running selected test
-10:40:00 [DEBUG] (1) lazytestr: Running selected test
-10:40:36 [DEBUG] (1) lazytestr: Running selected test
-10:40:39 [DEBUG] (1) lazytestr: Running selected test
-11:27:10 [DEBUG] (1) lazytestr: Running selected test
-11:32:28 [DEBUG] (1) lazytestr: Running selected test
-11:50:47 [DEBUG] (1) lazytestr: Running selected test
-11:51:54 [DEBUG] (1) lazytestr: Running selected test
+06:00:12 [DEBUG] (1) globset: glob converted to regex: Glob { glob: "**/npm-debug.log*", re: "(?-u)^(?:/?|.*/)npm\\-debug\\.log[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('n'), Literal('p'), Literal('m'), Literal('-'), Literal('d'), Literal('e'), Literal('b'), Literal('u'), Literal('g'), Literal('.'), Literal('l'), Literal('o'), Literal('g'), ZeroOrMore]) }
+06:00:12 [DEBUG] (1) globset: glob converted to regex: Glob { glob: "**/yarn-debug.log*", re: "(?-u)^(?:/?|.*/)yarn\\-debug\\.log[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('y'), Literal('a'), Literal('r'), Literal('n'), Literal('-'), Literal('d'), Literal('e'), Literal('b'), Literal('u'), Literal('g'), Literal('.'), Literal('l'), Literal('o'), Literal('g'), ZeroOrMore]) }
+06:00:12 [DEBUG] (1) globset: glob converted to regex: Glob { glob: "**/yarn-error.log*", re: "(?-u)^(?:/?|.*/)yarn\\-error\\.log[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, Literal('y'), Literal('a'), Literal('r'), Literal('n'), Literal('-'), Literal('e'), Literal('r'), Literal('r'), Literal('o'), Literal('r'), Literal('.'), Literal('l'), Literal('o'), Literal('g'), ZeroOrMore]) }
+06:00:12 [DEBUG] (1) globset: built glob set; 6 literals, 4 basenames, 2 extensions, 0 prefixes, 0 suffixes, 1 required extensions, 3 regexes
+06:00:12 [DEBUG] (1) globset: built glob set; 0 literals, 3 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 0 regexes
+06:00:12 [DEBUG] (1) ignore::walk: ignoring ./target: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: "**/target/", actual: "**/target", is_whitelist: false, is_only_dir: true })))
+06:00:12 [DEBUG] (1) ignore::walk: ignoring ./prisma/node_modules: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: "node_modules", actual: "**/node_modules", is_whitelist: false, is_only_dir: false })))
+06:00:12 [DEBUG] (1) ignore::walk: ignoring ./prisma/.env: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: ".env", actual: "**/.env", is_whitelist: false, is_only_dir: false })))
+06:00:12 [DEBUG] (1) ignore::walk: ignoring ./prisma-cli/target: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: "**/target/", actual: "**/target", is_whitelist: false, is_only_dir: true })))
+06:00:12 [DEBUG] (1) ignore::walk: ignoring ./.env: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.gitignore"), original: ".env", actual: "**/.env", is_whitelist: false, is_only_dir: false })))
+06:00:12 [DEBUG] (1) globset: built glob set; 6 literals, 0 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 0 regexes
+06:00:12 [DEBUG] (1) ignore::walk: ignoring ./.idea/workspace.xml: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("./.idea/.gitignore"), original: "/workspace.xml", actual: "workspace.xml", is_whitelist: false, is_only_dir: false })))
+06:00:13 [DEBUG] (1) lazytestr::app: Key pressed: Char('l')
+06:00:13 [DEBUG] (1) lazytestr::app: Key pressed: Enter
+06:00:13 [DEBUG] (1) lazytestr: Running selected test
+06:00:15 [DEBUG] (1) lazytestr::app: Key pressed: Char('l')
+06:00:15 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:15 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 1
+06:00:15 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:15 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 2
+06:00:15 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:15 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 3
+06:00:15 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:15 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 4
+06:00:15 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:15 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 5
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 6
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 7
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 8
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 9
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 10
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 11
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 12
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 13
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 12
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 11
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 10
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 9
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 8
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 7
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 6
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 5
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 4
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 3
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 2
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 1
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled up. New scroll position: 0
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('k')
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 1
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 2
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 3
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 4
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 5
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 6
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 7
+06:00:16 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:16 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 8
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 9
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 10
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 11
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 12
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 13
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 14
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 15
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 16
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 17
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 18
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 19
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 20
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 21
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 22
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 23
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 24
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 25
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 26
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 27
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 28
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 29
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Scrolled down. New scroll position: 30
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:17 [DEBUG] (1) lazytestr::app: Key pressed: Char('j')
+06:00:18 [DEBUG] (1) lazytestr::app: Key pressed: Char('q')

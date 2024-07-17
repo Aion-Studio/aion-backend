@@ -14,7 +14,7 @@ use crate::{
     events::combat::CombatTurnMessage,
     prisma::npc,
     services::{
-        impls::combat_service::CombatCommand, traits::combat_decision_maker::DecisionMaker,
+        impls::combat_controller::CombatCommand, traits::combat_decision_maker::DecisionMaker,
     },
 };
 
@@ -98,6 +98,7 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
 
         let (command_tx, mut command_receiver) = mpsc::channel(10);
 
+        println!("starting npc decision maker");
         self.command_sender = Some(command_tx);
         let combat_sender = combat_controller_tx.clone();
 

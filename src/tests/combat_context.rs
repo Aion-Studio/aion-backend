@@ -1,11 +1,15 @@
 // In your test_helpers.rs file
 
-use crate::events::combat::{CombatTurnMessage, EncounterState};
+use std::sync::Arc;
+
+use crate::events::combat::{CombatEncounter, CombatTurnMessage, EncounterState};
 use crate::models::cards::Card;
 use crate::models::combatant::{Combatant, CombatantType};
 use crate::models::hero_combatant::HeroCombatant;
 use crate::models::npc::Monster;
-use crate::services::impls::combat_service::{CombatCommand, ControllerMessage};
+use crate::services::impls::combat_controller::{
+    CombatCommand, CombatController, ControllerMessage,
+};
 use tokio::sync::{mpsc, oneshot};
 
 use super::helpers::init_test_combat;
@@ -17,11 +21,12 @@ pub struct CombatTestContext {
     encounter_id: String,
     hero_id: String,
     monster_id: String,
+    pub combat_controller: Arc<CombatController>,
 }
 
 impl CombatTestContext {
     pub async fn new(hero: HeroCombatant, monster: Monster) -> Self {
-        let (player_tx, npc_tx, controller_tx, encounter_id) =
+        let (player_tx, npc_tx, controller_tx, encounter_id, combat_controller) =
             init_test_combat(hero.clone(), monster.clone()).await;
         Self {
             player_tx,
@@ -30,7 +35,25 @@ impl CombatTestContext {
             encounter_id,
             hero_id: hero.get_id(),
             monster_id: monster.get_id(),
+            combat_controller,
         }
+    }
+
+    pub async fn get_encounter(&self) -> CombatEncounter {
+        self.combat_controller
+            .get_encounter(&self.encounter_id)
+            .await
+            .unwrap()
+            .get()
+            .to_owned()
+    }
+
+    pub async fn sync_encounter(
+        &self,
+        encounter: CombatEncounter,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.combat_controller.set_encounter(&encounter).await?;
+        Ok(())
     }
 
     pub async fn play_card(&self, index: usize) -> Result<(), Box<dyn std::error::Error>> {

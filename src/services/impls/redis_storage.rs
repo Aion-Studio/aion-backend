@@ -6,7 +6,7 @@ use tracing::info;
 
 use crate::events::combat::CombatEncounter;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RedisStorage {
     client: Arc<Mutex<redis::Client>>,
 }

@@ -1,5 +1,5 @@
 use crate::events::combat::{CombatTurnMessage, CombatantIndex};
-use crate::services::impls::combat_service::CombatCommand;
+use crate::services::impls::combat_controller::CombatCommand;
 use tokio::sync::mpsc::Sender;
 
 pub trait DecisionMaker: Send + Sync + std::fmt::Debug {

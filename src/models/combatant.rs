@@ -77,6 +77,13 @@ impl CombatantType {
         }
     }
 
+    pub fn as_hero(&mut self) -> &mut HeroCombatant {
+        match self {
+            CombatantType::Hero(hero) => hero,
+            CombatantType::Monster(_) => panic!("Expected hero"),
+        }
+    }
+
     pub fn as_combatant_mut(&mut self) -> &mut dyn Combatant {
         match self {
             CombatantType::Hero(hero) => hero,

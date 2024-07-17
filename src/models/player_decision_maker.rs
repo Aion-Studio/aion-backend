@@ -7,7 +7,7 @@ use tracing::info;
 
 use crate::events::combat::{CombatTurnMessage, CombatantIndex};
 use crate::messenger::MESSENGER;
-use crate::services::impls::combat_service::CombatCommand;
+use crate::services::impls::combat_controller::CombatCommand;
 use crate::services::tasks::action_names::Command;
 use crate::services::traits::combat_decision_maker::DecisionMaker;
 

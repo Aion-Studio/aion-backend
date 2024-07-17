@@ -11,10 +11,10 @@ use tracing::{error, info};
 
 use crate::jsontoken::decode_combat_token;
 use crate::models::player_decision_maker::PlayerDecisionMaker;
-use crate::services::impls::combat_service::{ControllerMessage, EnterBattleData};
+use crate::services::impls::combat_controller::{ControllerMessage, EnterBattleData};
 use crate::{
     events::combat::CombatTurnMessage,
-    services::impls::combat_service::CombatCommand,
+    services::impls::combat_controller::CombatCommand,
     // ... Other imports relevant to your combat system
     webserver::AppState,
 };

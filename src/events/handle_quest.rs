@@ -8,7 +8,7 @@ use tracing::{info, log::error};
 use crate::jsontoken::create_combat_token;
 use crate::logger::Logger;
 use crate::messenger::MESSENGER;
-use crate::services::impls::combat_service::ControllerMessage;
+use crate::services::impls::combat_controller::ControllerMessage;
 use crate::services::tasks::action_names::{
     ActionNames, CmdResponder, Command, Responder, ResponderType,
 };

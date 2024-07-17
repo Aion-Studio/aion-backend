@@ -1,7 +1,7 @@
 use aion_server::create_test_hero;
 use aion_server::events::combat::CombatantState;
 use aion_server::models::cards::Card;
-use aion_server::models::combatant::Combatant;
+use aion_server::models::combatant::{Combatant, CombatantType};
 use aion_server::models::npc::Monster;
 use aion_server::tests::combat_context::{
     create_attack_hero, create_poison_hero, CombatTestContext,
@@ -46,21 +46,20 @@ async fn test_combat_poision_effect() {
 async fn test_combat_heal_effect() {
     let context =
         CombatTestContext::new(create_test_hero!(Card::heal(3)), Monster::default()).await;
-    let mut hero = context.get_hero().await.unwrap();
-    println!("Initial HP: {}", hero.get_hp());
-    hero.take_damage(10);
-    if let CombatantState::Player { hp, .. } =
-        context.get_encounter_state().await.unwrap().player_state
-    {
-        print!("hp encounter {:?}", hp);
-    }
-    let initial_hp = hero.get_hp();
-    context.play_card(0).await.unwrap();
+    let mut encounter = context.get_encounter().await;
+
+    let hero_combatant = encounter.get_player_combatant();
+    let initial_hp = hero_combatant.get_hp(); // 1. Save the starting HP
+    hero_combatant.take_damage(10); // 2. Simulate taking damage
+    context.sync_encounter(encounter).await.unwrap(); //3. Sync the encounter to Redis
+
+    context.play_card(0).await.unwrap(); // 4. Play the heal card
+                                         //
     let encounter_state = context.get_encounter_state().await.unwrap();
 
     if let CombatantState::Player { hp, .. } = encounter_state.player_state {
         println!("HP: {}", hp);
-        assert_eq!(initial_hp + 3, hp);
+        assert_eq!(initial_hp - 10 + 3, hp);
     } else {
         panic!("Expected NPC state");
     }

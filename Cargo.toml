@@ -51,6 +51,7 @@ alloy-primitives = "0.7.5"
 actix-web-lab = "0.20.2"
 eip_712_utils = "0.1.0"
 redis = { version = "0.25.4", features = ["tokio-comp"] }
+async-trait = "0.1.81"
 
 
 [workspace]

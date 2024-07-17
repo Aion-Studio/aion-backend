@@ -62,8 +62,9 @@ pub mod events {
 
 pub mod services {
     pub mod impls {
-        pub mod combat_controller_handle;
-        pub mod combat_service;
+        pub mod combat_controller;
+        pub mod combat_messages;
+        pub mod combat_shared_state;
         pub mod redis_storage;
         pub mod tasks;
     }

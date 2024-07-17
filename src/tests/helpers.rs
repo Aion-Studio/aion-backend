@@ -13,16 +13,15 @@ use crate::{
         player_decision_maker::PlayerDecisionMaker,
     },
     prisma::PrismaClient,
-    services::impls::{
-        combat_controller_handle::CombatControllerHandle,
-        combat_service::{CombatCommand, CombatController, ControllerMessage, EnterBattleData},
+    services::impls::combat_controller::{
+        setup_combat_system, CombatCommand, CombatController, ControllerMessage, EnterBattleData,
     },
 };
 use actix_web::web::Data;
 use prisma_client_rust::raw;
 
 use lazy_static::lazy_static;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 lazy_static! {
     static ref SETUP_DONE: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
@@ -160,21 +159,17 @@ pub async fn init_test_combat(
     mpsc::Sender<CombatCommand>,
     mpsc::Sender<ControllerMessage>,
     String,
+    Arc<CombatController>,
 ) {
     let redis_url = init_test_redis().await;
 
-    let (controller_tx, controller_rx) = mpsc::channel(100);
-    let mut combat_controller = CombatController::new(controller_tx.clone(), &redis_url);
+    let (combat_controller, controller_tx, mut message_handler) = setup_combat_system(&redis_url);
 
     // Start the controller
 
-    let controller_handle = CombatControllerHandle {
-        sender: controller_tx.clone(),
-    };
-
     // Start the controller in a separate task
     tokio::spawn(async move {
-        combat_controller.run(controller_rx).await;
+        message_handler.run().await;
     });
 
     let hero_id = hero.get_id();
@@ -211,8 +206,6 @@ pub async fn init_test_combat(
         .await
         .unwrap();
 
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
     // remove it because the default EnerBattle message creates a CpuCombatantDecisionMaker
     controller_tx
         .send(ControllerMessage::RemoveSingleDecisionMaker {
@@ -232,8 +225,10 @@ pub async fn init_test_combat(
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    match controller_handle
-        .start_encounter_for_combatant(monster.get_id())
+    match controller_tx
+        .send(ControllerMessage::StartEncounterForCombatant {
+            combatant_id: monster.get_id(),
+        })
         .await
     {
         Ok(_) => {}
@@ -246,7 +241,6 @@ pub async fn init_test_combat(
 
     let npc = npc_decision_maker_arc.lock().await;
 
-    // let (npc_tx, mut npc_rx) = mpsc::channel(10);
     let npc_tx = npc.get_command_tx().expect("command tx not set");
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -254,5 +248,11 @@ pub async fn init_test_combat(
     let mutex_locked = cloned.lock().await;
     let player_tx = mutex_locked.get_from_ws_tx().expect("from_tx not set");
 
-    (player_tx, npc_tx, controller_tx, encounter_id)
+    (
+        player_tx,
+        npc_tx,
+        controller_tx,
+        encounter_id,
+        combat_controller,
+    )
 }
