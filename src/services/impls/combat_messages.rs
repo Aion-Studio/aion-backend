@@ -4,6 +4,7 @@ use tokio::join;
 use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tracing::{error, info};
 
+use crate::events::combat::CombatError;
 use crate::{
     events::combat::{CombatEncounter, CombatTurnMessage, EncounterState},
     models::npc::{CpuCombatantDecisionMaker, Monster},
@@ -58,9 +59,7 @@ impl MessageHandler {
             }
             ControllerMessage::StartEncounterForCombatant { combatant_id } => {
                 match self.start_encounter_for_combatant(&combatant_id).await {
-                    Ok(_) => {
-                        println!("Encounter started for combatant: {}", combatant_id)
-                    }
+                    Ok(_) => {}
                     Err(e) => {
                         error!("Failed to start encounter for combatant: {:?}", e);
                     }
@@ -80,6 +79,7 @@ impl MessageHandler {
 
             ControllerMessage::Combat((command, from_id)) => {
                 match command {
+                    CombatCommand::PlayCard(_) => {}
                     CombatCommand::EnterBattle(battle_data) => {
                         if let Some(decision_maker) = battle_data.0 {
                             let mut state = self.state.lock().await;
@@ -459,6 +459,19 @@ impl MessageHandler {
                             }
                             Err(e) => {
                                 error!("Error processing combat turn: {:?}", e);
+                                if let Some(combat_error) = e.downcast_ref::<CombatError>() {
+                                    match combat_error {
+                                        CombatError::OutOfTurnAction => {
+                                                println!("Out of turn action");
+                                            result_sender.send(CombatTurnMessage::OutOfTurnAction).await.unwrap();
+                                        }
+                                        _ => {
+                                            println!("Some other combat error occurred: {}", combat_error);
+                                        }
+                                    }
+                                } else {
+                                    println!("An unexpected error occurred: {:?}", e);
+                                }
                             }
                         }
                     }

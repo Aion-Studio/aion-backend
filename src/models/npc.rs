@@ -18,12 +18,7 @@ use crate::{
     },
 };
 
-use super::{
-    combatant::Combatant,
-    hero::Range,
-    resources::Relic,
-    talent::{Spell, Talent},
-};
+use super::{combatant::Combatant, hero::Range, resources::Relic, talent::Spell};
 
 #[derive(Debug)]
 pub struct CpuCombatantDecisionMaker {
@@ -98,7 +93,6 @@ impl DecisionMaker for CpuCombatantDecisionMaker {
 
         let (command_tx, mut command_receiver) = mpsc::channel(10);
 
-        println!("starting npc decision maker");
         self.command_sender = Some(command_tx);
         let combat_sender = combat_controller_tx.clone();
 
@@ -163,7 +157,7 @@ pub struct Monster {
     cards_in_discard: Vec<Card>,
     cards_in_hand: Vec<Card>,
     monster_type: Option<String>,
-    pub talents: Vec<Talent>,
+    pub spells: Vec<Spell>,
 }
 
 impl Default for Monster {
@@ -176,13 +170,65 @@ impl Default for Monster {
             // random between 20-40
             hit_points: hp,
             max_hp: hp,
-            armor: 0,
+            armor: 2,
             level: 1,
             mana: 0,
             cards_in_discard: vec![],
             cards_in_hand: vec![],
             monster_type: None,
-            talents: vec![],
+            spells: vec![],
+        }
+    }
+}
+
+impl Monster {
+    pub fn armor(&self, armor: i32) -> Monster {
+        let mut monster = self.clone();
+        monster.armor = armor;
+        monster
+    }
+
+    pub fn to_mut(self) -> Box<Monster> {
+        Box::new(self)
+    }
+
+    pub fn with_fireball(damage: i32) -> Self {
+        let spell_fireball = Spell::fireball(damage);
+        let hp = 50;
+        Monster {
+            id: "1".to_string(),
+            name: "Goblin".to_string(),
+            damage: Range { min: 1, max: 3 },
+            // random between 20-40
+            hit_points: hp,
+            max_hp: hp,
+            armor: 2,
+            level: 1,
+            mana: 0,
+            cards_in_discard: vec![],
+            cards_in_hand: vec![],
+            monster_type: None,
+            spells: vec![spell_fireball],
+        }
+    }
+
+    pub fn with_bolt(damage: i32) -> Self {
+        let spell_bolt = Spell::bolt(damage);
+        let hp = 50;
+        Monster {
+            id: "1".to_string(),
+            name: "Goblin".to_string(),
+            damage: Range { min: 1, max: 3 },
+            // random between 20-40
+            hit_points: hp,
+            max_hp: hp,
+            armor: 2,
+            level: 1,
+            mana: 0,
+            cards_in_discard: vec![],
+            cards_in_hand: vec![],
+            monster_type: None,
+            spells: vec![spell_bolt],
         }
     }
 }
@@ -235,9 +281,16 @@ impl Combatant for Monster {
         self.level
     }
 
-    fn take_damage(&mut self, damage: i32) {
+    fn take_damage(&mut self, damage: i32, is_chaos: bool) {
+        //for now no armor
+        if is_chaos {
+            self.hit_points -= damage;
+            return;
+        }
+
         let damage = max(0, damage - self.armor);
         self.hit_points -= damage;
+        self.armor = max(0, self.armor - damage);
     }
 
     fn shuffle_deck(&mut self) {}
@@ -249,6 +302,10 @@ impl Combatant for Monster {
     fn add_to_discard(&mut self, _: Card) {}
     fn add_mana(&mut self) {
         self.mana = 3;
+    }
+
+    fn boost_mana(&mut self, amount: i32) {
+        self.mana += amount;
     }
 
     fn spend_mana(&mut self, mana: i32) {
@@ -294,7 +351,7 @@ impl From<npc::Data> for Monster {
             mana: 0,
             cards_in_hand: vec![],
             cards_in_discard: vec![],
-            talents: vec![], // nothing for now
+            spells: vec![], // nothing for now
         }
     }
 }

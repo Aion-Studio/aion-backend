@@ -26,7 +26,7 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn get_player_state(&self) -> CombatantState;
 
     // fn attack(&self, other: &mut dyn Combatant);
-    fn take_damage(&mut self, amount: i32);
+    fn take_damage(&mut self, amount: i32, is_chaos: bool);
     fn shuffle_deck(&mut self);
     fn draw_cards(&mut self); // goes from deck to hand
     fn add_to_discard(&mut self, card: Card);
@@ -34,6 +34,7 @@ pub trait Combatant: CloneBoxCombatant + Send + Sync {
     fn get_zeal(&self) -> i32;
     /// Sets the hero's mana to the amount
     fn add_mana(&mut self);
+    fn boost_mana(&mut self, amount: i32);
     fn spend_mana(&mut self, mana: i32);
     fn get_hand(&self) -> &Vec<Card>;
     fn get_relics(&self) -> Vec<Relic>;
@@ -81,6 +82,13 @@ impl CombatantType {
         match self {
             CombatantType::Hero(hero) => hero,
             CombatantType::Monster(_) => panic!("Expected hero"),
+        }
+    }
+
+    pub fn as_monster(&mut self) -> &mut Monster {
+        match self {
+            CombatantType::Monster(monster) => monster,
+            CombatantType::Hero(_) => panic!("Expected monster"),
         }
     }
 

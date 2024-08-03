@@ -110,8 +110,14 @@ impl Combatant for HeroCombatant {
         self.hero.level
     }
 
-    fn take_damage(&mut self, damage: i32) {
-        self.hero.hp = max(0, self.hero.hp - damage);
+    fn take_damage(&mut self, damage: i32, is_chaos: bool) {
+        if is_chaos {
+            self.hero.hp -= damage;
+            return;
+        }
+        let damage = max(0, damage - self.hero.armor);
+        self.hero.hp -= damage;
+        self.hero.armor = max(0, self.hero.armor - damage);
     }
 
     fn get_mana(&self) -> i32 {
@@ -119,8 +125,11 @@ impl Combatant for HeroCombatant {
     }
 
     fn add_mana(&mut self) {
-        // NOTE: eventually this will be a variable
         self.mana += 3;
+    }
+
+    fn boost_mana(&mut self, amount: i32) {
+        self.mana += amount;
     }
 
     // put back remaining in-hand cards + discard pile back to deck and shuffle

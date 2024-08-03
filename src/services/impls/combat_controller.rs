@@ -24,7 +24,7 @@ use super::combat_shared_state::SharedState;
 pub enum CombatCommand {
     EnterBattle(EnterBattleData),
     LeaveBattle,
-    UseSpell(String, Spell), // Use a talent: (Talent)
+    UseSpell(Spell), // Use a talent: (Talent)
     PlayCard(Card),
     EndTurn,
 }
@@ -259,7 +259,7 @@ impl CombatController {
         &self,
         combatant_id: &str,
         command: CombatCommand,
-    ) -> Result<CombatTurnMessage, anyhow::Error> {
+    ) -> anyhow::Result<CombatTurnMessage> {
         let mut encounter = self
             .encounter_by_combatant_id(combatant_id)
             .await
@@ -267,7 +267,10 @@ impl CombatController {
                 anyhow::anyhow!("Encounter not found for combatant: {}", combatant_id)
             })?;
 
-        let result = encounter.process_combat_turn(command, combatant_id)?;
+        let result = encounter
+            .process_combat_turn(command, combatant_id)
+            .map_err(anyhow::Error::from)?;
+        // let result = encounter.process_combat_turn(command, combatant_id)?;
         self.set_encounter(&encounter).await?;
 
         Ok(result)

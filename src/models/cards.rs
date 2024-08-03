@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::prisma::{self, CardType, Class, EffectType, StatType, TargetType};
-
+use crate::prisma::{self, CardType, Class, DamageType, EffectType, StatType, TargetType};
 use crate::prisma::{card, deck};
+
+use super::talent::CombatModifier;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -63,14 +64,13 @@ impl Card {
             card_type: CardType::Attack,
             name: "Poison".to_string(),
             img_url: "".to_string(),
-            cost: 2,
+            cost: 1,
             zeal: 0,
             tier: 1,
             effects: vec![CardEffect {
                 id: uuid::Uuid::new_v4().to_string(),
                 card_id: "".to_string(),
-                effect: EffectType::Poison,
-                value: amount,
+                effect: Effect::Poison { value: amount },
                 target_type: TargetType::Opponent,
                 stat_affected: None,
                 duration: rounds,
@@ -80,10 +80,186 @@ impl Card {
         }
     }
 
-    pub fn attack(value: i32) -> Self {
+    pub fn initiative(amount: i32) -> Self {
+        let id = uuid::Uuid::new_v4().to_string();
+        Card {
+            id: id.clone(),
+            class: Class::Fighter,
+            card_type: CardType::Utility,
+            name: "Initiative".to_string(),
+            img_url: "".to_string(),
+            cost: 1,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: id,
+                effect: Effect::BuffInitiative { value: amount },
+                target_type: TargetType::Opponent,
+                stat_affected: None,
+                duration: None,
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+
+    pub fn initiative_remove(amount: i32) -> Self {
+        let id = uuid::Uuid::new_v4().to_string();
+        Card {
+            id: id.clone(),
+            class: Class::Fighter,
+            card_type: CardType::Utility,
+            name: "Initiative Remove".to_string(),
+            img_url: "".to_string(),
+            cost: 1,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: id,
+                effect: Effect::DebuffInitiative { value: amount },
+                target_type: TargetType::Itself,
+                stat_affected: None,
+                duration: None,
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+
+    pub fn buff_armor(amount: i32) -> Self {
+        let id = uuid::Uuid::new_v4().to_string();
+        Card {
+            id: id.clone(),
+            class: Class::Fighter,
+            card_type: CardType::Defensive,
+            name: "Buff Armor".to_string(),
+            img_url: "".to_string(),
+            cost: 2,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: id,
+                effect: Effect::BuffArmor { value: amount },
+                target_type: TargetType::Itself,
+                stat_affected: None,
+                duration: None,
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+
+    pub fn debuff_armor(amount: i32) -> Self {
+        let id = uuid::Uuid::new_v4().to_string();
+        Card {
+            id: id.clone(),
+            class: Class::Fighter,
+            card_type: CardType::Defensive,
+            name: "Debuff Armor".to_string(),
+            img_url: "".to_string(),
+            cost: 1,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: id,
+                effect: Effect::DebuffArmor { value: amount },
+                target_type: TargetType::Opponent,
+                stat_affected: None,
+                duration: None,
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+
+    pub fn buff_damage(amount: i32, rounds: Option<i32>) -> Self {
+        Card {
+            id: uuid::Uuid::new_v4().to_string(),
+            class: Class::Fighter,
+            card_type: CardType::Attack,
+            name: "Buff Damage".to_string(),
+            img_url: "".to_string(),
+            cost: 1,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: "".to_string(),
+                effect: Effect::BuffDamage { value: amount },
+                target_type: TargetType::Itself,
+                stat_affected: None,
+                duration: rounds,
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+
+    pub fn debuff_damage(amount: i32) -> Self {
+        let id = uuid::Uuid::new_v4().to_string();
+        Card {
+            id: id.clone(),
+            class: Class::Fighter,
+            card_type: CardType::Attack,
+            name: "Debuff Damage".to_string(),
+            img_url: "".to_string(),
+            cost: 2,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: id,
+                effect: Effect::DebuffDamage { value: amount },
+                target_type: TargetType::Opponent,
+                stat_affected: None,
+                duration: None,
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+
+    pub fn silence(rounds: i32) -> Self {
+        Card {
+            id: uuid::Uuid::new_v4().to_string(),
+            class: Class::Fighter,
+            card_type: CardType::Utility,
+            name: "Silence".to_string(),
+            img_url: "".to_string(),
+            cost: 2,
+            zeal: 0,
+            tier: 1,
+            effects: vec![CardEffect {
+                id: uuid::Uuid::new_v4().to_string(),
+                card_id: "".to_string(),
+                effect: Effect::Silence,
+                target_type: TargetType::Opponent,
+                stat_affected: None,
+                duration: Some(rounds),
+                is_percentage_modifier: false,
+            }],
+            last_attack_round: None,
+        }
+    }
+
+    pub fn attack(new_value: i32, damage_type: DamageType) -> Self {
         let card_type = CardType::Attack;
-        let effect = CardEffect::get_random_by_card_type(card_type);
-        let mut card = Card {
+        let mut effect = CardEffect::get_random_by_card_type(card_type);
+        match effect.effect {
+            Effect::Damage {
+                ref mut damage_type,
+                ref mut value,
+            } => {
+                *damage_type = damage_type.clone();
+                *value = new_value;
+            }
+            _ => {}
+        }
+        let card = Card {
             id: uuid::Uuid::new_v4().to_string(),
             class: Class::get_random(),
             card_type,
@@ -95,8 +271,46 @@ impl Card {
             effects: vec![effect],
             last_attack_round: None,
         };
-        card.effects[0].value = value;
         card
+    }
+
+    pub fn mana_gain_and_attack(amount_mana: i32, amount_attack: i32) -> Self {
+        let card_id = uuid::Uuid::new_v4().to_string();
+        let attack_effect = CardEffect {
+            id: uuid::Uuid::new_v4().to_string(),
+            card_id: card_id.clone(),
+            effect: Effect::Damage {
+                value: amount_attack,
+                damage_type: DamageType::Normal,
+            },
+            target_type: TargetType::Opponent,
+            stat_affected: None,
+            duration: None,
+            is_percentage_modifier: false,
+        };
+        Card {
+            id: card_id.clone(),
+            class: Class::Fighter,
+            card_type: CardType::Utility,
+            name: "Mana Gain".to_string(),
+            img_url: "".to_string(),
+            cost: 1,
+            zeal: 0,
+            tier: 1,
+            effects: vec![
+                attack_effect,
+                CardEffect {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    card_id: card_id,
+                    effect: Effect::ManaGain { value: amount_mana },
+                    target_type: TargetType::Itself,
+                    stat_affected: None,
+                    duration: None,
+                    is_percentage_modifier: false,
+                },
+            ],
+            last_attack_round: None,
+        }
     }
 
     pub fn heal(amount: i32) -> Self {
@@ -112,8 +326,7 @@ impl Card {
             effects: vec![CardEffect {
                 id: uuid::Uuid::new_v4().to_string(),
                 card_id: "".to_string(),
-                effect: EffectType::Heal,
-                value: amount,
+                effect: Effect::Heal { value: amount },
                 target_type: TargetType::Itself,
                 stat_affected: None,
                 duration: None,
@@ -125,12 +338,67 @@ impl Card {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum Effect {
+    Damage { value: i32, damage_type: DamageType },
+    Heal { value: i32 },
+    BuffDamage { value: i32 },
+    DebuffDamage { value: i32 },
+    ManaGain { value: i32 },
+    Draw { value: i32 },
+    BuffArmor { value: i32 },
+    DebuffArmor { value: i32 },
+    Silence,
+    Poison { value: i32 },
+    BuffInitiative { value: i32 },
+    DebuffInitiative { value: i32 },
+    // Modifier(CombatModifier),
+}
+
+impl From<prisma::card_effect::Data> for CardEffect {
+    fn from(data: prisma::card_effect::Data) -> Self {
+        let effect = Effect::from(data.clone());
+        CardEffect {
+            id: data.id,
+            card_id: data.card_id,
+            effect,
+            target_type: data.target,
+            duration: data.duration,
+            stat_affected: data.stat_affected,
+            is_percentage_modifier: data.percentage_modifier,
+        }
+    }
+}
+
+impl From<prisma::card_effect::Data> for Effect {
+    fn from(data: prisma::card_effect::Data) -> Self {
+        match data.effect_type {
+            prisma::EffectType::Damage => Effect::Damage {
+                value: data.value,
+                damage_type: data.damage_type.unwrap_or(DamageType::Normal),
+            },
+            prisma::EffectType::Heal => Effect::Heal { value: data.value },
+
+            prisma::EffectType::BuffDamage => Effect::BuffDamage { value: data.value },
+
+            prisma::EffectType::DebuffDamage => Effect::DebuffDamage { value: data.value },
+            prisma::EffectType::ManaGain => Effect::ManaGain { value: data.value },
+            prisma::EffectType::Draw => Effect::Draw { value: data.value },
+            prisma::EffectType::Silence => Effect::Silence,
+            prisma::EffectType::Poison => Effect::Poison { value: data.value },
+            prisma::EffectType::BuffInitiative => Effect::BuffInitiative { value: data.value },
+            prisma::EffectType::DebuffInitiative => Effect::DebuffInitiative { value: data.value },
+            prisma::EffectType::BuffArmor => Effect::BuffArmor { value: data.value },
+            prisma::EffectType::DebuffArmor => Effect::DebuffArmor { value: data.value },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CardEffect {
     pub id: String,
     pub card_id: String,
-    pub effect: EffectType, // Updated to use the EffectType enum
-    pub value: i32,
+    pub effect: Effect, // Updated to use the EffectType enum
     pub target_type: TargetType,
     pub stat_affected: Option<StatType>,
     pub duration: Option<i32>,
@@ -141,13 +409,15 @@ impl CardEffect {
     pub fn get_random_by_card_type(card_type: CardType) -> Self {
         match card_type {
             CardType::Attack => {
-                //random damage between 1-8
+                //random damage between 1-e
                 let damage = rand::random::<i32>() % 8;
                 let effect = CardEffect {
                     id: uuid::Uuid::new_v4().to_string(),
                     card_id: "".to_string(),
-                    effect: EffectType::Damage,
-                    value: damage,
+                    effect: Effect::Damage {
+                        value: damage,
+                        damage_type: DamageType::Normal,
+                    },
                     target_type: TargetType::Opponent,
                     stat_affected: None,
                     duration: None,
@@ -161,8 +431,7 @@ impl CardEffect {
                 CardEffect {
                     id: uuid::Uuid::new_v4().to_string(),
                     card_id: uuid::Uuid::new_v4().to_string(),
-                    effect: EffectType::Armor,
-                    value: armor,
+                    effect: Effect::BuffArmor { value: armor },
                     target_type: TargetType::Itself,
                     stat_affected: None,
                     duration: None,
@@ -177,7 +446,7 @@ impl CardEffect {
                     EffectType::Draw,
                     EffectType::Silence,
                     EffectType::Poison,
-                    EffectType::Initiative,
+                    EffectType::BuffInitiative,
                 ];
                 let effect_type = effect_types[rand::random::<usize>() % effect_types.len()];
                 let (target, value, duration) = match effect_type {
@@ -187,15 +456,21 @@ impl CardEffect {
                     EffectType::Draw => (TargetType::Itself, rand::random::<i32>() % 2, Some(1)),
                     EffectType::Silence => (TargetType::Opponent, 1, Some(1)),
                     EffectType::Poison => (TargetType::Opponent, 1, Some(2)),
-                    EffectType::Initiative => (TargetType::Itself, 1, Some(1)),
+                    EffectType::BuffInitiative => (TargetType::Itself, 1, Some(1)),
                     _ => (TargetType::Itself, 1, Some(1)),
                 };
 
                 CardEffect {
                     id: uuid::Uuid::new_v4().to_string(),
                     card_id: uuid::Uuid::new_v4().to_string(),
-                    effect: effect_type,
-                    value,
+                    effect: match effect_type {
+                        EffectType::ManaGain => Effect::ManaGain { value },
+                        EffectType::Draw => Effect::Draw { value },
+                        EffectType::Silence => Effect::Silence,
+                        EffectType::Poison => Effect::Poison { value },
+                        EffectType::BuffInitiative => Effect::BuffInitiative { value },
+                        _ => Effect::ManaGain { value },
+                    },
                     target_type: target,
                     stat_affected: None,
                     duration,
@@ -260,21 +535,6 @@ impl From<(card::Data, Vec<CardEffect>)> for Card {
             tier: data.tier,
             card_type: data.card_type,
             last_attack_round: None,
-        }
-    }
-}
-
-impl From<prisma::card_effect::Data> for CardEffect {
-    fn from(data: prisma::card_effect::Data) -> Self {
-        CardEffect {
-            id: data.id,
-            card_id: data.card_id,
-            effect: data.effect_type,
-            value: data.value,
-            target_type: data.target,
-            stat_affected: data.stat_affected,
-            duration: data.duration,
-            is_percentage_modifier: data.percentage_modifier,
         }
     }
 }

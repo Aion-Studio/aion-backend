@@ -20,7 +20,7 @@ use crate::{
 
 use super::region::RegionName;
 use super::resources::{Relic, Resource};
-use super::talent::{Spell, Talent};
+use super::talent::Spell;
 
 #[allow(dead_code)]
 #[allow(unused_variables)]
@@ -86,12 +86,12 @@ impl Hero {
             hp: 100,
             class: Class::Ranger,
             level: 1,
-            strength: rand::random::<i32>() % 10,
-            armor: rand::random::<i32>() % 2,
-            intelligence: rand::random::<i32>() % 3,
-            dexterity: rand::random::<i32>() % 5,
+            strength: (rand::random::<i32>() % 10).abs(),
+            armor: 1,
+            intelligence: (rand::random::<i32>() % 3).abs(),
+            dexterity: (rand::random::<i32>() % 5).abs(),
             explore: 10,
-            crafting: rand::random::<i32>() % 10,
+            crafting: (rand::random::<i32>() % 10).abs(),
             resources: Resource::randomize_amounts(),
             stamina: Stamina::new(),
             decks: None,

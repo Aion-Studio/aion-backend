@@ -93,15 +93,21 @@ model Spell {
   duration  Int?
   effects   SpellEffect[]
   HeroSpell HeroSpell[]
+  Npc       Npc?          @relation(fields: [npcId], references: [id])
+  npcId     String?
 }
 
 model SpellEffect {
-  id      String     @id @default(uuid())
-  value   Int // Value of the effect, e.g., 10 for heal, 10 for damage
-  target  TargetType // Target of the effect, e.g., "self" or "enemy"
-  effect  EffectType // Enum for type of effect
-  Spell   Spell?     @relation(fields: [spellId], references: [id])
-  spellId String?
+  id                 String      @id @default(uuid())
+  effectType         EffectType // Enum for type of effect
+  value              Int
+  target             TargetType // Target of the effect, e.g., "self" or "enemy"
+  duration           Int? // Duration in turns, if applicable
+  statAffected       StatType?
+  percentageModifier Boolean     @default(false)
+  damageType         DamageType? @default(Normal)
+  Spell              Spell?      @relation(fields: [spellId], references: [id])
+  spellId            String?
 }
 
 model HeroResource {
@@ -247,6 +253,7 @@ model Npc {
 
   leyline Leyline? @relation("NpcToLeyline")
   actions Action[] @relation("ActionToNpc")
+  spells  Spell[]
 }
 
 model Card {
@@ -277,15 +284,16 @@ enum StatType {
 }
 
 model CardEffect {
-  id                 String     @id @default(uuid())
+  id                 String      @id @default(uuid())
   effectType         EffectType // Enum for type of effect
   value              Int
   target             TargetType // Target of the effect, e.g., "self" or "enemy"
   duration           Int? // Duration in turns, if applicable
   cardId             String
-  card               Card       @relation(fields: [cardId], references: [id])
+  card               Card        @relation(fields: [cardId], references: [id])
   statAffected       StatType?
-  percentageModifier Boolean    @default(false)
+  percentageModifier Boolean     @default(false)
+  damageType         DamageType? @default(Normal)
 }
 
 model HeroCard {
@@ -319,16 +327,21 @@ model Deck {
 enum EffectType {
   Damage
   Heal
-  BuffStat
   BuffDamage
-  DebuffStat
   DebuffDamage
   ManaGain
   Draw
-  Armor
+  BuffArmor
+  DebuffArmor
   Silence
   Poison
-  Initiative
+  BuffInitiative
+  DebuffInitiative
+}
+
+enum DamageType {
+  Normal
+  Chaos
 }
 
 enum TargetType {
