@@ -14,7 +14,6 @@ use super::{
     combat_controller::{CombatCommand, CombatController, ControllerMessage},
     combat_shared_state::SharedState,
 };
-use ControllerMessage::*;
 
 pub struct MessageHandler {
     state: Arc<Mutex<SharedState>>,

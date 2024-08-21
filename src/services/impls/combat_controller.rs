@@ -10,7 +10,7 @@ use crate::events::persistant_wrapper::PersistentCombatEncounter;
 use crate::models::cards::Card;
 use crate::models::combatant::CombatantType;
 use crate::models::hero::Hero;
-use crate::models::npc::{CpuCombatantDecisionMaker, Monster};
+use crate::models::npc::Monster;
 use crate::models::talent::Spell;
 use crate::{
     events::combat::{CombatEncounter, CombatTurnMessage},
