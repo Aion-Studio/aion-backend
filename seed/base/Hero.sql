@@ -14,7 +14,7 @@ DROP TYPE IF EXISTS "public"."Class";
 CREATE TYPE "public"."Class" AS ENUM ('Fighter', 'Ranger', 'Wizard');
 
 -- Table Definition
-CREATE TABLE "public"."Hero" (
+CREATE TABLE IF NOT EXISTS "public"."Hero" (
     "id" text NOT NULL,
     "class" "public"."Class" NOT NULL,
     "hp" int4 NOT NULL,
