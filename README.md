@@ -259,9 +259,6 @@ graph TD
             13["API Response Structures<br>Rust"]
         end
         %% Edges at this level (grouped by source)
-        32["Configuration<br>Rust YAML"] -->|Configures| 4["Backend Server System<br>Rust"]
-        33["Logging & Telemetry<br>Rust TOML"] -->|Monitors| 4["Backend Server System<br>Rust"]
-        35["Utilities & Macros<br>Rust"] -->|Provides helpers to| 4["Backend Server System<br>Rust"]
         6["Services<br>Rust"] -->|Performs operations| 5["Database Interaction & Repositories<br>Rust Prisma"]
         7["Game Logic & Event Handling<br>Rust"] -->|Updates game state| 5["Database Interaction & Repositories<br>Rust Prisma"]
         7["Game Logic & Event Handling<br>Rust"] -->|Uses services| 6["Services<br>Rust"]
